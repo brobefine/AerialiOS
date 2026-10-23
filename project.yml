@@ -1,0 +1,110 @@
+# Проект Xcode собирается из этого файла: `xcodegen generate` (на CI — .github/workflows/build.yml).
+name: Aerial
+options:
+  bundleIdPrefix: com.aerial
+  deploymentTarget:
+    iOS: "18.0"
+  developmentLanguage: ru
+  createIntermediateGroups: true
+configFiles:
+  Debug: Config/Base.xcconfig
+  Release: Config/Base.xcconfig
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+packages:
+  MPVKit:
+    url: https://github.com/mpvkit/MPVKit
+    exactVersion: 1.0.0
+  TorrServerKit:
+    path: Packages/TorrServerKit
+targets:
+  Aerial:
+    type: application
+    platform: iOS
+    sources:
+      - path: Aerial
+    dependencies:
+      - package: MPVKit
+        product: MPVKit
+      - package: TorrServerKit
+        product: TorrServerEngine
+    info:
+      path: Config/Info.plist
+      properties:
+        CFBundleDisplayName: Aerial
+        CFBundleDevelopmentRegion: ru
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen:
+          UIColorName: LaunchBackground
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        # Фильм играет и с погасшим экраном; встроенный TorrServer живёт, пока идёт звук.
+        UIBackgroundModes:
+          - audio
+        # Журналы (logs/) и данные TorrServer видны в «Файлах»: На iPhone › Aerial.
+        UIFileSharingEnabled: true
+        LSSupportsOpeningDocumentsInPlace: true
+        NSAppTransportSecurity:
+          NSAllowsArbitraryLoads: true
+        NSLocalNetworkUsageDescription: Aerial подключается к TorrServer и раздающим в вашей сети.
+        ITSAppUsesNonExemptEncryption: false
+        TMDBApiKey: $(TMDB_API_KEY)
+        TMDBReadToken: $(TMDB_READ_TOKEN)
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.aerial.ios
+        PRODUCT_NAME: Aerial
+        TARGETED_DEVICE_FAMILY: "1,2"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        CODE_SIGN_STYLE: Automatic
+        ENABLE_PREVIEWS: YES
+  AerialTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: AerialTests
+    dependencies:
+      - target: Aerial
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.aerial.ios.tests
+  AerialUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: AerialUITests
+    dependencies:
+      - target: Aerial
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: com.aerial.ios.uitests
+        TEST_TARGET_NAME: Aerial
+schemes:
+  Aerial:
+    build:
+      targets:
+        Aerial: all
+        AerialTests: [test]
+        AerialUITests: [test]
+    test:
+      config: Debug
+      targets:
+        - AerialTests
+        - AerialUITests

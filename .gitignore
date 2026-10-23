@@ -1,0 +1,16 @@
+# Проект Xcode и Info.plist генерирует XcodeGen из project.yml
+*.xcodeproj/
+*.xcworkspace/
+Config/Info.plist
+
+# Ключи TMDb — только локально и в секретах GitHub
+Config/Secrets.xcconfig
+
+.build/
+build/
+DerivedData/
+out/
+dist/
+*.xcresult
+.DS_Store
+.claude/settings.local.json

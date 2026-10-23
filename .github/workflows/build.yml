@@ -1,0 +1,113 @@
+# Сборка без Mac: GitHub Actions (macOS 26, Xcode 26.6).
+# 1) тесты и UI-снимки на симуляторе iPhone 17 Pro; 2) неподписанный Aerial.ipa для установки через Sideloadly/AltStore.
+# Артефакты: Aerial-ipa (приложение), Aerial-check (снимки экранов, журналы приложения и mpv, лог сборки).
+name: build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ios:
+    runs-on: macos-26
+    timeout-minutes: 75
+    env:
+      SIM: iPhone 17 Pro
+      SIM_OS: "26.5"
+      PACKAGES: ${{ github.workspace }}/.build/SourcePackages
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Xcode
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.6.app
+          xcodebuild -version
+
+      - name: Проект
+        env:
+          TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
+          TMDB_READ_TOKEN: ${{ secrets.TMDB_READ_TOKEN }}
+        run: |
+          printf 'TMDB_API_KEY = %s\nTMDB_READ_TOKEN = %s\n' "$TMDB_API_KEY" "$TMDB_READ_TOKEN" > Config/Secrets.xcconfig
+          command -v xcodegen >/dev/null || brew install xcodegen
+          xcodegen generate
+
+      - name: Кэш пакетов
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ env.PACKAGES }}
+            ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ hashFiles('project.yml', 'Packages/**/Package.swift') }}
+
+      - name: Пакеты (MPVKit, TorrServerKit)
+        run: xcodebuild -resolvePackageDependencies -project Aerial.xcodeproj -scheme Aerial -clonedSourcePackagesDirPath "$PACKAGES"
+
+      - name: Тесты и снимки
+        id: test
+        continue-on-error: true
+        run: |
+          set +e
+          mkdir -p out/screens out/logs
+          xcodebuild test -project Aerial.xcodeproj -scheme Aerial \
+            -destination "platform=iOS Simulator,name=$SIM,OS=$SIM_OS" \
+            -clonedSourcePackagesDirPath "$PACKAGES" -parallel-testing-enabled NO \
+            -resultBundlePath out/tests.xcresult \
+            TEST_RUNNER_SCREENS_DIR="$PWD/out/screens" > out/logs/test-build.log 2>&1
+          status=$?
+          grep -E "error:|Test (Case|Suite)|[✔✘] |passed|failed" out/logs/test-build.log | tail -300
+          exit $status
+
+      - name: Журналы приложения с симулятора
+        if: always()
+        run: |
+          container=$(xcrun simctl get_app_container booted com.aerial.ios data 2>/dev/null || true)
+          if [ -n "$container" ]; then
+            cp -R "$container/Documents/logs" out/logs/app 2>/dev/null || true
+            cp "$container/Documents/TorrServer/"*.log out/logs/app/ 2>/dev/null || true
+          fi
+          grep -E "error:" out/logs/test-build.log | sort -u | head -80 || true
+
+      - name: Сборка .ipa (без подписи)
+        id: ipa
+        run: |
+          set +e
+          xcodebuild archive -project Aerial.xcodeproj -scheme Aerial -configuration Release \
+            -destination "generic/platform=iOS" -archivePath out/Aerial.xcarchive \
+            -clonedSourcePackagesDirPath "$PACKAGES" \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" > out/logs/archive.log 2>&1
+          status=$?
+          grep -E "error:|ARCHIVE" out/logs/archive.log | sort -u | tail -150
+          [ $status -eq 0 ] || exit $status
+          set -e
+          mkdir -p out/Payload
+          cp -R out/Aerial.xcarchive/Products/Applications/Aerial.app out/Payload/
+          (cd out && zip -qry Aerial.ipa Payload)
+          ls -lh out/Aerial.ipa
+
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.ipa.outcome == 'success'
+        with:
+          name: Aerial-ipa
+          path: out/Aerial.ipa
+          retention-days: 30
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Aerial-check
+          path: |
+            out/screens
+            out/logs
+          retention-days: 14
+
+      - name: Итог тестов
+        if: steps.test.outcome != 'success'
+        run: |
+          echo "Тесты не прошли — см. out/logs/test-build.log в артефакте Aerial-check"
+          exit 1

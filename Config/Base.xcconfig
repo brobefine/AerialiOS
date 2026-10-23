@@ -1,0 +1,4 @@
+// Общие настройки сборки. Ключи TMDb — в Secrets.xcconfig (не в git): CI пишет его из секретов репозитория.
+TMDB_API_KEY =
+TMDB_READ_TOKEN =
+#include? "Secrets.xcconfig"
