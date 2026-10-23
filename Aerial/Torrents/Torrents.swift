@@ -42,6 +42,7 @@ final class EmbeddedTorrServer {
         state = .starting
         let directory = dataDirectory
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        Self.trimLogs(in: directory)
         let wasRunning = TorrServerEngine.isRunning
         let port = Self.port
         let error: String = await Task.detached(priority: .userInitiated) {
@@ -69,6 +70,18 @@ final class EmbeddedTorrServer {
         await configure(cacheMB: cacheMB)
         Log.note("TORRSERVER", "встроенный \(version) на \(address)")
         state = .running(version: version)
+    }
+
+    /// Журналы сервера растут без предела до 100 МБ (сам TorrServer чистит только их), а в `torrserver.log` уходит
+    /// весь stderr процесса — сервер перенаправляет его к себе. Больше 4 МБ — прошлый уходит в `.1`.
+    private static func trimLogs(in directory: URL) {
+        for name in ["torrserver.log", "web.log"] {
+            let file = directory.appending(path: name)
+            guard let size = (try? file.resourceValues(forKeys: [.fileSizeKey]))?.fileSize, size > 4 << 20 else { continue }
+            let previous = file.appendingPathExtension("1")
+            try? FileManager.default.removeItem(at: previous)
+            try? FileManager.default.moveItem(at: file, to: previous)
+        }
     }
 
     /// Кэш в памяти по настройке; DLNA, Bonjour и поиск соседей по локальной сети выключены — телефону они не нужны,

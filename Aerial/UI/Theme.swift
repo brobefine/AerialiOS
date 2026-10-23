@@ -38,6 +38,19 @@ extension View {
     }
 }
 
+extension View {
+    /// Экран с картинкой под панелью навигации. На iOS 26 панель и так прозрачная, а при прокрутке система сама
+    /// размывает край под ней — её не трогаем; на iOS 18 прячем фон панели.
+    @ViewBuilder
+    func clearNavigationBar() -> some View {
+        if #available(iOS 26, *) {
+            self
+        } else {
+            self.toolbarBackground(.hidden, for: .navigationBar)
+        }
+    }
+}
+
 /// Главная кнопка, как «Смотреть» у Apple TV: белая капсула с чёрным текстом.
 struct PrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {

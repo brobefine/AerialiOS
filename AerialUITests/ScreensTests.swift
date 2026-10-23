@@ -59,25 +59,12 @@ final class ScreensTests: XCTestCase {
             shot("05-releases")
         }
 
-        let search = app.buttons["Поиск"].firstMatch
-        if search.waitForExistence(timeout: 5) {
-            search.tap()
-            sleep(3)
-            shot("06-search-empty")
-            let field = app.searchFields.firstMatch
-            if field.waitForExistence(timeout: 5) {
-                field.tap()
-                field.typeText("Дюна")
-                sleep(5)
-                shot("07-search")
-            }
-        }
-
+        // Поиск — последним: на iOS 26 поле поиска с клавиатурой закрывает панель вкладок.
         let library = app.buttons["Медиатека"].firstMatch
         if library.waitForExistence(timeout: 5) {
             library.tap()
             sleep(2)
-            shot("08-library")
+            shot("06-library")
         }
 
         let home = app.buttons["Главная"].firstMatch
@@ -87,7 +74,24 @@ final class ScreensTests: XCTestCase {
             if settings.waitForExistence(timeout: 10) {
                 settings.tap()
                 sleep(6)
-                shot("09-settings")
+                shot("07-settings")
+                let done = app.buttons["Готово"].firstMatch
+                if done.waitForExistence(timeout: 3) { done.tap() }
+                sleep(1)
+            }
+        }
+
+        let search = app.buttons["Поиск"].firstMatch
+        if search.waitForExistence(timeout: 5) {
+            search.tap()
+            sleep(3)
+            shot("08-search-empty")
+            let field = app.searchFields.firstMatch
+            if field.waitForExistence(timeout: 5) {
+                field.tap()
+                field.typeText("Дюна")
+                sleep(5)
+                shot("09-search")
             }
         }
     }
@@ -104,5 +108,12 @@ final class ScreensTests: XCTestCase {
         app.tap()
         sleep(1)
         shot("12-player-controls")
+        // Закрытие плеера — обратно в книжную ориентацию.
+        let close = app.buttons["Закрыть"].firstMatch
+        if close.waitForExistence(timeout: 3) {
+            close.tap()
+            sleep(3)
+            shot("13-after-player")
+        }
     }
 }

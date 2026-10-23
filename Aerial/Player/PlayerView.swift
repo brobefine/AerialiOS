@@ -34,12 +34,12 @@ struct PlayerView: View {
         .persistentSystemOverlays(.hidden)
         .task { await model.start(settings: settings, library: library) }
         .onAppear {
-            Orientation.prefer(.landscape)
+            Orientation.player(true)
             scheduleHide()
         }
         .onDisappear {
             model.stop()
-            Orientation.prefer(.portrait)
+            Orientation.player(false)
         }
         .onChange(of: model.finished) { _, finished in if finished { dismiss() } }
     }
@@ -259,15 +259,32 @@ struct MPVVideoView: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: MPVViewController, context: Context) {}
 }
 
-/// Поворот iPhone: плеер просит альбомную ориентацию, по закрытии — обратно книжную. На iPad — как держат.
+/// Ориентация на iPhone, как у Apple TV: каталог — книжная, плеер открывается альбомной (повернуть можно в любую,
+/// кроме перевёрнутой). На iPad — как держат. Разрешённые ориентации отдаёт [AppDelegate]: в SwiftUI запрос поворота
+/// без этого отклоняется («контроллер поддерживает только portrait»).
 @MainActor
 enum Orientation {
-    static func prefer(_ mask: UIInterfaceOrientationMask) {
+    private(set) static var mask: UIInterfaceOrientationMask = UIDevice.current.userInterfaceIdiom == .phone ? .portrait : .all
+
+    static func player(_ active: Bool) {
         guard UIDevice.current.userInterfaceIdiom == .phone,
               let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return }
-        scene.requestGeometryUpdate(.iOS(interfaceOrientations: mask)) { error in
+        mask = active ? .allButUpsideDown : .portrait
+        for window in scene.windows {
+            var controller = window.rootViewController
+            while let current = controller {
+                current.setNeedsUpdateOfSupportedInterfaceOrientations()
+                controller = current.presentedViewController
+            }
+        }
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: active ? .landscape : .portrait)) { error in
             Log.note("ПОВОРОТ", error.localizedDescription)
         }
-        scene.keyWindow?.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations()
+    }
+}
+
+final class AppDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
+        Orientation.mask
     }
 }

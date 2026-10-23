@@ -84,7 +84,7 @@ struct HomeView: View {
                         .accessibilityIdentifier("settings")
                 }
             }
-            .toolbarBackground(.hidden, for: .navigationBar)
+            .clearNavigationBar()
             .sheet(isPresented: $settingsOpen) { SettingsView() }
             .aerialDestinations()
         }

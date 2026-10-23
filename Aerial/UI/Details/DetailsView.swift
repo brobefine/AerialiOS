@@ -40,7 +40,7 @@ struct DetailsView: View {
         }
         .ignoresSafeArea(edges: .top)
         .background(Theme.background)
-        .toolbarBackground(.hidden, for: .navigationBar)
+        .clearNavigationBar()
         .navigationBarTitleDisplayMode(.inline)
         .task { if details == nil { await load() } }
         .task(id: season) { await loadSeason() }
@@ -157,7 +157,9 @@ struct DetailsView: View {
         if !text.isEmpty || !(details?.tagline ?? "").isEmpty {
             VStack(alignment: .leading, spacing: 8) {
                 if let tagline = details?.tagline, !tagline.isEmpty {
-                    Text("«\(tagline)»").font(.subheadline.italic()).foregroundStyle(Theme.secondaryText)
+                    // TMDb часто присылает слоган уже в кавычках.
+                    let quoted = ["«", "\"", "“", "„"].contains { tagline.hasPrefix($0) } ? tagline : "«\(tagline)»"
+                    Text(quoted).font(.subheadline.italic()).foregroundStyle(Theme.secondaryText)
                 }
                 if !text.isEmpty {
                     Text(text)

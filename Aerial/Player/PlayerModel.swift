@@ -13,6 +13,8 @@ struct PlaybackRequest: Identifiable {
     var releaseTitle: String
     var startAt: Double = 0
     var runtimeMinutes: Int = 0
+    /// Писать ли прогресс в медиатеку (проверка воспроизведения на CI — нет).
+    var record = true
 
     var title: String { item.title }
     var subtitle: String {
@@ -190,7 +192,7 @@ final class PlayerModel {
     }
 
     private func save(force: Bool) {
-        guard let library, duration > 0, position > 0 else { return }
+        guard request.record, let library, duration > 0, position > 0 else { return }
         guard force || Date().timeIntervalSince(lastSaved) >= 5 else { return }
         lastSaved = .now
         library.record(item: request.item, episode: request.episode, position: position, duration: duration, source: source)

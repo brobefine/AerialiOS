@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct AerialApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @State private var settings = AppSettings()
     @State private var library = Library()
     @State private var playback = Playback()
@@ -56,6 +57,6 @@ enum UITestHooks {
     static func start(_ playback: Playback) {
         guard active, let link = UserDefaults.standard.string(forKey: "smokeLink"), !link.isEmpty else { return }
         let item = VodItem(id: "smoke", remoteId: 0, kind: .movie, title: "Проверка воспроизведения")
-        playback.play(PlaybackRequest(item: item, link: link, releaseTitle: "smoke"))
+        playback.play(PlaybackRequest(item: item, link: link, releaseTitle: "smoke", record: false))
     }
 }
