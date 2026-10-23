@@ -58,24 +58,48 @@ jobs:
         run: |
           set +e
           mkdir -p out/screens out/logs
-          xcodebuild test -project Aerial.xcodeproj -scheme Aerial \
+          # Переменные TEST_RUNNER_* xcodebuild передаёт процессу тестов без приставки — только через окружение.
+          TEST_RUNNER_SCREENS_DIR="$PWD/out/screens" xcodebuild test -project Aerial.xcodeproj -scheme Aerial \
             -destination "platform=iOS Simulator,name=$SIM,OS=$SIM_OS" \
             -clonedSourcePackagesDirPath "$PACKAGES" -parallel-testing-enabled NO \
-            -resultBundlePath out/tests.xcresult \
-            TEST_RUNNER_SCREENS_DIR="$PWD/out/screens" > out/logs/test-build.log 2>&1
+            -resultBundlePath out/tests.xcresult > out/logs/test-build.log 2>&1
           status=$?
-          grep -E "error:|Test (Case|Suite)|[✔✘] |passed|failed" out/logs/test-build.log | tail -300
+          grep -E "error:|Test (Case|Suite)|passed|failed" out/logs/test-build.log | tail -300
           exit $status
 
-      - name: Журналы приложения с симулятора
+      - name: Итоги тестов, снимки и журналы приложения
         if: always()
         run: |
-          container=$(xcrun simctl get_app_container booted com.aerial.ios data 2>/dev/null || true)
-          if [ -n "$container" ]; then
-            cp -R "$container/Documents/logs" out/logs/app 2>/dev/null || true
-            cp "$container/Documents/TorrServer/"*.log out/logs/app/ 2>/dev/null || true
+          set +e
+          if [ -d out/tests.xcresult ]; then
+            # Итоги всех тестов (и Swift Testing, которые xcodebuild в журнал не пишет) и снимки-вложения.
+            xcrun xcresulttool get test-results tests --path out/tests.xcresult > out/logs/test-results.json
+            xcrun xcresulttool get test-results summary --path out/tests.xcresult > out/logs/test-summary.json
+            python3 - out/logs/test-results.json <<'PY'
+          import json, sys
+          def walk(node, depth=0):
+              if node.get("nodeType") in ("Test Case", "Test Suite", "Unit test bundle", "UI test bundle"):
+                  print("  " * depth + f"{node.get('result', '?'):8} {node.get('name')}")
+              for child in node.get("children", []):
+                  walk(child, depth + 1)
+          for root in json.load(open(sys.argv[1])).get("testNodes", []):
+              walk(root)
+          PY
+            xcrun xcresulttool export attachments --path out/tests.xcresult --output-path out/screens/attachments
           fi
-          grep -E "error:" out/logs/test-build.log | sort -u | head -80 || true
+          # Журналы приложения: симулятор после тестов мог выключиться — включаем, чтобы открыть контейнер.
+          udid=$(xcrun simctl list devices available -j | python3 -c "import json,sys,os; d=json.load(sys.stdin)['devices']; print(next((x['udid'] for k,v in d.items() if k.endswith('iOS-' + os.environ['SIM_OS'].replace('.','-')) for x in v if x['name']==os.environ['SIM']), ''))")
+          if [ -n "$udid" ]; then
+            xcrun simctl boot "$udid" 2>/dev/null
+            container=$(xcrun simctl get_app_container "$udid" com.aerial.ios data 2>/dev/null)
+            if [ -n "$container" ]; then
+              mkdir -p out/logs/app
+              cp -R "$container/Documents/logs/." out/logs/app/
+              cp "$container/Documents/TorrServer/"*.log out/logs/app/
+            fi
+          fi
+          ls -R out/screens out/logs | head -60
+          exit 0
 
       - name: Сборка .ipa (без подписи)
         id: ipa
