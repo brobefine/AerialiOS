@@ -33,6 +33,7 @@ jobs:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
           TMDB_READ_TOKEN: ${{ secrets.TMDB_READ_TOKEN }}
         run: |
+          mkdir -p out/screens out/logs
           printf 'TMDB_API_KEY = %s\nTMDB_READ_TOKEN = %s\n' "$TMDB_API_KEY" "$TMDB_READ_TOKEN" > Config/Secrets.xcconfig
           command -v xcodegen >/dev/null || brew install xcodegen
           xcodegen generate
@@ -46,7 +47,10 @@ jobs:
           key: spm-${{ hashFiles('project.yml', 'Packages/**/Package.swift') }}
 
       - name: Пакеты (MPVKit, TorrServerKit)
-        run: xcodebuild -resolvePackageDependencies -project Aerial.xcodeproj -scheme Aerial -clonedSourcePackagesDirPath "$PACKAGES"
+        run: |
+          set -o pipefail
+          xcodebuild -resolvePackageDependencies -project Aerial.xcodeproj -scheme Aerial \
+            -clonedSourcePackagesDirPath "$PACKAGES" 2>&1 | tee out/logs/packages.log | tail -40
 
       - name: Тесты и снимки
         id: test

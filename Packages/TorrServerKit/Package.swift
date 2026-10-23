@@ -1,4 +1,4 @@
-// swift-tools-version:5.9
+// swift-tools-version:6.0
 // TorrServer внутри приложения: готовая gomobile-сборка из релиза TorrServer (MatriX).
 // Новая версия — поменять адрес и checksum (`shasum -a 256` архива).
 
