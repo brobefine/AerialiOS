@@ -208,6 +208,7 @@ struct DetailsView: View {
                                         width: Theme.landscapeWidth(sizeClass))
                         }
                         .buttonStyle(.plain)
+                        .accessibilityIdentifier("episode")
                     }
                 }
                 .scrollTargetLayout()
@@ -231,6 +232,7 @@ struct DetailsView: View {
                     ForEach(people) { person in
                         NavigationLink(value: Route.person(person)) { PersonBadge(person: person) }
                             .buttonStyle(.plain)
+                            .accessibilityIdentifier("person")
                     }
                 }
             }

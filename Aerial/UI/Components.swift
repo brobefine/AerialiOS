@@ -157,6 +157,7 @@ struct ShelfHeader: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .accessibilityIdentifier("section-header")
             } else {
                 Text(title)
             }

@@ -112,6 +112,7 @@ struct ShelfPicker: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityAddTraits(selected ? .isSelected : [])
+                    .accessibilityIdentifier("shelf-\(shelf.rawValue)")
                 }
             }
         }
