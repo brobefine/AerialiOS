@@ -483,8 +483,9 @@ private struct EpisodeCard: View {
                 Text([Format.runtime(minutes: episode.runtimeMinutes), episode.airDate.isEmpty ? "" : Format.date(episode.airDate)]
                     .filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(.caption2).foregroundStyle(.white.opacity(0.7))
-                if overviews {
-                    Text(spoiler ? "Описание скрыто, чтобы не было спойлеров" : episode.overview.isEmpty ? " " : episode.overview)
+                // Нет описания — нет и пустого места под ним.
+                if overviews && (spoiler || !episode.overview.isEmpty) {
+                    Text(spoiler ? "Описание скрыто, чтобы не было спойлеров" : episode.overview)
                         .font(.caption).foregroundStyle(.white.opacity(spoiler ? 0.5 : 0.85))
                         .lineLimit(3, reservesSpace: true)
                 }
@@ -524,10 +525,18 @@ private struct EpisodePreview: View {
                     .filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(.caption).foregroundStyle(Theme.secondaryText)
                 if !episode.overview.isEmpty {
-                    Text(episode.overview).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                    // Ширина задана явно: окно предпросмотра меряет текст без ограничения, и длинное описание
+                    // выходило за края карточки.
+                    Text(episode.overview)
+                        .font(.subheadline)
+                        .lineLimit(16)
+                        .frame(width: 308, alignment: .leading)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .padding(16)
+            .padding(.horizontal, 16)
+            .frame(width: 340, alignment: .leading)
+            .padding(.vertical, 16)
         }
         .frame(width: 340)
         .background {
@@ -566,6 +575,7 @@ private struct PersonPreview: View {
             Text(info.map { $0.biography.isEmpty ? "Биографии на TMDb нет." : $0.biography } ?? "Загружаем…")
                 .font(.subheadline)
                 .lineLimit(12)
+                .frame(width: 304, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(18)

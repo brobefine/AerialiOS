@@ -65,7 +65,9 @@ final class MPVCore: @unchecked Sendable {
             ("hwdec", "videotoolbox"), ("video-rotate", "no"),
             ("keep-open", "yes"), ("idle", "yes"),
             // Поток с TorrServer: держим запас вперёд, сеть ждём долго — раздача может замереть на минуту.
-            ("cache", "yes"), ("demuxer-max-bytes", "150MiB"), ("demuxer-max-back-bytes", "50MiB"),
+            // Запас mpv — поверх кэша TorrServer в том же процессе (256 МБ): при 150+50 МБ плеер доходил до 650 МБ
+            // памяти (perf.log 24 октября). 64+16 МБ — это минуты видео, остальное держит сервер.
+            ("cache", "yes"), ("demuxer-max-bytes", "64MiB"), ("demuxer-max-back-bytes", "16MiB"),
             ("demuxer-readahead-secs", "30"), ("network-timeout", "90"),
             ("alang", "ru,rus,en,eng"), ("slang", "ru,rus,en,eng"), ("subs-fallback", "yes"),
             ("input-default-bindings", "no"), ("input-vo-keyboard", "no"),

@@ -47,11 +47,24 @@ struct RelativesSection: View {
                             LazyHStack(alignment: .top, spacing: 12) {
                                 ForEach(items) { row in
                                     NavigationLink(value: Route.details(row.item)) {
-                                        VStack(alignment: .leading, spacing: 4) {
+                                        // Чем связан — под постером в его зеркальном размытии, как описание серии.
+                                        VStack(alignment: .leading, spacing: 0) {
                                             PosterCard(item: row.item, width: width)
-                                            Text(row.why).font(.caption2).foregroundStyle(Theme.secondaryText)
-                                                .lineLimit(3, reservesSpace: true).frame(width: width, alignment: .leading)
+                                            Text(row.why).font(.caption2).foregroundStyle(.white.opacity(0.85))
+                                                .lineLimit(4, reservesSpace: true)
+                                                .padding(8)
+                                                .frame(width: width, alignment: .leading)
+                                                .background(alignment: .top) {
+                                                    CachedImage(path: row.item.poster, size: "w185", pixelWidth: 200)
+                                                        .frame(width: width, height: width * 1.5)
+                                                        .clipped()
+                                                        .scaleEffect(x: 1, y: -1)
+                                                        .blur(radius: 18, opaque: true)
+                                                        .overlay(Color.black.opacity(0.3))
+                                                }
+                                                .clipped()
                                         }
+                                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                     }
                                     .buttonStyle(.plain)
                                     .contextMenu { PosterMenu(item: row.item) }
@@ -338,7 +351,8 @@ private struct ReviewSheet: View {
                 }
                 .padding(20)
             }
-            .background(Theme.background)
+            // Без своего фона — лист на системном жидком стекле.
+            .scrollContentBackground(.hidden)
             .navigationTitle("Отзыв")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {

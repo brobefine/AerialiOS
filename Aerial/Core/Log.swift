@@ -25,6 +25,7 @@ enum Log {
 
     /// Начало запуска: прошлые журналы уходят в `.1`, чтобы падение было видно и после перезапуска.
     static func startSession() {
+        reserveStandardDescriptors()
         queue.sync {
             app.rotate()
             mpv.rotate()
@@ -38,6 +39,19 @@ enum Log {
         logger.info("\(tag, privacy: .public): \(message, privacy: .public)")
         let line = "\(stamp.string(from: .now)) \(tag): \(message)\n"
         queue.async { app.append(line) }
+    }
+
+    /// Приложение, запущенное не из Xcode, может стартовать с закрытыми 0, 1, 2. Тогда первый открытый файл журнала
+    /// получал номер 1 или 2, а встроенный TorrServer перенаправляет stdout/stderr в свой журнал (`dup2`) — и записи
+    /// `app.log` уходили к нему: `app.log` «переставал писаться». Пустые номера занимаем /dev/null.
+    private static func reserveStandardDescriptors() {
+        for fd: Int32 in 0...2 where fcntl(fd, F_GETFD) == -1 {
+            let null = open("/dev/null", O_RDWR)
+            if null >= 0 && null != fd {
+                dup2(null, fd)
+                close(null)
+            }
+        }
     }
 
     /// Замеры производительности и энергии ([PerfMonitor]) — `perf.log`.
@@ -57,6 +71,7 @@ private final class LogFile {
     let url: URL
     let limit: Int
     private var handle: FileHandle?
+    private var abandoned: [FileHandle] = []
     private var size = 0
 
     init(name: String, limit: Int) {
@@ -76,6 +91,12 @@ private final class LogFile {
     func append(_ line: String) {
         let data = Data(line.utf8)
         if size + data.count > limit { rotate() }
+        // Дескриптор подменили (`dup2` сервера) или файл удалили из «Файлов» — открываем заново.
+        // Старый не закрываем: под его номером теперь чужой файл (журнал сервера) — держим, чтобы не закрыть его.
+        if let handle, !Self.same(handle.fileDescriptor, url.path) {
+            abandoned.append(handle)
+            self.handle = nil
+        }
         if handle == nil {
             if !FileManager.default.fileExists(atPath: url.path) {
                 FileManager.default.createFile(atPath: url.path, contents: nil)
@@ -85,5 +106,12 @@ private final class LogFile {
         }
         try? handle?.write(contentsOf: data)
         size += data.count
+    }
+
+    private static func same(_ fd: Int32, _ path: String) -> Bool {
+        var open = stat()
+        var disk = stat()
+        guard fstat(fd, &open) == 0, stat(path, &disk) == 0 else { return false }
+        return open.st_ino == disk.st_ino && open.st_dev == disk.st_dev
     }
 }

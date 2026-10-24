@@ -500,7 +500,7 @@ struct WatchSheet: View {
                         Text("Как в раздаче").tag("")
                         ForEach(voices, id: \.self) { Text($0).tag($0) }
                     }
-                    .pickerStyle(.navigationLink)
+                    .pickerStyle(.menu)
                 }
                 if series {
                     Section {
@@ -514,7 +514,7 @@ struct WatchSheet: View {
                                 Text("\(place.number). \(meta(place).title)").tag(place.file.index)
                             }
                         }
-                        .pickerStyle(.navigationLink)
+                        .pickerStyle(.menu)
                     }
                 } else if files.count > 1 {
                     Section("Файл") {
