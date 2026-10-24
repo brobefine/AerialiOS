@@ -67,14 +67,8 @@ jobs:
           unzip -q -o "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP/xcodegen"
           "$RUNNER_TEMP/xcodegen/xcodegen/bin/xcodegen" generate
 
-      - name: Кэш пакетов
-        uses: actions/cache@v4
-        with:
-          path: |
-            ${{ env.PACKAGES }}
-            ~/Library/Caches/org.swift.swiftpm
-          key: spm-${{ hashFiles('project.yml', 'Packages/**/Package.swift') }}
-
+      # Кэша пакетов нет намеренно: с GitHub они качаются за ~40 с, а кэш (1 ГБ) при четырёх задачах сразу
+      # восстанавливался по 3–4 минуты.
       - name: Пакеты (MPVKit, TorrServerKit)
         run: |
           set -o pipefail
@@ -85,6 +79,8 @@ jobs:
         if: matrix.part != 'ipa'
         run: |
           set +e
+          # Сначала дождаться симулятора: загрузка параллельно со сборкой отнимала процессор и замедляла сборку в 2–4 раза.
+          xcrun simctl bootstatus "$UDID" -b > /dev/null
           xcodebuild build-for-testing -project Aerial.xcodeproj -scheme Aerial \
             -destination "platform=iOS Simulator,id=$UDID" \
             -clonedSourcePackagesDirPath "$PACKAGES" -derivedDataPath .build/DerivedData > out/logs/build.log 2>&1
