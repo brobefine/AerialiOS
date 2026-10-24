@@ -242,13 +242,13 @@ struct ReleasesView: View {
                 if let entry = library.entry(item, episode), entry.resumable, let source = entry.source {
                     Button { playback.resume(entry) } label: {
                         HStack(spacing: 14) {
-                            Image(systemName: "play.fill").font(.title3)
+                            Image(systemName: "play.fill").font(.aerial(.title3))
                                 .frame(width: 44, height: 44)
                                 .background(.white, in: Circle())
                                 .foregroundStyle(.black)
                             VStack(alignment: .leading, spacing: 3) {
-                                Text("Продолжить с \(Format.clock(entry.position))").font(.headline)
-                                Text(source.releaseTitle).font(.caption).foregroundStyle(Theme.secondaryText).lineLimit(2)
+                                Text("Продолжить с \(Format.clock(entry.position))").font(.aerial(.headline))
+                                Text(source.releaseTitle).font(.aerial(.caption)).foregroundStyle(Theme.secondaryText).lineLimit(2)
                             }
                             Spacer(minLength: 0)
                         }
@@ -259,7 +259,7 @@ struct ReleasesView: View {
                 }
                 if !list.isEmpty {
                     Text("\(list.count) \(Format.plural(list.count, "раздача", "раздачи", "раздач")) · удерживайте, чтобы скачать")
-                        .font(.footnote.weight(.semibold))
+                        .font(.aerial(.footnote, .semibold))
                         .foregroundStyle(Theme.secondaryText)
                         .padding(.horizontal, 4)
                 }
@@ -410,7 +410,7 @@ private struct ReleaseCard: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 10) {
                 Text(release.title)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.aerial(.subheadline, .semibold))
                     .foregroundStyle(.white)
                     .lineLimit(3)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -429,12 +429,12 @@ private struct ReleaseCard: View {
                 Label("\(release.seeds)", systemImage: "arrow.up").foregroundStyle(seedColor)
                 Text(release.tracker).lineLimit(1)
             }
-            .font(.caption.weight(.medium))
+            .font(.aerial(.caption, .medium))
             .foregroundStyle(Theme.secondaryText)
             .labelStyle(TightLabel())
             if !info.audio.isEmpty {
                 Label(info.audio.joined(separator: ", "), systemImage: "waveform")
-                    .font(.caption2)
+                    .font(.aerial(.caption2))
                     .foregroundStyle(Theme.secondaryText)
                     .lineLimit(2)
                     .labelStyle(TightLabel())
@@ -522,7 +522,7 @@ struct WatchSheet: View {
                             ForEach(files) { file in
                                 VStack(alignment: .leading) {
                                     Text(file.name).lineLimit(2)
-                                    Text(Format.bytes(file.bytes)).font(.caption).foregroundStyle(Theme.secondaryText)
+                                    Text(Format.bytes(file.bytes)).font(.aerial(.caption)).foregroundStyle(Theme.secondaryText)
                                 }
                                 .tag(file.index)
                             }

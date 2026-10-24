@@ -69,7 +69,7 @@ struct PrimaryButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.headline)
+            .font(.aerial(.headline))
             .foregroundStyle(fill == nil ? .black : .white)
             .padding(.horizontal, 18)
             .frame(height: 48)
@@ -88,7 +88,7 @@ struct CircleGlassButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.system(size: size * 0.4, weight: .semibold))
+            .font(.aerial(size: size * 0.4, .semibold))
             .foregroundStyle(.white)
             .frame(width: size, height: size)
             // Интерактивное стекло внутри стиля кнопки на iOS 26 перехватывало касание — кнопка не срабатывала.
@@ -106,7 +106,7 @@ struct TagLabel: View {
 
     var body: some View {
         Text(text)
-            .font(.caption2.weight(.semibold))
+            .font(.aerial(.caption2, .semibold))
             .foregroundStyle(highlighted ? .black : .white.opacity(0.85))
             .padding(.horizontal, 7)
             .padding(.vertical, 3)

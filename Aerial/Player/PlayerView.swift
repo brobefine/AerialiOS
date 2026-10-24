@@ -28,7 +28,7 @@ struct PlayerView: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            MPVVideoView(layer: model.layer).ignoresSafeArea()
+            MPVVideoView(layer: model.layer) { model.refreshVideo() }.ignoresSafeArea()
             if !model.started {
                 // Пока видео не пошло — кадр фильма в размытии, как у системного плеера при загрузке.
                 CachedImage(path: model.request.item.backdrop.isEmpty ? model.request.item.poster : model.request.item.backdrop,
@@ -96,7 +96,7 @@ struct PlayerView: View {
             VStack {
                 HStack(spacing: 12) {
                     Image(systemName: "hand.wave.fill").foregroundStyle(Theme.accent)
-                    Text("\(from) хочет смотреть вместе").font(.subheadline.weight(.semibold)).lineLimit(2)
+                    Text("\(from) хочет смотреть вместе").font(.aerial(.subheadline, .semibold)).lineLimit(2)
                     if !WatchParty.shared.active && model.partyMedia != nil {
                         Button("Открыть комнату") {
                             model.hostParty()
@@ -134,7 +134,7 @@ struct PlayerView: View {
                         scheduleHide()
                     } label: {
                         Label(skip.kind == .recap ? "Пропустить «Ранее в сериале»" : "Пропустить заставку", systemImage: "forward.end.fill")
-                            .font(.subheadline.weight(.semibold))
+                            .font(.aerial(.subheadline, .semibold))
                             .foregroundStyle(.black)
                             .padding(.horizontal, 18)
                             .frame(height: 44)
@@ -154,22 +154,22 @@ struct PlayerView: View {
     private func nextCard(_ next: PlaybackRequest) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Далее").font(.caption.weight(.semibold)).foregroundStyle(Theme.secondaryText)
+                Text("Далее").font(.aerial(.caption, .semibold)).foregroundStyle(Theme.secondaryText)
                 Spacer()
                 Button {
                     nextDismissed = true
                     if model.finished { dismiss() }
                 } label: {
-                    Image(systemName: "xmark").font(.caption.weight(.bold)).foregroundStyle(.white.opacity(0.8))
+                    Image(systemName: "xmark").font(.aerial(.caption, .bold)).foregroundStyle(.white.opacity(0.8))
                         .frame(width: 28, height: 28)
                 }
                 .accessibilityLabel("Скрыть")
             }
             if let episode = next.episode {
-                Text("\(episode.code) · \(episode.title)").font(.headline).foregroundStyle(.white).lineLimit(2)
+                Text("\(episode.code) · \(episode.title)").font(.aerial(.headline)).foregroundStyle(.white).lineLimit(2)
             }
             if model.finished && settings.autoplayNext {
-                Text("Начнётся через \(countdown) с").font(.caption).foregroundStyle(Theme.secondaryText)
+                Text("Начнётся через \(countdown) с").font(.aerial(.caption)).foregroundStyle(Theme.secondaryText)
             }
             Button { playNext() } label: { Label("Смотреть", systemImage: "play.fill") }
                 .buttonStyle(PrimaryButtonStyle())
@@ -208,7 +208,7 @@ struct PlayerView: View {
             PreparingView(text: "Подготовка к просмотру", progress: value, peers: model.peers, speed: model.speed)
         case .failed(let message):
             VStack(spacing: 16) {
-                Image(systemName: "exclamationmark.triangle.fill").font(.largeTitle).foregroundStyle(.yellow)
+                Image(systemName: "exclamationmark.triangle.fill").font(.aerial(.largeTitle)).foregroundStyle(.yellow)
                 Text(message).multilineTextAlignment(.center).foregroundStyle(.white)
                 Button("Закрыть") { dismiss() }.buttonStyle(PrimaryButtonStyle()).frame(maxWidth: 220)
             }
@@ -217,7 +217,7 @@ struct PlayerView: View {
             if model.buffering || !model.started {
                 VStack(spacing: 10) {
                     ProgressView().controlSize(.large).tint(.white)
-                    if model.peers > 0 { Text(rate).font(.footnote.monospacedDigit()).foregroundStyle(.white.opacity(0.8)) }
+                    if model.peers > 0 { Text(rate).font(.aerial(.footnote).monospacedDigit()).foregroundStyle(.white.opacity(0.8)) }
                 }
                 .allowsHitTesting(false)
             }
@@ -272,8 +272,8 @@ struct PlayerView: View {
                 Spacer()
                 VStack(alignment: .leading, spacing: 8) {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(model.request.title).font(.headline).lineLimit(1)
-                        Text(model.request.subtitle).font(.caption).foregroundStyle(.white.opacity(0.7)).lineLimit(1)
+                        Text(model.request.title).font(.aerial(.headline)).lineLimit(1)
+                        Text(model.request.subtitle).font(.aerial(.caption)).foregroundStyle(.white.opacity(0.7)).lineLimit(1)
                     }
                     .foregroundStyle(.white)
                     timeline
@@ -305,7 +305,7 @@ struct PlayerView: View {
             scheduleHide()
         } label: {
             Image(systemName: symbol)
-                .font(.system(size: 17, weight: .semibold))
+                .font(.aerial(size: 17, .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 42, height: 42)
                 .contentShape(Rectangle())
@@ -321,7 +321,7 @@ struct PlayerView: View {
             scheduleHide()
         } label: {
             Image(systemName: symbol)
-                .font(.system(size: size, weight: .semibold))
+                .font(.aerial(size: size, .semibold))
                 .foregroundStyle(.white)
                 .shadow(color: .black.opacity(0.35), radius: 8)
                 .frame(width: size * 1.8, height: size * 1.8)
@@ -342,7 +342,7 @@ struct PlayerView: View {
                 Spacer()
                 Text("−" + Format.clock(max(0, model.duration - (scrub ?? model.position))))
             }
-            .font(.caption.monospacedDigit())
+            .font(.aerial(.caption).monospacedDigit())
             .foregroundStyle(.white.opacity(0.85))
         }
     }
@@ -375,7 +375,7 @@ struct PlayerView: View {
             }
         } label: {
             Image(systemName: "captions.bubble")
-                .font(.system(size: 17, weight: .semibold))
+                .font(.aerial(size: 17, .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 42, height: 42)
                 .contentShape(Rectangle())
@@ -429,11 +429,11 @@ private struct PreparingView: View {
             }
             if peers > 0 || speed > 0 {
                 Text("\(Format.bytes(speed))/с · пиров: \(peers)")
-                    .font(.footnote.monospacedDigit())
+                    .font(.aerial(.footnote).monospacedDigit())
                     .foregroundStyle(Theme.secondaryText)
             }
         }
-        .font(.subheadline)
+        .font(.aerial(.subheadline))
         .foregroundStyle(.white)
         .padding(.horizontal, 26)
         .padding(.vertical, 20)
@@ -480,9 +480,17 @@ private struct Scrubber: View {
 
 struct MPVVideoView: UIViewControllerRepresentable {
     let layer: MPVMetalLayer
+    var onResize: () -> Void = {}
 
-    func makeUIViewController(context: Context) -> MPVViewController { MPVViewController(layer: layer) }
-    func updateUIViewController(_ controller: MPVViewController, context: Context) {}
+    func makeUIViewController(context: Context) -> MPVViewController {
+        let controller = MPVViewController(layer: layer)
+        controller.onResize = onResize
+        return controller
+    }
+
+    func updateUIViewController(_ controller: MPVViewController, context: Context) {
+        controller.onResize = onResize
+    }
 }
 
 /// Ориентация на iPhone, как у Apple TV: каталог — книжная, плеер открывается альбомным, но поворачивается
@@ -507,6 +515,11 @@ enum Orientation {
 final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
         Orientation.mask
+    }
+
+    func applicationWillTerminate(_ application: UIApplication) {
+        CrashGuard.mark("terminated")
+        Log.note("ЖИЗНЬ", "закрыто")
     }
 }
 
@@ -534,12 +547,12 @@ private struct SubtitleSearch: View {
                     } label: {
                         HStack(spacing: 12) {
                             Text(result.language.uppercased())
-                                .font(.caption.weight(.bold))
+                                .font(.aerial(.caption, .bold))
                                 .frame(width: 34, height: 24)
                                 .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
                             VStack(alignment: .leading, spacing: 2) {
-                                Text(result.release).font(.subheadline).foregroundStyle(.white).lineLimit(2)
-                                Text("Скачиваний: \(result.downloads)").font(.caption2).foregroundStyle(Theme.secondaryText)
+                                Text(result.release).font(.aerial(.subheadline)).foregroundStyle(.white).lineLimit(2)
+                                Text("Скачиваний: \(result.downloads)").font(.aerial(.caption2)).foregroundStyle(Theme.secondaryText)
                             }
                             Spacer(minLength: 0)
                             if busy == result.fileId { ProgressView() }

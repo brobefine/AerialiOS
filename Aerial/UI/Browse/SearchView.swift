@@ -52,9 +52,9 @@ struct SearchView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     if trimmed.isEmpty && !recent.isEmpty {
                         HStack {
-                            Text("Недавние").font(.title3.weight(.bold))
+                            Text("Недавние").font(.aerial(.title3, .bold))
                             Spacer()
-                            Button("Очистить") { recentRaw = "" }.font(.subheadline)
+                            Button("Очистить") { recentRaw = "" }.font(.aerial(.subheadline))
                         }
                         .padding(.horizontal, 16)
                         ScrollView(.horizontal) {
@@ -69,13 +69,13 @@ struct SearchView: View {
                         .padding(.bottom, 8)
                     }
                     if trimmed.isEmpty && !popular.isEmpty {
-                        Text("Популярно сейчас").font(.title3.weight(.bold)).padding(.horizontal, 16)
+                        Text("Популярно сейчас").font(.aerial(.title3, .bold)).padding(.horizontal, 16)
                     }
                     if !trimmed.isEmpty && (aiThinking || !aiPicked.isEmpty || aiNote != nil) {
                         HStack(spacing: 8) {
                             Image(systemName: "sparkles").foregroundStyle(Theme.accent)
                             Text(aiThinking ? "ИИ ищет по описанию…" : aiNote ?? "Первые \(aiPicked.count) — найдены ИИ по описанию")
-                                .font(.footnote)
+                                .font(.aerial(.footnote))
                                 .foregroundStyle(Theme.secondaryText)
                             if aiThinking { ProgressView().controlSize(.small).tint(.white) }
                         }
@@ -233,17 +233,17 @@ struct PersonView: View {
                         .background(Theme.card)
                         .clipShape(Circle())
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(info?.name ?? person.name).font(.title2.weight(.bold))
+                        Text(info?.name ?? person.name).font(.aerial(.title2, .bold))
                         if let info {
-                            if !info.birthday.isEmpty { Text("Дата рождения: \(Format.date(info.birthday))").font(.subheadline) }
-                            if !info.place.isEmpty { Text(info.place).font(.subheadline).foregroundStyle(Theme.secondaryText) }
+                            if !info.birthday.isEmpty { Text("Дата рождения: \(Format.date(info.birthday))").font(.aerial(.subheadline)) }
+                            if !info.place.isEmpty { Text(info.place).font(.aerial(.subheadline)).foregroundStyle(Theme.secondaryText) }
                         }
                     }
                 }
                 .padding(.horizontal, 16)
                 if let biography = info?.biography, !biography.isEmpty {
                     Text(biography)
-                        .font(.body)
+                        .font(.aerial(.body))
                         .foregroundStyle(.white.opacity(0.9))
                         .lineLimit(expanded ? nil : 6)
                         .onTapGesture { withAnimation(.easeOut) { expanded.toggle() } }

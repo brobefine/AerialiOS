@@ -87,15 +87,15 @@ private struct DownloadCard: View {
                 }
                 .overlay {
                     Image(systemName: downloads.complete(job) ? "play.fill" : job.paused ? "pause.fill" : "arrow.down")
-                        .font(.title2).foregroundStyle(.white)
+                        .font(.aerial(.title2)).foregroundStyle(.white)
                         .frame(width: 44, height: 44).glass(in: Circle())
                 }
                 .background(Theme.card)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            Text(job.item.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+            Text(job.item.title).font(.aerial(.subheadline, .semibold)).lineLimit(1)
             Text(job.files.count > 1 ? "\(job.files.count) \(Format.plural(job.files.count, "файл", "файла", "файлов"))" : job.releaseTitle)
-                .font(.caption).foregroundStyle(.white.opacity(0.8)).lineLimit(1)
-            Text(downloadStatus(job)).font(.caption2).foregroundStyle(Theme.secondaryText).lineLimit(1)
+                .font(.aerial(.caption)).foregroundStyle(.white.opacity(0.8)).lineLimit(1)
+            Text(downloadStatus(job)).font(.aerial(.caption2)).foregroundStyle(Theme.secondaryText).lineLimit(1)
         }
         .frame(width: width)
     }
@@ -115,8 +115,8 @@ struct DownloadView: View {
                 List {
                     Section {
                         VStack(alignment: .leading, spacing: 4) {
-                            Text(job.releaseTitle).font(.footnote).foregroundStyle(Theme.secondaryText)
-                            Text(downloadStatus(job)).font(.footnote.weight(.semibold))
+                            Text(job.releaseTitle).font(.aerial(.footnote)).foregroundStyle(Theme.secondaryText)
+                            Text(downloadStatus(job)).font(.aerial(.footnote, .semibold))
                         }
                         NavigationLink(value: Route.details(job.item)) { Label("Страница", systemImage: "info.circle") }
                     }
@@ -154,13 +154,13 @@ struct DownloadView: View {
         } label: {
             HStack(spacing: 12) {
                 Image(systemName: complete ? "play.circle.fill" : "arrow.down.circle")
-                    .font(.title2)
+                    .font(.aerial(.title2))
                     .foregroundStyle(complete ? Theme.accent : Theme.secondaryText)
                 VStack(alignment: .leading, spacing: 3) {
                     Text(file.episode.map { "\($0.code) · \($0.title)" } ?? file.name)
-                        .font(.subheadline).foregroundStyle(.white).lineLimit(2)
+                        .font(.aerial(.subheadline)).foregroundStyle(.white).lineLimit(2)
                     Text(complete ? Format.bytes(file.bytes) : "\(Format.bytes(file.bytes)) · ещё не скачан")
-                        .font(.caption).foregroundStyle(Theme.secondaryText)
+                        .font(.aerial(.caption)).foregroundStyle(Theme.secondaryText)
                     if let entry, entry.fraction > 0 {
                         ProgressView(value: entry.fraction).tint(.white)
                     }

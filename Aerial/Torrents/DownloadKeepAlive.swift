@@ -34,6 +34,7 @@ final class DownloadKeepAlive {
     private var commands: [(MPRemoteCommand, Any)] = []
     private var artwork: MPMediaItemArtwork?
     private var shownPlate = false
+    private var lastDuration = 1000.0
 
     var active: Bool { player != nil }
 
@@ -48,10 +49,14 @@ final class DownloadKeepAlive {
         if shownPlate { publish() }
     }
 
-    /// Очередь кончилась.
+    /// Очередь кончилась: в плашке остаётся итог («Загружено» или «На паузе»), а не системное «Not Playing».
     func end() {
+        if shownPlate, let job {
+            let finished = Downloads.shared.complete(Downloads.shared.jobs.first { $0.hash == job.hash } ?? job)
+            publish(final: finished ? "Загружено · можно смотреть без сети" : "Загрузка на паузе · откройте Aerial, чтобы продолжить")
+        }
         job = nil
-        stop()
+        stop(keepInfo: true)
     }
 
     /// Плеер забирает звук себе — беззвучный встаёт; после фильма продолжается, если загрузка ещё идёт.
@@ -82,7 +87,9 @@ final class DownloadKeepAlive {
 
     func enterForeground() {
         background = false
-        guard shownPlate else { return }
+        // Плашку не прячем: иначе на экране блокировки оставалось системное «Not Playing». Загрузка в LiveContainer
+        // и так уже забрала звук, пока приложение было свёрнуто.
+        guard shownPlate, !Self.insideContainer else { return }
         hidePlate()
         // На экране — снова вперемешку: музыка пользователя не должна прерываться из-за загрузки.
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.mixWithOthers])
@@ -108,8 +115,14 @@ final class DownloadKeepAlive {
         }
     }
 
-    private func stop() {
-        hidePlate()
+    private func stop(keepInfo: Bool = false) {
+        if keepInfo, shownPlate {
+            shownPlate = false
+            for (command, target) in commands { command.removeTarget(target) }
+            commands = []
+        } else {
+            hidePlate()
+        }
         guard let player else { return }
         player.stop()
         self.player = nil
@@ -160,17 +173,25 @@ final class DownloadKeepAlive {
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
     }
 
-    /// Доля загрузки — полосой: длительность 1000, позиция — доля × 1000; подпись — скорость и очередь.
-    private func publish() {
+    /// Плашка как Live Activity: полоса — доля загрузки. Время на полосе — в секундах загрузки при текущей скорости:
+    /// слева — сколько ушло на скачанное, справа «−» — сколько осталось. Пока скорость держится, полоса идёт сама.
+    private func publish(final: String? = nil) {
         guard let job else { return }
         let paused = Downloads.shared.jobs.first { $0.hash == job.hash }?.paused ?? false
+        let total = Double(max(job.totalBytes, 1))
+        let speed = Double(max(rate, 1))
+        let duration = rate > 0 ? total / speed : max(lastDuration, 100)
+        lastDuration = duration
+        let left = rate > 0 ? Format.runtime(minutes: max(1, Int(total * (1 - fraction) / speed / 60))) : ""
+        let status = final ?? (paused ? "На паузе · \(Int(fraction * 100)) %"
+            : "\(Int(fraction * 100)) % · \(Format.bytes(rate))/с" + (left.isEmpty ? "" : " · осталось \(left)"))
         var info: [String: Any] = [
-            MPMediaItemPropertyTitle: "Загрузка: \(job.item.title)",
-            MPMediaItemPropertyArtist: paused ? "На паузе · \(Int(fraction * 100)) %"
-                : "\(Int(fraction * 100)) % · \(Format.bytes(rate))/с",
-            MPMediaItemPropertyPlaybackDuration: 1000.0,
-            MPNowPlayingInfoPropertyElapsedPlaybackTime: fraction * 1000,
-            MPNowPlayingInfoPropertyPlaybackRate: paused ? 0.0 : 1.0,
+            MPMediaItemPropertyTitle: final == nil ? "Загрузка: \(job.item.title)" : job.item.title,
+            MPMediaItemPropertyArtist: status,
+            MPMediaItemPropertyAlbumTitle: "Aerial · загрузки",
+            MPMediaItemPropertyPlaybackDuration: duration,
+            MPNowPlayingInfoPropertyElapsedPlaybackTime: (final == nil ? fraction : 1) * duration,
+            MPNowPlayingInfoPropertyPlaybackRate: paused || final != nil ? 0.0 : 1.0,
         ]
         if let artwork { info[MPMediaItemPropertyArtwork] = artwork }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info

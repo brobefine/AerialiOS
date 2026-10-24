@@ -23,8 +23,12 @@ final class EmbeddedTorrServer {
     var address: String { "http://127.0.0.1:\(Self.port)" }
     var client: TorrServerClient { try! TorrServerClient(address: address) }
 
+    /// База и журнал сервера. Обычно — `Documents/TorrServer` (видно в «Файлах»). Если документы лежат в общей папке
+    /// группы приложений (так бывает в LiveContainer), база уходит в личную временную папку процесса: сервер всё время
+    /// держит блокировку файла базы, а свёрнутое приложение с блокировкой в общей папке iOS сразу закрывает.
     var dataDirectory: URL {
-        URL.documentsDirectory.appending(path: "TorrServer", directoryHint: .isDirectory)
+        Storage.sharedGroup ? Storage.privateTemp.appending(path: "TorrServer", directoryHint: .isDirectory)
+            : URL.documentsDirectory.appending(path: "TorrServer", directoryHint: .isDirectory)
     }
 
     func ensureRunning(cacheMB: Int) async throws {

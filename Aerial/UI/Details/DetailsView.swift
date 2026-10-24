@@ -22,6 +22,8 @@ struct DetailsView: View {
     /// Цвет постера — им окрашены кнопки ([PosterPalette]).
     @State private var accent: Color?
     @State private var trailerOpen = false
+    /// Насколько страницу оттянули вниз в самом начале — постер растягивается следом.
+    @State private var pull: CGFloat = 0
 
     private var shown: VodItem { details?.item ?? item }
     private var art: String { shown.backdrop.isEmpty ? shown.poster : shown.backdrop }
@@ -32,7 +34,10 @@ struct DetailsView: View {
             let hero = min(geometry.size.height * 0.62, sizeClass == .regular ? 760 : 580)
             ZStack(alignment: .top) {
                 Theme.background
+                // Оттянули вниз в начале — постер растягивается от верха: иначе между ним и опустившимся размытием
+                // открывался резкий край зеркального размытия.
                 backdrop(width: width, height: hero)
+                    .scaleEffect(1 + pull / hero, anchor: .top)
                 ScrollView {
                     VStack(spacing: 0) {
                         // Постер виден целиком; информация начинается у его нижней трети.
@@ -51,6 +56,10 @@ struct DetailsView: View {
                     }
                 }
                 .scrollIndicators(.hidden)
+                // Только величина оттягивания: при обычной прокрутке она 0 и страница не перерисовывается.
+                .onScrollGeometryChange(for: CGFloat.self) { max(0, -($0.contentOffset.y + $0.contentInsets.top)) } action: { _, value in
+                    pull = value
+                }
             }
         }
         .ignoresSafeArea(edges: .top)
@@ -128,7 +137,7 @@ struct DetailsView: View {
         VStack(spacing: 14) {
             TitleArt(title: shown.title, logo: details?.logo ?? "", maxHeight: 100)
             Text(metaLine)
-                .font(.footnote.weight(.medium))
+                .font(.aerial(.footnote, .medium))
                 .foregroundStyle(.white.opacity(0.75))
                 .multilineTextAlignment(.center)
             genreChips
@@ -138,7 +147,7 @@ struct DetailsView: View {
                 // TMDb часто присылает слоган уже в кавычках.
                 let quoted = ["«", "\"", "“", "„"].contains { tagline.hasPrefix($0) } ? tagline : "«\(tagline)»"
                 Text(quoted)
-                    .font(.subheadline.italic())
+                    .font(.aerialItalic(.subheadline))
                     .foregroundStyle(.white.opacity(0.75))
                     .multilineTextAlignment(.center)
                     .frame(maxWidth: .infinity)
@@ -185,7 +194,7 @@ struct DetailsView: View {
 
     private func chip(_ title: String, strong: Bool) -> some View {
         Text(title)
-            .font(.caption.weight(.semibold))
+            .font(.aerial(.caption, .semibold))
             .foregroundStyle(.white.opacity(strong ? 0.95 : 0.75))
             .lineLimit(1)
             .truncationMode(.tail)
@@ -222,12 +231,12 @@ struct DetailsView: View {
         if let first = paragraphs.first {
             VStack(alignment: .leading, spacing: 6) {
                 Text(expanded ? paragraphs.joined(separator: "\n\n") : first)
-                    .font(.body)
+                    .font(.aerial(.body))
                     .foregroundStyle(.white.opacity(0.92))
                     .fixedSize(horizontal: false, vertical: true)
                 if paragraphs.count > 1 && !expanded {
                     Button("Ещё") { withAnimation(.easeOut) { expanded = true } }
-                        .font(.subheadline.weight(.semibold))
+                        .font(.aerial(.subheadline, .semibold))
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -280,7 +289,7 @@ struct DetailsView: View {
             let marked = rating != 0 || library.isSaved(item)
             Menu { PosterMenu(item: shown) } label: {
                 Image(systemName: rating != 0 ? TasteLevel.symbol(rating) : marked ? "bookmark.fill" : "bookmark")
-                    .font(.system(size: 19, weight: .semibold))
+                    .font(.aerial(size: 19, .semibold))
                     .foregroundStyle(marked && accent == nil ? .black : .white)
                     .frame(width: 48, height: 48)
                     .background {
@@ -322,7 +331,7 @@ struct DetailsView: View {
     private func episodesSection(_ details: VodDetails) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Серии").font(.title3.weight(.bold))
+                Text("Серии").font(.aerial(.title3, .bold))
                 Spacer()
                 Menu {
                     ForEach(details.seasons, id: \.self) { number in
@@ -331,9 +340,9 @@ struct DetailsView: View {
                 } label: {
                     HStack(spacing: 4) {
                         Text("Сезон \(season)")
-                        Image(systemName: "chevron.up.chevron.down").font(.caption)
+                        Image(systemName: "chevron.up.chevron.down").font(.aerial(.caption))
                     }
-                    .font(.subheadline.weight(.semibold))
+                    .font(.aerial(.subheadline, .semibold))
                     .padding(.horizontal, 12)
                     .frame(height: 32)
                     .glass(in: Capsule(), interactive: true)
@@ -414,8 +423,8 @@ struct DetailsView: View {
             VStack(alignment: .leading, spacing: 12) {
                 ForEach(details.facts, id: \.label) { fact in
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(fact.label).font(.caption).foregroundStyle(Theme.secondaryText)
-                        Text(fact.value).font(.subheadline)
+                        Text(fact.label).font(.aerial(.caption)).foregroundStyle(Theme.secondaryText)
+                        Text(fact.value).font(.aerial(.subheadline))
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -436,9 +445,9 @@ private struct WatchLabel: View {
         HStack(spacing: 8) {
             Image(systemName: "play.fill")
             VStack(alignment: .leading, spacing: 0) {
-                Text(title).font(.headline)
+                Text(title).font(.aerial(.headline))
                 if !detail.isEmpty {
-                    Text(detail).font(.caption2.weight(.medium)).opacity(0.7)
+                    Text(detail).font(.aerial(.caption2, .medium)).opacity(0.7)
                 }
             }
             .lineLimit(1)
@@ -479,14 +488,14 @@ private struct EpisodeCard: View {
                     }
                 }
             VStack(alignment: .leading, spacing: 4) {
-                Text("\(episode.number). \(episode.title)").font(.subheadline.weight(.semibold)).lineLimit(1)
+                Text("\(episode.number). \(episode.title)").font(.aerial(.subheadline, .semibold)).lineLimit(1)
                 Text([Format.runtime(minutes: episode.runtimeMinutes), episode.airDate.isEmpty ? "" : Format.date(episode.airDate)]
                     .filter { !$0.isEmpty }.joined(separator: " · "))
-                    .font(.caption2).foregroundStyle(.white.opacity(0.7))
+                    .font(.aerial(.caption2)).foregroundStyle(.white.opacity(0.7))
                 // Нет описания — нет и пустого места под ним.
                 if overviews && (spoiler || !episode.overview.isEmpty) {
                     Text(spoiler ? "Описание скрыто, чтобы не было спойлеров" : episode.overview)
-                        .font(.caption).foregroundStyle(.white.opacity(spoiler ? 0.5 : 0.85))
+                        .font(.aerial(.caption)).foregroundStyle(.white.opacity(spoiler ? 0.5 : 0.85))
                         .lineLimit(3, reservesSpace: true)
                 }
             }
@@ -519,17 +528,18 @@ private struct EpisodePreview: View {
                 .frame(width: 340, height: 340 * 9 / 16)
                 .clipped()
             VStack(alignment: .leading, spacing: 6) {
-                Text("\(episode.code) · \(episode.title)").font(.headline)
+                Text("\(episode.code) · \(episode.title)").font(.aerial(.headline))
                 Text([Format.runtime(minutes: episode.runtimeMinutes), episode.airDate.isEmpty ? "" : Format.date(episode.airDate),
                       entry.map { $0.resumable ? $0.remaining : "" } ?? ""]
                     .filter { !$0.isEmpty }.joined(separator: " · "))
-                    .font(.caption).foregroundStyle(Theme.secondaryText)
+                    .font(.aerial(.caption)).foregroundStyle(Theme.secondaryText)
                 if !episode.overview.isEmpty {
                     // Ширина задана явно: окно предпросмотра меряет текст без ограничения, и длинное описание
                     // выходило за края карточки.
+                    // Длинное — мельче и не больше 11 строк: окно предпросмотра выше экрана iOS обрезает снизу.
                     Text(episode.overview)
-                        .font(.subheadline)
-                        .lineLimit(16)
+                        .font(.aerial(episode.overview.count > 350 ? .footnote : .subheadline))
+                        .lineLimit(11)
                         .frame(width: 308, alignment: .leading)
                         .fixedSize(horizontal: false, vertical: true)
                 }
@@ -565,22 +575,29 @@ private struct PersonPreview: View {
                     .background(Theme.card)
                     .clipShape(Circle())
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(info?.name ?? person.name).font(.headline)
+                    Text(info?.name ?? person.name).font(.aerial(.headline))
                     let facts = [info.map { $0.birthday.isEmpty ? "" : Format.date($0.birthday) } ?? "", info?.place ?? ""]
                         .filter { !$0.isEmpty }.joined(separator: " · ")
-                    if !facts.isEmpty { Text(facts).font(.caption).foregroundStyle(Theme.secondaryText) }
-                    if !person.role.isEmpty { Text(person.role).font(.caption).foregroundStyle(Theme.secondaryText) }
+                    if !facts.isEmpty { Text(facts).font(.aerial(.caption)).foregroundStyle(Theme.secondaryText) }
+                    if !person.role.isEmpty { Text(person.role).font(.aerial(.caption)).foregroundStyle(Theme.secondaryText) }
                 }
             }
             Text(info.map { $0.biography.isEmpty ? "Биографии на TMDb нет." : $0.biography } ?? "Загружаем…")
-                .font(.subheadline)
+                .font(.aerial(.subheadline))
                 .lineLimit(12)
                 .frame(width: 304, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(18)
         .frame(width: 340, alignment: .leading)
+        // Жидкое стекло поверх размытого фото — как у предпросмотра серии.
+        .background {
+            CachedImage(path: info?.photo ?? person.photo, size: "w185", pixelWidth: 200)
+                .blur(radius: 30, opaque: true)
+                .overlay(Color.black.opacity(0.4))
+        }
         .glass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .foregroundStyle(.white)
         .task { if info == nil { info = try? await Catalogue.shared.person(person) } }
     }
@@ -601,7 +618,7 @@ private struct PersonBadge: View {
                 .frame(width: Theme.actorPhoto, height: Theme.actorPhoto)
                 .overlay {
                     if person.photo.isEmpty {
-                        Image(systemName: "person.fill").font(.title).foregroundStyle(Theme.secondaryText)
+                        Image(systemName: "person.fill").font(.aerial(.title)).foregroundStyle(Theme.secondaryText)
                     } else {
                         CachedImage(path: person.photo, size: "w185", pixelWidth: 240)
                     }
@@ -609,10 +626,10 @@ private struct PersonBadge: View {
                 .background(Theme.card)
                 .clipShape(Circle())
             Text(name)
-                .font(.caption.weight(.semibold))
+                .font(.aerial(.caption, .semibold))
                 .lineLimit(2, reservesSpace: true)
                 .multilineTextAlignment(.center)
-            Text(person.role).font(.caption2).foregroundStyle(Theme.secondaryText).lineLimit(1)
+            Text(person.role).font(.aerial(.caption2)).foregroundStyle(Theme.secondaryText).lineLimit(1)
         }
         .frame(width: Theme.actorPhoto + 16)
     }

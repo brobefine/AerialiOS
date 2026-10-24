@@ -37,8 +37,7 @@ final class HomeModel {
     }
 }
 
-/// Главная: разделы капсулами сверху; между разделами — свайпом влево-вправо по странице (ряды листаются своим
-/// жестом, раздел переключает свайп по заголовкам и промежуткам между рядами).
+/// Главная: разделы капсулами сверху, под ними — ряды выбранного раздела.
 struct HomeView: View {
     @Environment(Library.self) private var library
     @Environment(Taste.self) private var taste
@@ -50,31 +49,23 @@ struct HomeView: View {
 
     var body: some View {
         NavigationStack {
-            // Страницы `TabView` обрезаются по безопасной зоне — сверху и снизу оставались чёрные полосы. Поэтому
-            // страницы во весь экран, а отступы под капсулы разделов и нижнюю пилюлю — полями прокрутки. Капсулы —
-            // отдельным слоем поверх, в безопасной зоне: наложение на растянутый `TabView` прыгало вниз при касании.
-            GeometryReader { geometry in
-                ZStack(alignment: .top) {
-                    TabView(selection: $shelf) {
-                        ForEach(VodShelf.allCases) { item in
-                            ShelfPage(shelf: item, model: models[item] ?? HomeModel(),
-                                      insets: EdgeInsets(top: geometry.safeAreaInsets.top + Self.pickerHeight, leading: 0,
-                                                         bottom: geometry.safeAreaInsets.bottom, trailing: 0))
-                                .tag(item)
-                        }
-                    }
-                    .tabViewStyle(.page(indexDisplayMode: .never))
-                    .ignoresSafeArea()
-                    LinearGradient(colors: [Theme.background, Theme.background.opacity(0.85), .clear],
-                                   startPoint: .top, endPoint: .bottom)
-                        .frame(height: geometry.safeAreaInsets.top + Self.pickerHeight + 12)
-                        .ignoresSafeArea(edges: .top)
-                        .frame(maxHeight: .infinity, alignment: .top)
-                        .allowsHitTesting(false)
+            // Один раздел за раз — без постраничного `TabView`: он обрезал страницы по безопасной зоне (чёрные полосы),
+            // а на iOS 27 касание капсулы не переключало страницу и сдвигало полосу капсул вниз. Прокрутка раздела —
+            // во весь экран, под полосой капсул и нижней пилюлей; капсулы — `safeAreaInset`, контент идёт под ними.
+            ShelfPage(shelf: shelf, model: models[shelf] ?? HomeModel())
+                .id(shelf)
+                .transition(.opacity)
+                .safeAreaInset(edge: .top, spacing: 0) {
                     ShelfPicker(selection: $shelf)
                         .padding(.vertical, 8)
+                        .background {
+                            LinearGradient(colors: [Theme.background, Theme.background.opacity(0.85), .clear],
+                                           startPoint: .top, endPoint: .bottom)
+                                .ignoresSafeArea(edges: .top)
+                                .allowsHitTesting(false)
+                        }
                 }
-            }
+                .animation(.easeOut(duration: 0.2), value: shelf)
             .background(Theme.background)
             .toolbar(.hidden, for: .navigationBar)
             .aerialDestinations()
@@ -88,15 +79,11 @@ struct HomeView: View {
         .task(id: library.tasteRevision) { await feeds.refreshUpcoming(library) }
         .task(id: library.followed.map(\.id)) { await feeds.refreshFollowed(library) }
     }
-
-    /// Высота полосы капсул разделов с отступами.
-    static let pickerHeight: CGFloat = 52
 }
 
 private struct ShelfPage: View {
     let shelf: VodShelf
     let model: HomeModel
-    let insets: EdgeInsets
 
     @Environment(Library.self) private var library
     @Environment(Taste.self) private var taste
@@ -150,9 +137,6 @@ private struct ShelfPage: View {
             }
             .padding(.vertical, 12)
         }
-        .contentMargins(.top, insets.top, for: .scrollContent)
-        .contentMargins(.bottom, insets.bottom + 12, for: .scrollContent)
-        .contentMargins(.top, insets.top, for: .scrollIndicators)
         .refreshable { await model.load(shelf, force: true) }
         .task { await model.load(shelf) }
         .task(id: tasteKey) { updateTaste() }
@@ -189,7 +173,7 @@ struct ShelfPicker: View {
                     // «Вселенные» — тоже раздел главной, как пункт «Кинотека › Вселенные» на ТВ.
                     NavigationLink(value: Route.universes) {
                         Label("Вселенные", systemImage: "circle.hexagongrid")
-                            .font(.subheadline.weight(.semibold))
+                            .font(.aerial(.subheadline, .semibold))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 16)
                             .frame(height: 36)
@@ -220,7 +204,7 @@ struct Chip: View {
     var body: some View {
         Button(action: action) {
             let label = Text(title)
-                .font(.subheadline.weight(.semibold))
+                .font(.aerial(.subheadline, .semibold))
                 .foregroundStyle(selected ? .black : .white)
                 .padding(.horizontal, 16)
                 .frame(height: 36)
@@ -244,7 +228,7 @@ struct TitleArt: View {
     var body: some View {
         if logo.isEmpty || !Theme.titleLogos {
             Text(title)
-                .font(.system(size: 32, weight: .heavy))
+                .font(.aerial(size: 32, .heavy))
                 .multilineTextAlignment(.center)
                 .lineLimit(3)
                 .minimumScaleFactor(0.6)
@@ -282,7 +266,7 @@ struct UpcomingShelf: View {
                                     }
                                     .overlay(alignment: .topLeading) {
                                         Text(Self.when(episode.date))
-                                            .font(.caption.weight(.bold))
+                                            .font(.aerial(.caption, .bold))
                                             .foregroundStyle(.black)
                                             .padding(.horizontal, 10)
                                             .frame(height: 26)
@@ -291,10 +275,10 @@ struct UpcomingShelf: View {
                                     }
                                     .background(Theme.card)
                                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                Text(episode.item.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                                Text(episode.item.title).font(.aerial(.subheadline, .semibold)).lineLimit(1)
                                 Text([episode.code, episode.title].filter { !$0.isEmpty }.joined(separator: " · "))
-                                    .font(.caption).foregroundStyle(.white.opacity(0.8)).lineLimit(1)
-                                Text(Format.date(episode.date)).font(.caption2).foregroundStyle(Theme.secondaryText)
+                                    .font(.aerial(.caption)).foregroundStyle(.white.opacity(0.8)).lineLimit(1)
+                                Text(Format.date(episode.date)).font(.aerial(.caption2)).foregroundStyle(Theme.secondaryText)
                             }
                             .frame(width: width)
                         }

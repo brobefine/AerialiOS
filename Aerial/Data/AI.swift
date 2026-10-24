@@ -146,14 +146,14 @@ enum AI {
         }.filter { !$0.title.isEmpty && !$0.items.isEmpty }
     }
 
-    /// Перевод текста отзыва на русский (длинный — частями по ~4000 символов, параллельно).
-    static func translate(_ text: String) async throws -> String {
+    /// Перевод на русский (длинный — частями по ~4000 символов, параллельно): отзыв или, `what`, биография.
+    static func translate(_ text: String, what: String = "movie review") async throws -> String {
         let parts = split(text, limit: 4000)
         return try await withThrowingTaskGroup(of: (Int, String).self) { group in
             for (index, part) in parts.enumerated() {
                 group.addTask {
                     let out = try await cached("translate", ["ru", part], ttl: 30 * day) {
-                        try await generate("Translate the following movie review into Russian. Keep the meaning, tone and paragraph breaks. " +
+                        try await generate("Translate the following \(what) into Russian. Keep the meaning, tone and paragraph breaks. " +
                             "Output only the translation, without comments or quotes.\n\n\(part)")
                     }
                     return (index, out.trimmingCharacters(in: .whitespacesAndNewlines))

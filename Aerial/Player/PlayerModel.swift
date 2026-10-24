@@ -73,6 +73,7 @@ final class Playback {
         PerfMonitor.activity = "плеер: \(request.title)\(self.request?.localFile == nil ? "" : " (с диска)")"
         Orientation.allowLandscape(true)
         let view = PlayerScreen { [weak self] in self?.close() }
+            .font(.aerial(.body))
             .environment(settings)
             .environment(library)
             .environment(self)
@@ -402,6 +403,7 @@ final class PlayerModel {
         }
     }
     func selectAudio(_ track: MPVTrack) { core?.selectAudio(track.id) }
+    func refreshVideo() { core?.refreshVideo() }
     func selectSubtitle(_ track: MPVTrack?) { core?.selectSubtitle(track?.id) }
     func addSubtitle(_ file: URL) {
         Log.note("ПЛЕЕР", "субтитры: \(file.lastPathComponent)")

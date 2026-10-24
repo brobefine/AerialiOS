@@ -9,8 +9,8 @@ struct PartyOverlay: View {
             VStack(spacing: 6) {
                 ForEach(party.notes) { note in
                     HStack(spacing: 6) {
-                        Text(note.from).font(.caption.weight(.bold))
-                        Text(note.text).font(.caption).lineLimit(2)
+                        Text(note.from).font(.aerial(.caption, .bold))
+                        Text(note.text).font(.aerial(.caption)).lineLimit(2)
                     }
                     .foregroundStyle(.white)
                     .padding(.horizontal, 12)
@@ -26,7 +26,7 @@ struct PartyOverlay: View {
                 VStack(spacing: 4) {
                     Spacer()
                     ForEach(party.reactions) { reaction in
-                        Text(reaction.emoji).font(.system(size: 34)).transition(.move(edge: .bottom).combined(with: .opacity))
+                        Text(reaction.emoji).font(.aerial(size: 34)).transition(.move(edge: .bottom).combined(with: .opacity))
                     }
                 }
                 .padding(.trailing, 28)
@@ -89,7 +89,7 @@ struct PartySheet: View {
             Section {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Комната").font(.caption).foregroundStyle(Theme.secondaryText)
+                        Text("Комната").font(.aerial(.caption)).foregroundStyle(Theme.secondaryText)
                         Text(code).font(.system(.title, design: .monospaced).weight(.bold)).textSelection(.enabled)
                     }
                     Spacer()
@@ -100,14 +100,14 @@ struct PartySheet: View {
                     LabeledContent("Зрители", value: room.members.joined(separator: ", "))
                 }
                 if party.media != nil && !model.partyFile {
-                    Text("Комната смотрит другой файл — плеер переключится на него.").font(.footnote).foregroundStyle(Theme.secondaryText)
+                    Text("Комната смотрит другой файл — плеер переключится на него.").font(.aerial(.footnote)).foregroundStyle(Theme.secondaryText)
                 }
             }
             Section("Реакции") {
                 ScrollView(.horizontal) {
                     HStack(spacing: 10) {
                         ForEach(Self.emoji, id: \.self) { emoji in
-                            Button(emoji) { party.sendReaction(emoji) }.font(.system(size: 30)).buttonStyle(.plain)
+                            Button(emoji) { party.sendReaction(emoji) }.font(.aerial(size: 30)).buttonStyle(.plain)
                         }
                     }
                 }
@@ -116,9 +116,9 @@ struct PartySheet: View {
             Section("Чат") {
                 ForEach(party.chat.suffix(50)) { note in
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(note.mine ? "Вы" : note.from).font(.caption.weight(.semibold))
+                        Text(note.mine ? "Вы" : note.from).font(.aerial(.caption, .semibold))
                             .foregroundStyle(note.mine ? Theme.accent : Theme.secondaryText)
-                        Text(note.text).font(.subheadline)
+                        Text(note.text).font(.aerial(.subheadline))
                     }
                 }
                 HStack {
@@ -176,23 +176,23 @@ struct FriendsView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
                             Circle().fill(friend.online ? Color(hex: 0x3DDC84) : .gray).frame(width: 8, height: 8)
-                            Text(friends.label(friend)).font(.headline)
+                            Text(friends.label(friend)).font(.aerial(.headline))
                             Spacer()
                             if friend.online {
                                 Button("Постучаться") {
                                     friends.knock(friend.code)
                                     note = "\(friends.label(friend)) увидит, что вы хотите смотреть вместе."
                                 }
-                                .font(.caption)
+                                .font(.aerial(.caption))
                                 .buttonStyle(.bordered)
                             }
                         }
                         if let watching = friend.watching {
                             Text([watching.title, watching.sub].filter { !$0.isEmpty }.joined(separator: " · "))
-                                .font(.caption).foregroundStyle(Theme.secondaryText)
+                                .font(.aerial(.caption)).foregroundStyle(Theme.secondaryText)
                             if !watching.room.isEmpty {
                                 Button("Войти в комнату \(watching.room)") { WatchParty.shared.join(watching.room) }
-                                    .font(.caption.weight(.semibold))
+                                    .font(.aerial(.caption, .semibold))
                             }
                         }
                     }
@@ -249,7 +249,7 @@ struct FriendsView: View {
                 Button("Войти в комнату") { WatchParty.shared.join(joinRoom) }.disabled(joinRoom.count < 4)
                 if WatchParty.shared.active {
                     LabeledContent("Вы в комнате", value: WatchParty.shared.code ?? "")
-                    if WatchParty.shared.media == nil { Text("Жду фильм от комнаты…").font(.footnote).foregroundStyle(Theme.secondaryText) }
+                    if WatchParty.shared.media == nil { Text("Жду фильм от комнаты…").font(.aerial(.footnote)).foregroundStyle(Theme.secondaryText) }
                 }
             }
         }

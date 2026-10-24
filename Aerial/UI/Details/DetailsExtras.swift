@@ -34,11 +34,11 @@ struct RelativesSection: View {
                         Image(systemName: "sparkles").foregroundStyle(Theme.accent)
                     }
                     if let failure, items.isEmpty {
-                        Text(failure).font(.footnote).foregroundStyle(Theme.secondaryText).padding(.horizontal, 16)
+                        Text(failure).font(.aerial(.footnote)).foregroundStyle(Theme.secondaryText).padding(.horizontal, 16)
                     } else if items.isEmpty {
                         HStack(spacing: 8) {
                             ProgressView().tint(.white)
-                            Text("ИИ подбирает фильмы по темам…").font(.footnote).foregroundStyle(Theme.secondaryText)
+                            Text("ИИ подбирает фильмы по темам…").font(.aerial(.footnote)).foregroundStyle(Theme.secondaryText)
                         }
                         .padding(.horizontal, 16)
                     } else {
@@ -49,8 +49,8 @@ struct RelativesSection: View {
                                     NavigationLink(value: Route.details(row.item)) {
                                         // Чем связан — под постером в его зеркальном размытии, как описание серии.
                                         VStack(alignment: .leading, spacing: 0) {
-                                            PosterCard(item: row.item, width: width)
-                                            Text(row.why).font(.caption2).foregroundStyle(.white.opacity(0.85))
+                                            PosterCard(item: row.item, width: width, squareBottom: true)
+                                            Text(row.why).font(.aerial(.caption2)).foregroundStyle(.white.opacity(0.85))
                                                 .lineLimit(4, reservesSpace: true)
                                                 .padding(8)
                                                 .frame(width: width, alignment: .leading)
@@ -67,7 +67,8 @@ struct RelativesSection: View {
                                         .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                                     }
                                     .buttonStyle(.plain)
-                                    .contextMenu { PosterMenu(item: row.item) }
+                                    // Удержание — весь текст «чем связан» и обычное меню: «Смотреть позже», оценка.
+                                    .contextMenu { PosterMenu(item: row.item) } preview: { RelativePreview(row: row) }
                                 }
                             }
                         }
@@ -142,14 +143,14 @@ struct RecapCard: View {
             Button { open = true } label: {
                 HStack(spacing: 12) {
                     Image(systemName: unlocked ? "text.book.closed" : "lock")
-                        .font(.title3)
+                        .font(.aerial(.title3))
                         .frame(width: 40, height: 40)
                         .background(Theme.accent.opacity(0.18), in: Circle())
                         .foregroundStyle(Theme.accent)
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(details.item.kind == .series ? "Разбор сериала" : "Разбор фильма").font(.headline)
+                        Text(details.item.kind == .series ? "Разбор сериала" : "Разбор фильма").font(.aerial(.headline))
                         Text(unlocked ? subtitle : "Откроется после просмотра — в нём спойлеры")
-                            .font(.caption).foregroundStyle(Theme.secondaryText)
+                            .font(.aerial(.caption)).foregroundStyle(Theme.secondaryText)
                     }
                     Spacer(minLength: 0)
                     Image(systemName: "chevron.right").foregroundStyle(Theme.secondaryText)
@@ -198,8 +199,8 @@ private struct RecapSheet: View {
                     }
                     ForEach(sections, id: \.title) { section in
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(section.title).font(.title3.weight(.bold))
-                            Text(section.text).font(.body).foregroundStyle(.white.opacity(0.9)).textSelection(.enabled)
+                            Text(section.title).font(.aerial(.title3, .bold))
+                            Text(section.text).font(.aerial(.body)).foregroundStyle(.white.opacity(0.9)).textSelection(.enabled)
                         }
                     }
                 }
@@ -264,12 +265,12 @@ struct ReviewsSection: View {
                                 Text("Сначала подробные").tag("long")
                             }
                         } label: {
-                            Image(systemName: "arrow.up.arrow.down").font(.subheadline.weight(.semibold))
+                            Image(systemName: "arrow.up.arrow.down").font(.aerial(.subheadline, .semibold))
                         }
                         .padding(.trailing, 16)
                     }
                     if let summary {
-                        Label { Text(summary).font(.subheadline) } icon: { Image(systemName: "sparkles").foregroundStyle(Theme.accent) }
+                        Label { Text(summary).font(.aerial(.subheadline)) } icon: { Image(systemName: "sparkles").foregroundStyle(Theme.accent) }
                             .padding(14)
                             .frame(maxWidth: .infinity, alignment: .leading)
                             .background(Theme.accent.opacity(0.1), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
@@ -277,7 +278,7 @@ struct ReviewsSection: View {
                     } else if summaryPending {
                         HStack(spacing: 8) {
                             ProgressView().tint(.white)
-                            Text("ИИ читает отзывы…").font(.footnote).foregroundStyle(Theme.secondaryText)
+                            Text("ИИ читает отзывы…").font(.aerial(.footnote)).foregroundStyle(Theme.secondaryText)
                         }
                         .padding(.horizontal, 16)
                     }
@@ -313,12 +314,12 @@ private struct ReviewCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Text(review.author).font(.subheadline.weight(.semibold)).lineLimit(1)
+                Text(review.author).font(.aerial(.subheadline, .semibold)).lineLimit(1)
                 Spacer(minLength: 0)
                 if review.rating > 0 { RatingRing(value: review.rating, size: 28) }
             }
-            Text(review.text).font(.footnote).foregroundStyle(.white.opacity(0.85)).lineLimit(6, reservesSpace: true)
-            if !review.date.isEmpty { Text(Format.date(review.date)).font(.caption2).foregroundStyle(Theme.secondaryText) }
+            Text(review.text).font(.aerial(.footnote)).foregroundStyle(.white.opacity(0.85)).lineLimit(6, reservesSpace: true)
+            if !review.date.isEmpty { Text(Format.date(review.date)).font(.aerial(.caption2)).foregroundStyle(Theme.secondaryText) }
         }
         .padding(14)
         .frame(width: 280, alignment: .leading)
@@ -341,13 +342,13 @@ private struct ReviewSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack {
-                        Text(review.author).font(.headline)
+                        Text(review.author).font(.aerial(.headline))
                         Spacer()
                         if review.rating > 0 { RatingRing(value: review.rating, size: 34) }
                     }
                     if translating { HStack(spacing: 8) { ProgressView().tint(.white); Text("Перевожу…").foregroundStyle(Theme.secondaryText) } }
-                    if let failure { Text(failure).font(.footnote).foregroundStyle(Theme.secondaryText) }
-                    Text(showOriginal ? review.text : translated ?? review.text).font(.body).textSelection(.enabled)
+                    if let failure { Text(failure).font(.aerial(.footnote)).foregroundStyle(Theme.secondaryText) }
+                    Text(showOriginal ? review.text : translated ?? review.text).font(.aerial(.body)).textSelection(.enabled)
                 }
                 .padding(20)
             }
@@ -400,21 +401,21 @@ struct WikiStorySection: View {
             VStack(alignment: .leading, spacing: 10) {
                 if let story {
                     Text(story.text)
-                        .font(.subheadline)
+                        .font(.aerial(.subheadline))
                         .foregroundStyle(.white.opacity(0.9))
                         .lineLimit(expanded ? nil : 8)
                         .onTapGesture { withAnimation(.easeOut) { expanded.toggle() } }
                     HStack {
-                        if !expanded { Button("Ещё") { withAnimation(.easeOut) { expanded = true } }.font(.subheadline.weight(.semibold)) }
+                        if !expanded { Button("Ещё") { withAnimation(.easeOut) { expanded = true } }.font(.aerial(.subheadline, .semibold)) }
                         Spacer()
                         Button { openURL(story.source) } label: {
-                            Label("Википедия · \(story.heading)", systemImage: "book").font(.caption)
+                            Label("Википедия · \(story.heading)", systemImage: "book").font(.aerial(.caption))
                         }
                         .foregroundStyle(Theme.secondaryText)
                     }
                 } else {
                     Text(loading ? "Загружаем интересные факты…" : "История создания пока недоступна в Википедии")
-                        .font(.subheadline)
+                        .font(.aerial(.subheadline))
                         .foregroundStyle(Theme.secondaryText)
                 }
             }
@@ -428,5 +429,36 @@ struct WikiStorySection: View {
             story = await Wiki.story(item)
             loading = false
         }
+    }
+}
+
+/// Предпросмотр «духовного родственника»: постер, название и год, весь текст «чем связан» — на стекле поверх
+/// размытого постера, как предпросмотр серии.
+private struct RelativePreview: View {
+    let row: Relative
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            PosterCard(item: row.item, width: 110)
+            VStack(alignment: .leading, spacing: 6) {
+                Text(row.item.title).font(.aerial(.headline))
+                Text([row.item.year, row.item.kindLabel].filter { !$0.isEmpty }.joined(separator: " · "))
+                    .font(.aerial(.caption)).foregroundStyle(Theme.secondaryText)
+                Text(row.why)
+                    .font(.aerial(.subheadline))
+                    .frame(width: 186, alignment: .leading)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(16)
+        .frame(width: 340, alignment: .leading)
+        .background {
+            CachedImage(path: row.item.poster, size: "w185", pixelWidth: 200)
+                .blur(radius: 30, opaque: true)
+                .overlay(Color.black.opacity(0.4))
+        }
+        .glass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .foregroundStyle(.white)
     }
 }

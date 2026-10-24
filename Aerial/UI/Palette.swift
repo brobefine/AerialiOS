@@ -137,7 +137,7 @@ struct RatingsRow: View {
                 .rotationEffect(.degrees(-90))
                 .padding(line / 2)
             Text(entry.text)
-                .font(.system(size: size * 0.33, weight: .semibold, design: .rounded))
+                .font(.aerial(size: size * 0.33, .semibold))
                 .monospacedDigit()
                 .minimumScaleFactor(0.7)
                 .foregroundStyle(.white)
@@ -149,18 +149,18 @@ struct RatingsRow: View {
         let k = size / 26
         switch kind {
         case .tomato, .popcorn:
-            Text(kind == .tomato ? "🍅" : "🍿").font(.system(size: 18 * k)).frame(width: size, height: size)
+            Text(kind == .tomato ? "🍅" : "🍿").font(.aerial(size: 18 * k)).frame(width: size, height: size)
         case .metacritic:
-            Text("m").font(.system(size: 13 * k, weight: .bold)).foregroundStyle(.white)
+            Text("m").font(.aerial(size: 13 * k, .bold)).foregroundStyle(.white)
                 .frame(width: size, height: size)
                 .background(Color(hex: 0x1B1B1B), in: Circle())
                 .overlay(Circle().stroke(Color(hex: 0xFFCC33), lineWidth: 2 * k))
         case .imdb:
-            Text("IMDb").font(.system(size: 8 * k, weight: .black)).foregroundStyle(.black)
+            Text("IMDb").font(.aerial(size: 8 * k, .black)).foregroundStyle(.black)
                 .frame(width: size, height: size)
                 .background(Color(hex: 0xF5C518), in: RoundedRectangle(cornerRadius: 4 * k))
         case .tmdb:
-            Text("TMDB").font(.system(size: 7 * k, weight: .black)).foregroundStyle(Color(hex: 0x01D2A0))
+            Text("TMDB").font(.aerial(size: 7 * k, .black)).foregroundStyle(Color(hex: 0x01D2A0))
                 .frame(width: size, height: size)
                 .background(Color(hex: 0x0D253F), in: RoundedRectangle(cornerRadius: 4 * k))
         case .letterboxd:

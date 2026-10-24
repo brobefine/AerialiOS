@@ -18,6 +18,9 @@ struct AerialApp: App {
         // и так приходит коду как EPIPE.
         signal(SIGPIPE, SIG_IGN)
         Log.startSession()
+        AerialFont.applyToNavigationBars()
+        CrashGuard.start()
+        Storage.logPlacement()
         // UI-тесты ждут конца каждой анимации — без них прогон на CI заметно короче.
         if UITestHooks.active { UIView.setAnimationsEnabled(false) }
     }
@@ -32,11 +35,14 @@ struct AerialApp: App {
                 .environment(playback)
                 .preferredColorScheme(.dark)
                 .tint(Theme.accent)
+                // Commissioner, как на ТВ, — для всего, где шрифт не задан явно (списки, формы, подписи).
+                .font(.aerial(.body))
                 .task { await Torrents.warmUp(settings) }
         }
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .background:
+                CrashGuard.mark("background")
                 PerfMonitor.shared.pause()
                 Friends.shared.setForeground(false)
                 Log.note("ЖИЗНЬ", "в фоне\(playback.request == nil ? "" : ", идёт фильм")")
@@ -46,6 +52,7 @@ struct AerialApp: App {
                 DownloadKeepAlive.shared.enterBackground()
             case .active:
                 Log.note("ЖИЗНЬ", "на экране")
+                CrashGuard.mark("active")
                 PerfMonitor.shared.resume()
                 DownloadKeepAlive.shared.enterForeground()
                 Friends.shared.setForeground(true)

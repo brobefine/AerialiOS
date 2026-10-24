@@ -46,7 +46,7 @@ struct RatingRing: View {
                 .rotationEffect(.degrees(-90))
                 .padding(line / 2 + 1)
             Text(String(format: "%.1f", value))
-                .font(.system(size: size * 0.32, weight: .bold, design: .rounded))
+                .font(.aerial(size: size * 0.32, .bold))
                 .monospacedDigit()
                 .foregroundStyle(.white)
         }
@@ -60,6 +60,8 @@ struct PosterCard: View {
     let item: VodItem
     var width: CGFloat?
     var showTitle = false
+    /// Скругление только сверху: под постером продолжается карточка (описание «Духовных родственников»).
+    var squareBottom = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -68,18 +70,20 @@ struct PosterCard: View {
                 .overlay { CachedImage(path: item.poster, size: "w342", pixelWidth: 420) }
                 .overlay {
                     if item.poster.isEmpty {
-                        Text(item.title).font(.caption.weight(.semibold)).multilineTextAlignment(.center).padding(8)
+                        Text(item.title).font(.aerial(.caption, .semibold)).multilineTextAlignment(.center).padding(8)
                     }
                 }
                 .background(Theme.card)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .clipShape(UnevenRoundedRectangle(topLeadingRadius: 10, bottomLeadingRadius: squareBottom ? 0 : 10,
+                                                  bottomTrailingRadius: squareBottom ? 0 : 10, topTrailingRadius: 10,
+                                                  style: .continuous))
                 .overlay(alignment: .bottomTrailing) {
                     if item.rating > 0 && item.votes >= 10 { RatingRing(value: item.rating, size: 26).padding(5) }
                 }
             if showTitle {
-                Text(item.title).font(.footnote.weight(.medium)).lineLimit(1)
+                Text(item.title).font(.aerial(.footnote, .medium)).lineLimit(1)
                 Text([item.year, item.kindLabel].filter { !$0.isEmpty }.joined(separator: " · "))
-                    .font(.caption2).foregroundStyle(Theme.secondaryText).lineLimit(1)
+                    .font(.aerial(.caption2)).foregroundStyle(Theme.secondaryText).lineLimit(1)
             }
         }
         .frame(width: width)
@@ -163,7 +167,7 @@ struct RankedPoster: View {
     var body: some View {
         HStack(alignment: .bottom, spacing: -width * 0.12) {
             Text("\(rank)")
-                .font(.system(size: width * 0.95, weight: .black, design: .rounded))
+                .font(.aerial(size: width * 0.95, .black))
                 .foregroundStyle(LinearGradient(colors: [.white.opacity(0.95), .white.opacity(0.35)], startPoint: .top, endPoint: .bottom))
                 .shadow(color: .black.opacity(0.6), radius: 6)
                 .offset(y: width * 0.14)
@@ -227,7 +231,7 @@ struct ShelfHeader: View {
                 NavigationLink(value: destination) {
                     HStack(spacing: 4) {
                         Text(title)
-                        Image(systemName: "chevron.right").font(.subheadline.weight(.bold)).foregroundStyle(Theme.secondaryText)
+                        Image(systemName: "chevron.right").font(.aerial(.subheadline, .bold)).foregroundStyle(Theme.secondaryText)
                     }
                 }
                 .buttonStyle(.plain)
@@ -236,7 +240,7 @@ struct ShelfHeader: View {
                 Text(title)
             }
         }
-        .font(.title3.weight(.bold))
+        .font(.aerial(.title3, .bold))
         .foregroundStyle(.white)
         .padding(.horizontal, 16)
     }
@@ -269,16 +273,16 @@ struct ContinueCard: View {
                     }
                 }
                 .overlay {
-                    Image(systemName: "play.fill").font(.title2).foregroundStyle(.white)
+                    Image(systemName: "play.fill").font(.aerial(.title2)).foregroundStyle(.white)
                         .frame(width: 44, height: 44).glass(in: Circle())
                 }
                 .background(Theme.card)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-            Text(entry.item.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+            Text(entry.item.title).font(.aerial(.subheadline, .semibold)).lineLimit(1)
             if let episode = entry.episode {
-                Text("\(episode.code) · \(episode.title)").font(.caption).foregroundStyle(.white.opacity(0.8)).lineLimit(1)
+                Text("\(episode.code) · \(episode.title)").font(.aerial(.caption)).foregroundStyle(.white.opacity(0.8)).lineLimit(1)
             }
-            Text(entry.remaining).font(.caption2).foregroundStyle(Theme.secondaryText).lineLimit(1)
+            Text(entry.remaining).font(.aerial(.caption2)).foregroundStyle(Theme.secondaryText).lineLimit(1)
         }
         .frame(width: width)
     }

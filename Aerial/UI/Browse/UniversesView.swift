@@ -79,7 +79,7 @@ struct UniversesView: View {
                     NavigationLink { WallView(universe: universe) } label: {
                         VStack(spacing: 12) {
                             UniverseBall(universe: universe, spin: spin)
-                            Text(universe.title).font(.headline).foregroundStyle(.white)
+                            Text(universe.title).font(.aerial(.headline)).foregroundStyle(.white)
                         }
                     }
                     .buttonStyle(.plain)
@@ -87,7 +87,7 @@ struct UniversesView: View {
             }
             .padding(20)
             Text("Самые известные работы каждого раздела — стеной постеров. Сведите пальцы, чтобы отдалить, разведите — чтобы рассмотреть; касание — карточка.")
-                .font(.footnote)
+                .font(.aerial(.footnote))
                 .foregroundStyle(Theme.secondaryText)
                 .padding(.horizontal, 24)
         }
@@ -189,12 +189,12 @@ private struct WallCard: View {
         HStack(alignment: .top, spacing: 14) {
             PosterCard(item: item, width: 84)
             VStack(alignment: .leading, spacing: 6) {
-                Text(item.title).font(.headline).lineLimit(2)
+                Text(item.title).font(.aerial(.headline)).lineLimit(2)
                 Text([item.year, item.genres.prefix(2).joined(separator: ", ")].filter { !$0.isEmpty }.joined(separator: " · "))
-                    .font(.caption).foregroundStyle(Theme.secondaryText)
-                Text(item.overview).font(.caption).foregroundStyle(.white.opacity(0.8)).lineLimit(3)
+                    .font(.aerial(.caption)).foregroundStyle(Theme.secondaryText)
+                Text(item.overview).font(.aerial(.caption)).foregroundStyle(.white.opacity(0.8)).lineLimit(3)
                 NavigationLink(value: Route.details(item)) {
-                    Text("Открыть").font(.subheadline.weight(.semibold)).foregroundStyle(.black)
+                    Text("Открыть").font(.aerial(.subheadline, .semibold)).foregroundStyle(.black)
                         .padding(.horizontal, 16).frame(height: 34).background(.white, in: Capsule())
                 }
                 .buttonStyle(.plain)

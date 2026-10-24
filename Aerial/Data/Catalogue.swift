@@ -281,6 +281,11 @@ final class Catalogue: Sendable {
             // Русской биографии у TMDb часто нет — тогда английская.
             biography = (try? await tmdb.decode(TMDbPerson.self, "person/\(person.id)", ["language": "en-US"], ttl: 7 * DiskCache.day))?.biography ?? ""
         }
+        // Биография не по-русски — переводит ИИ, как на ТВ (`ReviewTranslator`); перевод кэшируется на месяц.
+        if AI.enabled, !biography.isEmpty, !Self.cyrillic.matches(String(biography.prefix(300))),
+           let russian = try? await AI.translate(biography, what: "biography of a film actor or director"), !russian.isEmpty {
+            biography = russian
+        }
         let credits = try await tmdb.decode(TMDbCredits.self, "person/\(person.id)/combined_credits", ttl: 7 * DiskCache.day)
         let directing = person.role == "Режиссёр" || body.knownForDepartment == "Directing"
         let rows = directing ? (credits.crew ?? []).filter { $0.job == "Director" } : (credits.cast ?? [])
@@ -290,6 +295,8 @@ final class Catalogue: Sendable {
                              place: body.placeOfBirth ?? "", biography: biography.trimmingCharacters(in: .whitespacesAndNewlines),
                              works: works)
     }
+
+    private static let cyrillic = Rx("[А-Яа-яЁё]")
 
     // MARK: Разбор
 

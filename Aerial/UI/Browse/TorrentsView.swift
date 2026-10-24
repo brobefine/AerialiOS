@@ -45,10 +45,10 @@ struct TorrentsView: View {
                     Button { open(info) } label: {
                         HStack(spacing: 12) {
                             VStack(alignment: .leading, spacing: 3) {
-                                Text(info.title).font(.subheadline).foregroundStyle(.white).lineLimit(2)
+                                Text(info.title).font(.aerial(.subheadline)).foregroundStyle(.white).lineLimit(2)
                                 Text(info.files.isEmpty ? "Метаданные ещё не получены"
                                      : "\(info.files.count) \(Format.plural(info.files.count, "видеофайл", "видеофайла", "видеофайлов")) · \(Format.bytes(info.files.reduce(0) { $0 + $1.bytes }))")
-                                    .font(.caption).foregroundStyle(Theme.secondaryText)
+                                    .font(.aerial(.caption)).foregroundStyle(Theme.secondaryText)
                             }
                             Spacer(minLength: 0)
                             if opening == info.hash { ProgressView() }

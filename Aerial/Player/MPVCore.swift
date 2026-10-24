@@ -113,6 +113,13 @@ final class MPVCore: @unchecked Sendable {
     /// В фоне видео выключаем — звук играет дальше, а при возврате не бывает чёрного экрана (как в демо MPVKit).
     func setVideoEnabled(_ enabled: Bool) { set("vid", enabled ? "auto" : "no") }
 
+    /// Размер вывода сменился (поворот): mpv перестраивает картинку под новый размер слоя сразу, а не со следующим
+    /// кадром — на паузе и при медленном потоке кадр оставался обрезанным или за краями экрана.
+    func refreshVideo() {
+        set("video-zoom", "0.0001")
+        set("video-zoom", "0")
+    }
+
     func destroy() {
         guard let handle else { return }
         self.handle = nil
@@ -230,6 +237,9 @@ final class MPVCore: @unchecked Sendable {
 /// Хозяин слоя видео в иерархии UIKit: растягивает слой на весь вид.
 final class MPVViewController: UIViewController {
     let metalLayer: MPVMetalLayer
+    /// Слой сменил размер — плеер перестраивает картинку.
+    var onResize: (() -> Void)?
+    private var lastSize = CGSize.zero
 
     init(layer: MPVMetalLayer) {
         metalLayer = layer
@@ -242,7 +252,6 @@ final class MPVViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         view.backgroundColor = .black
-        metalLayer.contentsScale = traitCollection.displayScale
         metalLayer.framebufferOnly = true
         metalLayer.backgroundColor = UIColor.black.cgColor
         view.layer.addSublayer(metalLayer)
@@ -252,10 +261,27 @@ final class MPVViewController: UIViewController {
         super.viewDidLayoutSubviews()
         CATransaction.begin()
         CATransaction.setDisableActions(true)
+        // Масштаб — экрана, на котором вид (до появления в окне `traitCollection` ещё не знает его и даёт 1).
+        let scale = view.window?.screen.nativeScale ?? UIScreen.main.nativeScale
+        metalLayer.contentsScale = scale
         metalLayer.frame = view.bounds
         // Размер кадра сам за поворотом не идёт: видео оставалось в углу размером с книжную ориентацию.
-        let scale = metalLayer.contentsScale
-        metalLayer.drawableSize = CGSize(width: view.bounds.width * scale, height: view.bounds.height * scale)
+        let size = CGSize(width: (view.bounds.width * scale).rounded(), height: (view.bounds.height * scale).rounded())
+        metalLayer.drawableSize = size
         CATransaction.commit()
+        if size != lastSize, size.width > 1, size.height > 1 {
+            lastSize = size
+            onResize?()
+        }
+    }
+
+    override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
+        super.viewWillTransition(to: size, with: coordinator)
+        // После анимации поворота — окончательный размер ещё раз.
+        coordinator.animate(alongsideTransition: nil) { [weak self] _ in
+            self?.view.setNeedsLayout()
+            self?.view.layoutIfNeeded()
+            self?.onResize?()
+        }
     }
 }

@@ -74,7 +74,7 @@ struct SettingsView: View {
                         Spacer()
                         if let ok = probes[entry.address] {
                             Image(systemName: ok ? "circle.fill" : "xmark.circle")
-                                .font(.caption2)
+                                .font(.aerial(.caption2))
                                 .foregroundStyle(ok ? Color(hex: 0x3DDC84) : Color(hex: 0xFF5A4E))
                         }
                         if settings.parserAddress == entry.address {
@@ -117,7 +117,7 @@ struct SettingsView: View {
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
                 Button("Проверить") { Task { await checkExternal() } }
-                if let externalCheck { Text(externalCheck).font(.footnote).foregroundStyle(Theme.secondaryText) }
+                if let externalCheck { Text(externalCheck).font(.aerial(.footnote)).foregroundStyle(Theme.secondaryText) }
             }
         } header: {
             Text("TorrServer")
@@ -227,7 +227,7 @@ struct SettingsView: View {
                     })) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(source.title)
-                            Text(source.about).font(.caption).foregroundStyle(Theme.secondaryText)
+                            Text(source.about).font(.aerial(.caption)).foregroundStyle(Theme.secondaryText)
                         }
                     }
                 }
@@ -252,9 +252,9 @@ struct SettingsView: View {
             }
             if AI.regionBlocked {
                 Label("Google и Groq не обслуживают вашу страну — ИИ работает только через VPN.", systemImage: "exclamationmark.triangle")
-                    .font(.footnote).foregroundStyle(.yellow)
+                    .font(.aerial(.footnote)).foregroundStyle(.yellow)
             } else if let error = taste.aiError {
-                Text(error).font(.footnote).foregroundStyle(Theme.secondaryText)
+                Text(error).font(.aerial(.footnote)).foregroundStyle(Theme.secondaryText)
             }
         } header: {
             Text("ИИ")
@@ -299,7 +299,7 @@ struct SettingsView: View {
                 }
             }
             Button("Восстановить из копии…") { importing = true }
-            if let backupNote { Text(backupNote).font(.footnote).foregroundStyle(Theme.secondaryText) }
+            if let backupNote { Text(backupNote).font(.aerial(.footnote)).foregroundStyle(Theme.secondaryText) }
         } header: {
             Text("Данные")
         } footer: {
@@ -347,7 +347,7 @@ struct SettingsView: View {
                 Text(title)
             } icon: {
                 Image(systemName: symbol)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.aerial(size: 14, .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 29, height: 29)
                     .background(color.gradient, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
