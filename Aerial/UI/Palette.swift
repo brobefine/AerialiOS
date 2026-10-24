@@ -95,19 +95,19 @@ struct RatingsRow: View {
         let entries = Self.entries(tmdb: tmdb, external: external)
         let tomatoes = entries.filter { $0.kind == .tomato || $0.kind == .popcorn }
         ViewThatFits(in: .horizontal) {
-            row(entries, tomatoes, ring: 34, badge: 22, gap: 14)
-            row(entries, tomatoes, ring: 28, badge: 18, gap: 9)
+            row(entries, tomatoes, ringSize: 34, badge: 22, gap: 14)
+            row(entries, tomatoes, ringSize: 28, badge: 18, gap: 9)
         }
     }
 
-    private func row(_ entries: [Entry], _ tomatoes: [Entry], ring: CGFloat, badge: CGFloat, gap: CGFloat) -> some View {
+    private func row(_ entries: [Entry], _ tomatoes: [Entry], ringSize: CGFloat, badge: CGFloat, gap: CGFloat) -> some View {
         HStack(spacing: gap) {
             ForEach(entries, id: \.self) { entry in
                 if !(tomatoes.contains(entry) && entry != tomatoes.first) {
                     let group = tomatoes.contains(entry) ? tomatoes : [entry]
                     HStack(spacing: 5) {
                         HStack(spacing: -4) { ForEach(group, id: \.self) { Self.badge($0.kind, size: badge) } }
-                        ForEach(group, id: \.self) { ring(for: $0, size: ring) }
+                        ForEach(group, id: \.self) { ring(for: $0, size: ringSize) }
                     }
                 }
             }
