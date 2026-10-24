@@ -191,7 +191,7 @@ final class Downloads {
         kick()
     }
 
-    /// Уход в фон: iOS даёт ещё полминуты — пусть текущий кусок допишется на диск.
+    /// Уход в фон: держит приложение беззвучный звук ([DownloadKeepAlive]); задание фона — запас, если звук не включился.
     func enterBackground() {
         guard busy, background == .invalid else { return }
         background = UIApplication.shared.beginBackgroundTask(withName: "downloads") { [weak self] in
@@ -236,8 +236,14 @@ final class Downloads {
                     try await fetch(client.streamURL(hash: job.hash, file: file.torrentFile), to: url, size: file.bytes) { [weak self] written in
                         guard let self else { return }
                         done[job.hash] = before + written
-                        DownloadLive.shared.show(job, done: before + written, rate: rate,
-                                                 left: jobs.filter { !$0.paused && $0.failure == nil && !self.complete($0) }.count)
+                        let done = before + written
+                        // Звук держит приложение живым в фоне; в LiveContainer он же — плашка в Dynamic Island.
+                        DownloadKeepAlive.shared.show(job, fraction: job.totalBytes > 0 ? min(1, Double(done) / Double(job.totalBytes)) : 0,
+                                                      rate: rate)
+                        if !DownloadKeepAlive.insideContainer {
+                            DownloadLive.shared.show(job, done: done, rate: rate,
+                                                     left: jobs.filter { !$0.paused && $0.failure == nil && !self.complete($0) }.count)
+                        }
                     }
                     done[job.hash] = onDisk(job)
                 }
@@ -255,6 +261,7 @@ final class Downloads {
         rate = 0
         PerfMonitor.activity = ""
         DownloadLive.shared.end()
+        DownloadKeepAlive.shared.end()
         endBackground()
     }
 

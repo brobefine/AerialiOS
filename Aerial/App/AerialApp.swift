@@ -43,9 +43,11 @@ struct AerialApp: App {
                 // Сервер не останавливаем: повторный запуск движка Go в том же процессе обрывал приложение при
                 // возврате — и открытая страница терялась. iOS сама усыпит его вместе с приложением.
                 if Downloads.shared.busy { Downloads.shared.enterBackground() }
+                DownloadKeepAlive.shared.enterBackground()
             case .active:
                 Log.note("ЖИЗНЬ", "на экране")
                 PerfMonitor.shared.resume()
+                DownloadKeepAlive.shared.enterForeground()
                 Friends.shared.setForeground(true)
                 Task {
                     await Torrents.warmUp(settings)

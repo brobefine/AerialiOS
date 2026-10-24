@@ -63,9 +63,11 @@
   `Torrents` (`EmbeddedTorrServer` — 127.0.0.1:18090, запускается один раз за жизнь процесса — остановка и повторный
   запуск движка Go обрывали приложение при возврате из фона; настройки кэша; выбор встроенный/внешний),
   `Release` (`Release`, `ReleaseInfo` — разбор названия, `EpisodeMatch` — файл серии), `ReleaseSearch` (JacRed exact →
-  Jackett, плюс `Torrentio`), `DownloadLive` (загрузка в Dynamic Island — Live Activity), `ReleaseFacts` (трекеры, год, 3D, языки раздачи для фильтров), `Downloads` (очередь загрузок: файл раздачи с TorrServer → `.part` с докачкой Range
+  Jackett, плюс `Torrentio`), `DownloadLive` (загрузка в Dynamic Island — Live Activity при обычной установке), `DownloadKeepAlive` (беззвучный
+  звук держит приложение живым, пока идёт загрузка; в LiveContainer — определяется по пути приложения — загрузка в Dynamic
+  Island плашкой «Сейчас играет»), `ReleaseFacts` (трекеры, год, 3D, языки раздачи для фильтров), `Downloads` (очередь загрузок: файл раздачи с TorrServer → `.part` с докачкой Range
   (`FileFetcher`) → `Documents/Downloads/<работа>`; `localURL` — скачанный файл, `Playback` играет его с диска;
-  в фоне iOS даёт полминуты, при возврате очередь продолжается).
+  в фоне не прерывается — [DownloadKeepAlive]).
 - `Player/` — `MPVCore` (libmpv: опции, события в главный поток, команды; `MPVViewController` — слой Metal),
   `PlayerModel` (TorrServer → подкачка → mpv или скачанный файл; время от mpv — не чаще раза в полсекунды, пиры при просмотре — раз в 15 с (батарея); скорость; прогресс каждые 5 с; следующая серия — следующий файл той же раздачи,
   `planNext`; `PlayerScreen` — новая серия открывается новым `PlayerView` в том же окне через `Playback.advance`),

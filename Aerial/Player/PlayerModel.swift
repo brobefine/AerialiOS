@@ -68,6 +68,7 @@ final class Playback {
     func play(_ request: PlaybackRequest) {
         PictureInPicture.shared.stop()
         guard controller == nil, let settings, let library, let presenter = Self.topController() else { return }
+        DownloadKeepAlive.shared.suspendForPlayer()
         self.request = Self.resolved(request)
         PerfMonitor.activity = "плеер: \(request.title)\(self.request?.localFile == nil ? "" : " (с диска)")"
         Orientation.allowLandscape(true)
@@ -93,6 +94,7 @@ final class Playback {
         PerfMonitor.activity = ""
         controller.dismiss(animated: true) { [weak self] in
             Orientation.allowLandscape(false)
+            DownloadKeepAlive.shared.resumeAfterPlayer()
             self?.request = nil
         }
     }
