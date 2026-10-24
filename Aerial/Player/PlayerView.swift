@@ -3,7 +3,6 @@ import UIKit
 
 /// Полноэкранный плеер в духе Apple TV: видео во весь экран, панель по касанию, сама прячется через 4 с.
 struct PlayerView: View {
-    @Environment(\.dismiss) private var dismiss
     @Environment(AppSettings.self) private var settings
     @Environment(Library.self) private var library
 
@@ -11,9 +10,11 @@ struct PlayerView: View {
     @State private var controls = true
     @State private var scrub: Double?
     @State private var hideTask: Task<Void, Never>?
+    private let dismiss: () -> Void
 
-    init(request: PlaybackRequest) {
+    init(request: PlaybackRequest, onClose: @escaping () -> Void) {
         _model = State(initialValue: PlayerModel(request: request))
+        dismiss = onClose
     }
 
     var body: some View {
@@ -33,14 +34,8 @@ struct PlayerView: View {
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
         .task { await model.start(settings: settings, library: library) }
-        .onAppear {
-            Orientation.player(true)
-            scheduleHide()
-        }
-        .onDisappear {
-            model.stop()
-            Orientation.player(false)
-        }
+        .onAppear { scheduleHide() }
+        .onDisappear { model.stop() }
         .onChange(of: model.finished) { _, finished in if finished { dismiss() } }
     }
 
@@ -259,25 +254,19 @@ struct MPVVideoView: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: MPVViewController, context: Context) {}
 }
 
-/// Ориентация на iPhone, как у Apple TV: каталог — книжная, плеер открывается альбомной (повернуть можно в любую,
-/// кроме перевёрнутой). На iPad — как держат. Разрешённые ориентации отдаёт [AppDelegate]: в SwiftUI запрос поворота
-/// без этого отклоняется («контроллер поддерживает только portrait»).
+/// Ориентация на iPhone, как у Apple TV: каталог — книжная, плеер — альбомная ([PlayerHostingController]).
+/// На iPad — как держат. Разрешённые приложению ориентации отдаёт [AppDelegate].
 @MainActor
 enum Orientation {
     private(set) static var mask: UIInterfaceOrientationMask = UIDevice.current.userInterfaceIdiom == .phone ? .portrait : .all
 
-    static func player(_ active: Bool) {
-        guard UIDevice.current.userInterfaceIdiom == .phone,
-              let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return }
-        mask = active ? .allButUpsideDown : .portrait
-        for window in scene.windows {
-            var controller = window.rootViewController
-            while let current = controller {
-                current.setNeedsUpdateOfSupportedInterfaceOrientations()
-                controller = current.presentedViewController
-            }
-        }
-        scene.requestGeometryUpdate(.iOS(interfaceOrientations: active ? .landscape : .portrait)) { error in
+    /// Перед показом плеера — разрешить альбомную; после закрытия — вернуть книжную.
+    static func allowLandscape(_ allow: Bool) {
+        guard UIDevice.current.userInterfaceIdiom == .phone else { return }
+        mask = allow ? .allButUpsideDown : .portrait
+        guard !allow, let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first else { return }
+        scene.windows.forEach { $0.rootViewController?.setNeedsUpdateOfSupportedInterfaceOrientations() }
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: .portrait)) { error in
             Log.note("ПОВОРОТ", error.localizedDescription)
         }
     }

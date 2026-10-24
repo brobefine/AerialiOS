@@ -35,6 +35,10 @@ struct ReleaseInfoTests {
         #expect(ReleaseInfo.season("Show S01-S03 Complete") == "Сезоны 1–3")
         #expect(ReleaseInfo.season("Show S02E05 720p") == "Сезон 2 · серия 5")
         #expect(ReleaseInfo.season("Фильм 2024 1080p") == nil)
+        #expect(ReleaseInfo.seasonInfo("Show S01-S03 Complete")?.range == 1...3)
+        #expect(ReleaseInfo.seasonInfo("Люпен / Lupin [03x01-01 из 7] WEB-DLRip 1080p")?.range == 3...3)
+        #expect(ReleaseInfo.seasonInfo("Фильм 1920x1080 x264") == nil)
+        #expect(ReleaseInfo.seasonInfo("Сериал (2 сезон: 1-8 из 8)")?.range == 2...2)
     }
 
     @Test func voices() {

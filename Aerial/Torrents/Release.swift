@@ -27,6 +27,8 @@ struct ReleaseInfo: Hashable, Sendable {
     var codec: String?
     var source: String?
     var season: String?
+    /// Сезоны раздачи числами: «S01-S03» — 1…3, «Сезон 2» — 2…2; nil — не указаны.
+    var seasons: ClosedRange<Int>?
     var audio: [String]
     var subtitles: Bool
 
@@ -51,6 +53,8 @@ struct ReleaseInfo: Hashable, Sendable {
     private static let seasonCode = Rx("(?i)\\bS(\\d{1,2})(?:[ ._-]?E(\\d{1,3})(?:[-–](?:E)?(\\d{1,3}))?)?")
     private static let seasonWords = Rx("(?iu)(?:сезон(?:ы|а)?|season)\\s*[:.]?\\s*(\\d{1,2})(?:[\\s,/|]*(?:серии|серия|episodes?)\\s*[:.]?\\s*(\\d{1,3}(?:\\s*[-–]\\s*\\d{1,3})?))?")
     private static let seasonBefore = Rx("(?iu)(\\d{1,2})\\s*(?:-?(?:й|ый))?\\s*сезон")
+    // «03x01-01», «2x05» — сезон и серии через «x» (у ТВ этого правила нет; разрешение «1920x1080» не подходит).
+    private static let seasonCross = Rx("(?<![\\d.])(\\d{1,2})x(\\d{2,3})(?:-(\\d{2,3}))?(?!\\d)")
     private static let seasonRange = Rx("(?iu)\\bS(\\d{1,2})\\s*[-–]\\s*S?(\\d{1,2})\\b(?!\\s*[EЕ]\\d)|сезон(?:ы|ов)?\\s*[:.]?\\s*(\\d{1,2})\\s*[-–]\\s*(\\d{1,2})\\b(?!\\s*(?:сери|из))|(?<![\\d-])(\\d{1,2})\\s*[-–]\\s*(\\d{1,2})\\s*сезон")
     private static let episodeRange = Rx("(?iu)(?<![\\d.])(\\d{1,3})\\s*[-–]\\s*(\\d{1,3})(?=\\s*(?:сери[йия]|эп|из\\s*\\d))")
     // Порядок важен: «WEB-DLRip» раньше «WEB-DL», «BDRemux» раньше «BDRip».
@@ -92,14 +96,18 @@ struct ReleaseInfo: Hashable, Sendable {
         subtitles = Self.subtitleWords.matches(title)
         var seen = Set<String>()
         audio = (release.voices + Self.audioNames.all(title)).filter { seen.insert($0.lowercased()).inserted }
-        season = Self.season(title)
+        let found = Self.seasonInfo(title)
+        season = found?.label
+        seasons = found?.range
     }
 
-    /// Сезон и серии одной плашкой: «Сезоны 1–3», «Сезон 1 · 8 серий», «Сезон 2 · серия 5», «Сезон 3».
-    static func season(_ title: String) -> String? {
+    static func season(_ title: String) -> String? { seasonInfo(title)?.label }
+
+    /// Сезон и серии одной плашкой: «Сезоны 1–3», «Сезон 1 · 8 серий», «Сезон 2 · серия 5», «Сезон 3» — и сезоны числами.
+    static func seasonInfo(_ title: String) -> (label: String, range: ClosedRange<Int>)? {
         if let span = seasonRange.groups(title)?.dropFirst().filter({ !$0.isEmpty }).compactMap({ Int($0) }),
            span.count == 2, span[1] > span[0] {
-            return "Сезоны \(span[0])–\(span[1])"
+            return ("Сезоны \(span[0])–\(span[1])", span[0]...span[1])
         }
         let code = seasonCode.groups(title)
         let words = seasonWords.groups(title)
@@ -110,9 +118,13 @@ struct ReleaseInfo: Hashable, Sendable {
             number = before[1]
         }
         if number == nil { number = words?[1] }
+        let cross = number == nil ? seasonCross.groups(title) : nil
+        if let cross { number = cross[1] }
         guard let number, let season = Int(number) else { return nil }
         var episodes: (String, String)?
-        if let code, !code[2].isEmpty {
+        if let cross {
+            episodes = (cross[2], cross[3])
+        } else if let code, !code[2].isEmpty {
             episodes = (code[2], code[3])
         } else if let words, !words[2].isEmpty {
             let parts = words[2].components(separatedBy: CharacterSet(charactersIn: "-–")).map { $0.trimmingCharacters(in: .whitespaces) }
@@ -121,10 +133,10 @@ struct ReleaseInfo: Hashable, Sendable {
             episodes = (range[1], range[2])
         }
         let head = "Сезон \(season)"
-        guard let episodes, let from = Int(episodes.0) else { return head }
-        guard let to = Int(episodes.1), to > from else { return "\(head) · серия \(from)" }
+        guard let episodes, let from = Int(episodes.0) else { return (head, season...season) }
+        guard let to = Int(episodes.1), to > from else { return ("\(head) · серия \(from)", season...season) }
         let count = to - from + 1
-        return "\(head) · \(count) \(Format.plural(count, "серия", "серии", "серий"))"
+        return ("\(head) · \(count) \(Format.plural(count, "серия", "серии", "серий"))", season...season)
     }
 }
 

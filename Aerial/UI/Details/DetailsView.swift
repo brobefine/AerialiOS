@@ -222,9 +222,9 @@ struct DetailsView: View {
     // MARK: Люди и сведения
 
     private func peopleSection(_ details: VodDetails) -> some View {
-        // Режиссёр бывает и в ролях — один человек одной карточкой.
+        // Сначала актёры, затем режиссёры и авторы; режиссёр бывает и в ролях — один человек одной карточкой.
         var seen = Set<Int>()
-        let people = (details.directors + details.cast).filter { seen.insert($0.id).inserted }
+        let people = (details.cast + details.directors).filter { seen.insert($0.id).inserted }
         return VStack(alignment: .leading, spacing: 10) {
             ShelfHeader(title: "Актёры и съёмочная группа")
             ScrollView(.horizontal) {

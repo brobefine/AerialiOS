@@ -37,11 +37,20 @@ struct ReleasesView: View {
 
     private var shown: [Release] {
         let filtered = quality.map { wanted in releases.filter { infos[$0.id]?.quality == wanted } } ?? releases
-        switch sort {
-        case .seeds: return filtered.sorted { $0.seeds > $1.seeds }
-        case .size: return filtered.sorted { $0.bytes > $1.bytes }
-        case .date: return filtered.sorted { $0.published > $1.published }
+        let sorted: [Release] = switch sort {
+        case .seeds: filtered.sorted { $0.seeds > $1.seeds }
+        case .size: filtered.sorted { $0.bytes > $1.bytes }
+        case .date: filtered.sorted { $0.published > $1.published }
         }
+        // Для серии — сначала раздачи с её сезоном, затем без указания сезона, в конце — другие сезоны.
+        guard let episode else { return sorted }
+        func rank(_ release: Release) -> Int {
+            guard let seasons = infos[release.id]?.seasons else { return 1 }
+            return seasons.contains(episode.season) ? 0 : 2
+        }
+        return sorted.enumerated()
+            .sorted { (rank($0.element), $0.offset) < (rank($1.element), $1.offset) }
+            .map(\.element)
     }
 
     var body: some View {
