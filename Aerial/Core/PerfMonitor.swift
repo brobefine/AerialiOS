@@ -37,6 +37,7 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
         sampler = Task { [weak self] in
             while !Task.isCancelled {
                 self?.sample()
+                await Self.torrserverLine()
                 try? await Task.sleep(for: .seconds(15))
             }
         }
@@ -64,6 +65,82 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
         let what = Self.activity.isEmpty ? "" : " · \(Self.activity)"
         Log.perf(String(format: "%@ ЦП %.0f %% · память %.0f МБ · нагрев %@ · заряд %@%@%@%@", tag, Self.cpuPercent(),
                         Self.memoryMB(), thermal, battery, charging, saver, what))
+        let threads = threadBreakdown()
+        if !threads.isEmpty { Log.perf("  потоки: " + threads) }
+    }
+
+    /// Что делает встроенный TorrServer: раздачи с пирами и скорость — видно, если он качает, пока фильм не идёт.
+    private static func torrserverLine() async {
+        guard case .running = EmbeddedTorrServer.shared.state,
+              let list = try? await EmbeddedTorrServer.shared.client.list() else { return }
+        let busy = list.filter { $0.peers > 0 || $0.speed > 0 }
+        guard !busy.isEmpty else { return }
+        let speed = busy.reduce(Int64(0)) { $0 + $1.speed }
+        Log.perf("  TorrServer: раздач с пирами \(busy.count), пиров \(busy.reduce(0) { $0 + $1.peers }), \(Format.bytes(speed))/с")
+    }
+
+    // MARK: Потоки
+
+    /// Время процессора каждого потока на прошлом замере (по номеру потока) и момент замера.
+    private var lastThreadTimes: [UInt64: Double] = [:]
+    private var lastThreadSample = Date()
+
+    /// Кто ел процессор с прошлого замера: время потоков (user + system), сложенное по именам, в % одного ядра.
+    /// Имена: «главный», потоки mpv и libmpv, очереди GCD (сеть, картинки, журнал); безымянные — в основном Go
+    /// (TorrServer) — идут как «без имени».
+    private func threadBreakdown() -> String {
+        var threads: thread_act_array_t?
+        var count: mach_msg_type_number_t = 0
+        guard task_threads(mach_task_self_, &threads, &count) == KERN_SUCCESS, let threads else { return "" }
+        defer {
+            for index in 0..<Int(count) { mach_port_deallocate(mach_task_self_, threads[index]) }
+            vm_deallocate(mach_task_self_, vm_address_t(UInt(bitPattern: threads)), vm_size_t(Int(count) * MemoryLayout<thread_t>.stride))
+        }
+        let now = Date()
+        let interval = max(0.5, now.timeIntervalSince(lastThreadSample))
+        var times: [UInt64: Double] = [:]
+        var byName: [String: Double] = [:]
+        for index in 0..<Int(count) {
+            let thread = threads[index]
+            var basic = thread_basic_info()
+            var size = mach_msg_type_number_t(THREAD_INFO_MAX)
+            let ok = withUnsafeMutablePointer(to: &basic) {
+                $0.withMemoryRebound(to: integer_t.self, capacity: Int(size)) {
+                    thread_info(thread, thread_flavor_t(THREAD_BASIC_INFO), $0, &size)
+                }
+            }
+            guard ok == KERN_SUCCESS else { continue }
+            var ident = thread_identifier_info()
+            var identSize = mach_msg_type_number_t(MemoryLayout<thread_identifier_info>.size / MemoryLayout<integer_t>.size)
+            let identified = withUnsafeMutablePointer(to: &ident) {
+                $0.withMemoryRebound(to: integer_t.self, capacity: Int(identSize)) {
+                    thread_info(thread, thread_flavor_t(THREAD_IDENTIFIER_INFO), $0, &identSize)
+                }
+            }
+            guard identified == KERN_SUCCESS else { continue }
+            let seconds = Double(basic.user_time.seconds + basic.system_time.seconds)
+                + Double(basic.user_time.microseconds + basic.system_time.microseconds) / 1_000_000
+            times[ident.thread_id] = seconds
+            guard let before = lastThreadTimes[ident.thread_id], seconds > before else { continue }
+            byName[Self.name(thread), default: 0] += seconds - before
+        }
+        lastThreadTimes = times
+        lastThreadSample = now
+        return byName.filter { $0.value / interval >= 0.01 }
+            .sorted { $0.value > $1.value }
+            .prefix(6)
+            .map { String(format: "%@ %.0f %%", $0.key, $0.value / interval * 100) }
+            .joined(separator: " · ")
+    }
+
+    private static func name(_ thread: thread_act_t) -> String {
+        guard let pthread = pthread_from_mach_thread_np(thread) else { return "без имени" }
+        if pthread_equal(pthread, pthread_self()) != 0 && Thread.isMainThread { return "главный" }
+        var buffer = [CChar](repeating: 0, count: 64)
+        pthread_getname_np(pthread, &buffer, buffer.count)
+        let name = String(cString: buffer)
+        if !name.isEmpty { return name == "main" ? "главный" : name }
+        return "без имени (Go, GCD)"
     }
 
     // MARK: Главный поток
@@ -143,6 +220,8 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
         var count: mach_msg_type_number_t = 0
         guard task_threads(mach_task_self_, &threads, &count) == KERN_SUCCESS, let threads else { return 0 }
         defer {
+            // Права на потоки тоже возвращаем — иначе каждый замер оставлял их в процессе.
+            for index in 0..<Int(count) { mach_port_deallocate(mach_task_self_, threads[index]) }
             vm_deallocate(mach_task_self_, vm_address_t(UInt(bitPattern: threads)), vm_size_t(Int(count) * MemoryLayout<thread_t>.stride))
         }
         var total = 0.0
