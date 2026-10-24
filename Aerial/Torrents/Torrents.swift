@@ -5,7 +5,8 @@ import UIKit
 
 /// TorrServer внутри приложения: TorrServerKit (gomobile-сборка MatriX из релизов TorrServer) на 127.0.0.1:[port].
 /// Работает, пока приложение на экране или играет звук (фоновый режим `audio`); после сна iOS сокет может
-/// умереть — [ensureRunning] проверяет `/echo` и перезапускает сервер.
+/// умереть — [ensureRunning] ждёт `/echo`. Сервер запускается один раз за жизнь процесса: остановка и повторный
+/// запуск движка Go обрывали приложение.
 @MainActor @Observable
 final class EmbeddedTorrServer {
     enum State: Equatable {
@@ -28,6 +29,20 @@ final class EmbeddedTorrServer {
 
     func ensureRunning(cacheMB: Int) async throws {
         if case .running = state, await client.echo() != nil { return }
+        // Движок Go уже запущен в процессе: второй запуск (как и остановка с запуском) обрывал приложение при
+        // возврате из фона. После сна сокет оживает не сразу — ждём ответа, но не перезапускаем.
+        if TorrServerEngine.isRunning {
+            for _ in 0..<25 {
+                if let version = await client.echo() {
+                    state = .running(version: version)
+                    return
+                }
+                try? await Task.sleep(for: .milliseconds(200))
+            }
+            Log.note("TORRSERVER", "запущен, но не отвечает после сна")
+            state = .failed("сервер не отвечает — перезапустите приложение")
+            throw TorrServerError.notRunning("сервер не отвечает")
+        }
         if let starting {
             await starting.value
         } else {
@@ -44,12 +59,9 @@ final class EmbeddedTorrServer {
         let directory = dataDirectory
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         Self.trimLogs(in: directory)
-        let wasRunning = TorrServerEngine.isRunning
         let port = Self.port
         let error: String = await Task.detached(priority: .userInitiated) {
-            // Запущен, но не отвечает (сокет умер во сне) — останавливаем и поднимаем заново.
-            if wasRunning { _ = TorrServerEngine.stop() }
-            return TorrServerEngine.start(port: port, dataDir: directory.path)
+            TorrServerEngine.start(port: port, dataDir: directory.path)
         }.value
         if !error.isEmpty {
             Log.note("TORRSERVER", "старт: \(error)")
@@ -71,21 +83,6 @@ final class EmbeddedTorrServer {
         await configure(cacheMB: cacheMB)
         Log.note("TORRSERVER", "встроенный \(version) на \(address)")
         state = .running(version: version)
-    }
-
-    /// Уход в фон без фильма: сервер останавливается (в фоновом задании, чтобы успел закрыть базу); при возврате
-    /// [ensureRunning] поднимет его заново.
-    func suspend() {
-        guard case .running = state else { return }
-        state = .stopped
-        let task = UIApplication.shared.beginBackgroundTask(withName: "torrserver-stop")
-        Task.detached(priority: .userInitiated) {
-            let error = TorrServerEngine.stop()
-            await MainActor.run {
-                if !error.isEmpty { Log.note("TORRSERVER", "остановка: \(error)") }
-                UIApplication.shared.endBackgroundTask(task)
-            }
-        }
     }
 
     /// Журналы сервера растут без предела до 100 МБ (сам TorrServer чистит только их), а в `torrserver.log` уходит

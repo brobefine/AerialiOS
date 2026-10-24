@@ -68,30 +68,39 @@ struct ReleasesView: View {
     }
 
     var body: some View {
-        TabView(selection: $filter) {
-            ForEach(filters, id: \.self) { value in
-                page(value).tag(value)
-            }
-        }
-        .tabViewStyle(.page(indexDisplayMode: .never))
-        .background(Theme.background)
-        .safeAreaInset(edge: .top, spacing: 0) {
-            if !releases.isEmpty {
-                ScrollView(.horizontal) {
-                    HStack(spacing: 8) {
-                        ForEach(filters, id: \.self) { value in
-                            Chip(title: value, selected: filter == value) {
-                                withAnimation(.snappy) { filter = value }
-                            }
-                                .accessibilityIdentifier("quality-\(value)")
-                        }
+        // Страницы во весь экран, как на главной: `TabView` со страницами обрезался по безопасной зоне — сверху и
+        // снизу были чёрные полосы. Отступы под панель, капсулы качества и пилюлю — полями прокрутки.
+        GeometryReader { geometry in
+            let chips: CGFloat = releases.isEmpty ? 0 : 52
+            ZStack(alignment: .top) {
+                TabView(selection: $filter) {
+                    ForEach(filters, id: \.self) { value in
+                        page(value)
+                            .contentMargins(.top, geometry.safeAreaInsets.top + chips, for: .scrollContent)
+                            .contentMargins(.bottom, geometry.safeAreaInsets.bottom + 8, for: .scrollContent)
+                            .tag(value)
                     }
                 }
-                .contentMargins(.horizontal, 16, for: .scrollContent)
-                .scrollIndicators(.hidden)
-                .padding(.vertical, 8)
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .ignoresSafeArea()
+                if !releases.isEmpty {
+                    ScrollView(.horizontal) {
+                        HStack(spacing: 8) {
+                            ForEach(filters, id: \.self) { value in
+                                Chip(title: value, selected: filter == value) {
+                                    withAnimation(.snappy) { filter = value }
+                                }
+                                .accessibilityIdentifier("quality-\(value)")
+                            }
+                        }
+                    }
+                    .contentMargins(.horizontal, 16, for: .scrollContent)
+                    .scrollIndicators(.hidden)
+                    .padding(.vertical, 8)
+                }
             }
         }
+        .background(Theme.background)
         .navigationTitle(episode.map { "\(item.title) · \($0.code)" } ?? item.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -119,9 +128,10 @@ struct ReleasesView: View {
             if !releases.isEmpty { preferredQuality = value == Self.all ? "" : value }
         }
         .sheet(item: $picking) { picking in
-            FilesSheet(info: picking.info, episode: episode) { file in
+            WatchSheet(item: item, info: picking.info, voices: (infos[picking.release.id] ?? picking.release.info).audio,
+                       episode: episode) { file, chosen, voice in
                 self.picking = nil
-                play(picking.release, file)
+                play(picking.release, file, episode: chosen, voice: voice)
             }
         }
         .alert("Не удалось открыть раздачу", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
@@ -259,7 +269,10 @@ struct ReleasesView: View {
                 let poster = TMDbImage.urls(item.poster, "w342").first?.absoluteString ?? ""
                 var info = try await client.add(link: release.link, title: item.title, poster: poster)
                 info = try await client.awaitFiles(info)
-                if let file = EpisodeMatch.pick(info.files, episode: episode) {
+                // Окно «Смотреть», как на ТВ: озвучка, сезон и серия из файлов раздачи (у фильма — файл, если их
+                // несколько). Выбирать нечего — сразу в плеер.
+                let voices = (infos[release.id] ?? release.info).audio
+                if voices.count < 2 && info.files.count < 2, let file = info.files.first {
                     play(release, file)
                 } else {
                     picking = Picking(release: release, info: info)
@@ -273,11 +286,14 @@ struct ReleasesView: View {
         }
     }
 
-    private func play(_ release: Release, _ file: TorrentFile) {
-        let entry = library.entry(item, episode)
-        playback.play(PlaybackRequest(item: item, episode: episode, link: release.link, fileIndex: file.index,
+    private func play(_ release: Release, _ file: TorrentFile, episode chosen: VodEpisode? = nil, voice: String? = nil) {
+        let target = chosen ?? episode
+        let entry = library.entry(item, target)
+        var request = PlaybackRequest(item: item, episode: target, link: release.link, fileIndex: file.index,
                                       releaseTitle: release.title, startAt: entry?.resumable == true ? entry?.position ?? 0 : 0,
-                                      runtimeMinutes: runtime))
+                                      runtimeMinutes: target.map { $0.runtimeMinutes > 0 ? $0.runtimeMinutes : runtime } ?? runtime)
+        request.voice = voice
+        playback.play(request)
     }
 }
 
@@ -340,37 +356,125 @@ private struct TightLabel: LabelStyle {
     }
 }
 
-/// Выбор файла раздачи, когда он не очевиден: сериал без координат серии или фильм с несколькими частями.
-private struct FilesSheet: View {
+/// Окно «Смотреть» перед плеером, как на ТВ: озвучка из названия раздачи, сезон и серия — из файлов раздачи
+/// (серии подписаны по TMDb); у фильма из нескольких файлов — выбор файла. Лист на стекле снизу.
+private struct WatchSheet: View {
+    let item: VodItem
     let info: TorrentInfo
+    let voices: [String]
     let episode: VodEpisode?
-    let onPick: (TorrentFile) -> Void
+    let onPlay: (TorrentFile, VodEpisode?, String?) -> Void
 
-    @Environment(\.dismiss) private var dismiss
+    @State private var voice = ""
+    @State private var season = 0
+    @State private var fileIndex = -1
+    @State private var titles: [Int: [VodEpisode]] = [:]
+
+    private struct Placed: Identifiable {
+        let file: TorrentFile
+        let season: Int
+        let number: Int
+        var id: Int { file.index }
+    }
+
+    private var placed: [Placed] {
+        info.files.compactMap { file in
+            EpisodeMatch.coordinates(file.path).map { Placed(file: file, season: $0.season, number: $0.episode) }
+        }
+        .sorted { ($0.season, $0.number) < ($1.season, $1.number) }
+    }
+
+    private var series: Bool { item.kind == .series && !placed.isEmpty }
+    private var seasons: [Int] { Array(Set(placed.map(\.season))).sorted() }
+    private var files: [TorrentFile] { info.files.sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending } }
+
+    private func meta(_ place: Placed) -> VodEpisode {
+        titles[place.season]?.first { $0.number == place.number }
+            ?? VodEpisode(season: place.season, number: place.number, title: "Серия \(place.number)")
+    }
 
     var body: some View {
         NavigationStack {
-            List(info.files.sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }) { file in
-                Button { onPick(file) } label: {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(file.name).font(.subheadline).foregroundStyle(.white).lineLimit(3)
-                        HStack(spacing: 8) {
-                            Text(Format.bytes(file.bytes))
-                            if let found = EpisodeMatch.coordinates(file.path) {
-                                Text("\(found.season)x\(found.episode)")
+            Form {
+                if voices.count > 1 {
+                    Picker("Озвучка", selection: $voice) {
+                        Text("Как в раздаче").tag("")
+                        ForEach(voices, id: \.self) { Text($0).tag($0) }
+                    }
+                    .pickerStyle(.navigationLink)
+                }
+                if series {
+                    Section {
+                        if seasons.count > 1 {
+                            Picker("Сезон", selection: $season) {
+                                ForEach(seasons, id: \.self) { Text("Сезон \($0)").tag($0) }
                             }
                         }
-                        .font(.caption)
-                        .foregroundStyle(Theme.secondaryText)
+                        Picker("Серия", selection: $fileIndex) {
+                            ForEach(placed.filter { $0.season == season }) { place in
+                                Text("\(place.number). \(meta(place).title)").tag(place.file.index)
+                            }
+                        }
+                        .pickerStyle(.navigationLink)
+                    }
+                } else if files.count > 1 {
+                    Section("Файл") {
+                        Picker("Файл", selection: $fileIndex) {
+                            ForEach(files) { file in
+                                VStack(alignment: .leading) {
+                                    Text(file.name).lineLimit(2)
+                                    Text(Format.bytes(file.bytes)).font(.caption).foregroundStyle(Theme.secondaryText)
+                                }
+                                .tag(file.index)
+                            }
+                        }
+                        .pickerStyle(.inline)
+                        .labelsHidden()
                     }
                 }
+                Section {
+                    Button(action: play) {
+                        Label("Смотреть", systemImage: "play.fill")
+                    }
+                    .buttonStyle(PrimaryButtonStyle())
+                    .listRowBackground(Color.clear)
+                    .listRowInsets(EdgeInsets())
+                    .accessibilityIdentifier("watch-sheet-play")
+                }
             }
-            .navigationTitle(episode.map { "Файл для \($0.code)" } ?? "Выберите файл")
+            .scrollContentBackground(.hidden)
+            .navigationTitle("Смотреть")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("Отмена") { dismiss() } }
-            }
         }
         .presentationDetents([.medium, .large])
+        .presentationBackground(.ultraThinMaterial)
+        .onAppear(perform: preselect)
+        .onChange(of: season) { _, value in
+            if placed.first(where: { $0.file.index == fileIndex })?.season != value {
+                fileIndex = placed.first { $0.season == value }?.file.index ?? fileIndex
+            }
+        }
+        .task(id: season) {
+            guard series, season > 0, titles[season] == nil else { return }
+            titles[season] = (try? await Catalogue.shared.season(item, season)) ?? []
+        }
+    }
+
+    private func play() {
+        guard let file = info.files.first(where: { $0.index == fileIndex }) ?? info.files.first else { return }
+        let place = placed.first { $0.file.index == file.index }
+        onPlay(file, place.map(meta) ?? episode, voice.isEmpty ? nil : voice)
+    }
+
+    /// Начальный выбор: нужная серия (или первая), у фильма — самый большой файл.
+    private func preselect() {
+        if series {
+            let wanted = EpisodeMatch.pick(info.files, episode: episode).flatMap { file in placed.first { $0.file.index == file.index } }
+                ?? placed.first
+            season = wanted?.season ?? 0
+            fileIndex = wanted?.file.index ?? -1
+        } else {
+            fileIndex = info.files.max(by: { $0.bytes < $1.bytes })?.index ?? -1
+        }
     }
 }

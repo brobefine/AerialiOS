@@ -251,6 +251,9 @@ final class MPVViewController: UIViewController {
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         metalLayer.frame = view.bounds
+        // Размер кадра сам за поворотом не идёт: видео оставалось в углу размером с книжную ориентацию.
+        let scale = metalLayer.contentsScale
+        metalLayer.drawableSize = CGSize(width: view.bounds.width * scale, height: view.bounds.height * scale)
         CATransaction.commit()
     }
 }

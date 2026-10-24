@@ -14,6 +14,8 @@ struct PlayerView: View {
     @State private var countdown = 10
     @State private var findingSubtitles = false
     @State private var partyOpen = false
+    /// Цвет постера: шкала времени и стекло кнопок ([PosterPalette]).
+    @State private var accent: Color?
     private let dismiss: () -> Void
     private let onNext: (PlaybackRequest) -> Void
 
@@ -57,6 +59,7 @@ struct PlayerView: View {
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
         .task { await model.start(settings: settings, library: library) }
+        .task { accent = await PosterPalette.accent(model.request.item.poster) }
         .onAppear { scheduleHide() }
         .onDisappear { model.stop() }
         .onChange(of: model.finished) { _, finished in
@@ -231,7 +234,7 @@ struct PlayerView: View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 Button { dismiss() } label: { Image(systemName: "xmark") }
-                    .buttonStyle(CircleGlassButtonStyle(size: 44))
+                    .buttonStyle(CircleGlassButtonStyle(size: 44, tint: accent))
                     .accessibilityLabel("Закрыть")
                     .accessibilityIdentifier("player-close")
                 Spacer()
@@ -245,7 +248,7 @@ struct PlayerView: View {
                     if model.phase == .playing { tracksMenu }
                 }
                 .padding(.horizontal, 4)
-                .glass(in: Capsule())
+                .glass(in: Capsule(), tint: accent?.opacity(0.55))
             }
             .padding(.horizontal, 20)
             .padding(.top, 12)
@@ -269,7 +272,7 @@ struct PlayerView: View {
                 .padding(.horizontal, 18)
                 .padding(.top, 12)
                 .padding(.bottom, 6)
-                .glass(in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+                .glass(in: RoundedRectangle(cornerRadius: 26, style: .continuous), tint: accent?.opacity(0.35))
                 .padding(.horizontal, 16)
                 .padding(.bottom, 10)
             } else {
@@ -320,7 +323,8 @@ struct PlayerView: View {
 
     private var timeline: some View {
         VStack(spacing: 6) {
-            Scrubber(position: model.position, duration: model.duration, scrub: $scrub) { target in
+            Scrubber(position: model.position, duration: model.duration, color: accent.map { $0.mix(with: .white, by: 0.35) } ?? .white,
+                     scrub: $scrub) { target in
                 model.seek(to: target)
                 scheduleHide()
             }
@@ -433,6 +437,7 @@ private struct PreparingView: View {
 private struct Scrubber: View {
     let position: Double
     let duration: Double
+    let color: Color
     @Binding var scrub: Double?
     let onCommit: (Double) -> Void
 
@@ -442,7 +447,7 @@ private struct Scrubber: View {
             let fraction = duration > 0 ? min(1, max(0, shown / duration)) : 0
             ZStack(alignment: .leading) {
                 Capsule().fill(.white.opacity(0.25))
-                Capsule().fill(.white).frame(width: geometry.size.width * fraction)
+                Capsule().fill(color).frame(width: geometry.size.width * fraction)
             }
             .frame(height: scrub == nil ? 5 : 9)
             .frame(maxHeight: .infinity)

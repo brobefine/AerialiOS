@@ -39,13 +39,9 @@ struct AerialApp: App {
             case .background:
                 Friends.shared.setForeground(false)
                 Log.note("ЖИЗНЬ", "в фоне\(playback.request == nil ? "" : ", идёт фильм")")
-                // Без фильма сервер в фоне не нужен: iOS всё равно усыпит его, а сокеты после сна мёртвые.
-                // Идёт загрузка — сервер не трогаем: iOS даст ещё полминуты дописать кусок.
-                if Downloads.shared.busy {
-                    Downloads.shared.enterBackground()
-                } else if playback.request == nil {
-                    EmbeddedTorrServer.shared.suspend()
-                }
+                // Сервер не останавливаем: повторный запуск движка Go в том же процессе обрывал приложение при
+                // возврате — и открытая страница терялась. iOS сама усыпит его вместе с приложением.
+                if Downloads.shared.busy { Downloads.shared.enterBackground() }
             case .active:
                 Log.note("ЖИЗНЬ", "на экране")
                 Friends.shared.setForeground(true)

@@ -19,6 +19,8 @@ struct DetailsView: View {
     @State private var expanded = false
     /// Оценки IMDb, RT, Metacritic из MDBList — если в настройках есть ключ.
     @State private var external = ""
+    /// Цвет постера — им окрашены кнопки ([PosterPalette]).
+    @State private var accent: Color?
 
     private var shown: VodItem { details?.item ?? item }
     private var art: String { shown.backdrop.isEmpty ? shown.poster : shown.backdrop }
@@ -54,6 +56,7 @@ struct DetailsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { if details == nil { await load() } }
         .task(id: season) { await loadSeason() }
+        .task(id: shown.poster) { accent = await PosterPalette.accent(shown.poster.isEmpty ? art : shown.poster) }
         .task(id: settings.mdblistKey) { external = await MdbList.ratings(item, key: settings.mdblistKey) }
     }
 
@@ -124,7 +127,7 @@ struct DetailsView: View {
                 .foregroundStyle(.white.opacity(0.75))
                 .multilineTextAlignment(.center)
             ratingsLine
-            actions.frame(maxWidth: 440)
+            actions.frame(maxWidth: 480)
             if let tagline = details?.tagline, !tagline.isEmpty {
                 // TMDb часто присылает слоган уже в кавычках.
                 let quoted = ["«", "\"", "“", "„"].contains { tagline.hasPrefix($0) } ? tagline : "«\(tagline)»"
@@ -143,47 +146,16 @@ struct DetailsView: View {
         .frame(maxWidth: 720)
     }
 
-    /// Оценки одной строкой, как в приложении для ТВ: кольцо TMDb, затем IMDb/RT/Metacritic из MDBList. Есть внешние
-    /// оценки — число голосов TMDb не показываем, а трейлер — круглой кнопкой, чтобы всё поместилось.
+    /// Оценки строкой, как на ТВ: знак источника и кольцо — TMDb, IMDb, Rotten Tomatoes, Metacritic, Letterboxd.
     @ViewBuilder private var ratingsLine: some View {
-        let rated = shown.rating > 0 && shown.votes >= 10
-        let trailer = (details?.trailerKey).flatMap { $0.isEmpty ? nil : URL(string: "https://www.youtube.com/watch?v=\($0)") }
-        if rated || trailer != nil || !external.isEmpty {
-            HStack(spacing: 8) {
-                if rated { RatingRing(value: shown.rating, size: 34) }
-                if !external.isEmpty {
-                    Text(external)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.white.opacity(0.85))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.6)
-                } else if rated {
-                    Text("TMDb · \(shown.votes) \(Format.plural(shown.votes, "голос", "голоса", "голосов"))")
-                        .font(.caption).foregroundStyle(.white.opacity(0.75))
-                        .lineLimit(1)
-                }
-                if let trailer {
-                    Button { openURL(trailer) } label: {
-                        if external.isEmpty {
-                            Label("Трейлер", systemImage: "play.rectangle")
-                                .font(.caption.weight(.semibold))
-                                .padding(.horizontal, 12)
-                                .frame(height: 30)
-                                .glass(in: Capsule())
-                        } else {
-                            Image(systemName: "play.rectangle")
-                                .font(.system(size: 13, weight: .semibold))
-                                .frame(width: 32, height: 32)
-                                .glass(in: Circle())
-                        }
-                    }
-                    .foregroundStyle(.white)
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("Трейлер")
-                    .padding(.leading, rated ? 4 : 0)
-                }
-            }
+        let tmdb = shown.rating > 0 && shown.votes >= 10 ? shown.rating : 0
+        if tmdb > 0 || !external.isEmpty {
+            RatingsRow(tmdb: tmdb, external: external)
         }
+    }
+
+    private var trailer: URL? {
+        (details?.trailerKey).flatMap { $0.isEmpty ? nil : URL(string: "https://www.youtube.com/watch?v=\($0)") }
     }
 
     private var metaLine: String {
@@ -227,40 +199,46 @@ struct DetailsView: View {
                                detail: [latest.episode?.code, latest.remaining].compactMap { $0 }.filter { !$0.isEmpty }
                                    .joined(separator: " · "))
                 }
-                .buttonStyle(PrimaryButtonStyle())
+                .buttonStyle(PrimaryButtonStyle(fill: accent))
                 .accessibilityIdentifier("details-watch")
                 NavigationLink(value: Route.releases(item, latest.episode, runtime: details?.runtimeMinutes ?? 0)) {
                     Image(systemName: "list.bullet")
                 }
-                .buttonStyle(CircleGlassButtonStyle())
+                .buttonStyle(CircleGlassButtonStyle(tint: accent))
                 .accessibilityLabel("Другая раздача")
             } else if item.kind == .movie {
                 NavigationLink(value: Route.releases(item, nil, runtime: details?.runtimeMinutes ?? 0)) {
                     WatchLabel(title: "Смотреть")
                 }
-                .buttonStyle(PrimaryButtonStyle())
+                .buttonStyle(PrimaryButtonStyle(fill: accent))
                 .accessibilityIdentifier("details-watch")
             } else if let episode = latest?.episode ?? episodes.first {
+                // Серия под «Смотреть» — только когда сериал уже начинали, как на ТВ.
                 NavigationLink(value: Route.releases(item, episode, runtime: episode.runtimeMinutes)) {
-                    WatchLabel(title: "Смотреть", detail: "\(episode.code) · \(episode.title)")
+                    WatchLabel(title: "Смотреть", detail: latest?.episode == nil ? "" : "\(episode.code) · \(episode.title)")
                 }
-                .buttonStyle(PrimaryButtonStyle())
+                .buttonStyle(PrimaryButtonStyle(fill: accent))
                 .accessibilityIdentifier("details-watch")
             } else {
                 WatchLabel(title: "Смотреть").opacity(0.5)
                     .frame(maxWidth: .infinity).frame(height: 52).background(.white.opacity(0.3), in: Capsule())
             }
+            if let trailer {
+                Button { openURL(trailer) } label: { Image(systemName: "play.rectangle") }
+                    .buttonStyle(CircleGlassButtonStyle(tint: accent))
+                    .accessibilityLabel("Трейлер")
+            }
             Button { library.toggleSaved(shown) } label: {
                 Image(systemName: library.isSaved(item) ? "checkmark" : "plus")
             }
-            .buttonStyle(CircleGlassButtonStyle())
+            .buttonStyle(CircleGlassButtonStyle(tint: accent))
             .accessibilityLabel(library.isSaved(item) ? "Убрать из списка" : "В мой список")
             Menu { TasteMenuItems(item: shown) } label: {
                 Image(systemName: TasteLevel.symbol(library.rating(item)))
                     .font(.system(size: 19, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 48, height: 48)
-                    .glass(in: Circle(), interactive: true)
+                    .glass(in: Circle(), tint: accent)
             }
             .accessibilityLabel("Оценка")
             .accessibilityIdentifier("details-rate")
@@ -470,7 +448,13 @@ private struct EpisodePreview: View {
             .padding(16)
         }
         .frame(width: 340)
-        .background(Theme.card)
+        .background {
+            CachedImage(path: episode.still, size: "w300", pixelWidth: 300)
+                .blur(radius: 30, opaque: true)
+                .overlay(Color.black.opacity(0.35))
+        }
+        .glass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .foregroundStyle(.white)
     }
 }

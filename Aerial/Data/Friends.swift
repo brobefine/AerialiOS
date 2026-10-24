@@ -91,7 +91,8 @@ final class Friends {
         loop = Task { [weak self] in
             while !Task.isCancelled {
                 if let self, Date().timeIntervalSince(reportedAt) >= (watching != nil ? Self.watchingPeriod : next) { await report() }
-                try? await Task.sleep(for: .seconds(1))
+                // Раз в 5 с, а не в секунду: лишние пробуждения процесса — это батарея.
+                try? await Task.sleep(for: .seconds(5))
             }
         }
     }

@@ -51,28 +51,28 @@ struct HomeView: View {
     var body: some View {
         NavigationStack {
             // Страницы `TabView` обрезаются по безопасной зоне — сверху и снизу оставались чёрные полосы. Поэтому
-            // страницы во весь экран, а отступы под капсулы разделов и нижнюю пилюлю — полями прокрутки.
+            // страницы во весь экран, а отступы под капсулы разделов и нижнюю пилюлю — полями прокрутки. Капсулы —
+            // отдельным слоем поверх, в безопасной зоне: наложение на растянутый `TabView` прыгало вниз при касании.
             GeometryReader { geometry in
-                let top = geometry.safeAreaInsets.top
-                TabView(selection: $shelf) {
-                    ForEach(VodShelf.allCases) { item in
-                        ShelfPage(shelf: item, model: models[item] ?? HomeModel(),
-                                  insets: EdgeInsets(top: top + Self.pickerHeight, leading: 0,
-                                                     bottom: geometry.safeAreaInsets.bottom, trailing: 0))
-                            .tag(item)
+                ZStack(alignment: .top) {
+                    TabView(selection: $shelf) {
+                        ForEach(VodShelf.allCases) { item in
+                            ShelfPage(shelf: item, model: models[item] ?? HomeModel(),
+                                      insets: EdgeInsets(top: geometry.safeAreaInsets.top + Self.pickerHeight, leading: 0,
+                                                         bottom: geometry.safeAreaInsets.bottom, trailing: 0))
+                                .tag(item)
+                        }
                     }
-                }
-                .tabViewStyle(.page(indexDisplayMode: .never))
-                .ignoresSafeArea()
-                .overlay(alignment: .top) {
+                    .tabViewStyle(.page(indexDisplayMode: .never))
+                    .ignoresSafeArea()
+                    LinearGradient(colors: [Theme.background, Theme.background.opacity(0.85), .clear],
+                                   startPoint: .top, endPoint: .bottom)
+                        .frame(height: geometry.safeAreaInsets.top + Self.pickerHeight + 12)
+                        .ignoresSafeArea(edges: .top)
+                        .frame(maxHeight: .infinity, alignment: .top)
+                        .allowsHitTesting(false)
                     ShelfPicker(selection: $shelf)
                         .padding(.vertical, 8)
-                        .background {
-                            LinearGradient(colors: [Theme.background, Theme.background.opacity(0.85), .clear],
-                                           startPoint: .top, endPoint: .bottom)
-                                .padding(.top, -top)
-                                .allowsHitTesting(false)
-                        }
                 }
             }
             .background(Theme.background)

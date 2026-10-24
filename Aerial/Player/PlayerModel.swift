@@ -20,6 +20,8 @@ struct PlaybackRequest: Identifiable {
     var localFile: URL?
     /// Открыт по команде комнаты (она переключила серию) — сообщать ей о смене не нужно.
     var fromParty = false
+    /// Озвучка, выбранная в окне раздачи: дорожка с таким названием включается сама.
+    var voice: String?
 
     var title: String { item.title }
 
@@ -445,7 +447,9 @@ final class PlayerModel {
     private func handle(_ event: MPVEvent) {
         switch event {
         case .time(let value):
-            position = value
+            // mpv присылает время каждый кадр; на каждое изменение SwiftUI пересчитывал плеер — 30–60 раз в секунду,
+            // и это заметно садило батарею. Часы и шкале хватает полсекунды.
+            if abs(value - position) >= 0.5 { position = value }
             if value > 0 { started = true }
             save(force: false)
             if Date().timeIntervalSince(nowPlayingUpdated) >= 5 { publishNowPlaying() }
@@ -460,7 +464,12 @@ final class PlayerModel {
         case .cache: break
         case .fileLoaded: Log.note("ПЛЕЕР", "файл открыт")
         case .tracks(let tracks):
+            let firstTracks = audioTracks.isEmpty
             audioTracks = tracks.filter { $0.type == "audio" }
+            if firstTracks, let voice = request.voice?.lowercased(), !voice.isEmpty,
+               let track = audioTracks.first(where: { $0.title.lowercased().contains(voice) }), !track.selected {
+                selectAudio(track)
+            }
             subtitleTracks = tracks.filter { $0.type == "sub" }
         case .ended(let error):
             if let error {
@@ -496,7 +505,9 @@ final class PlayerModel {
                     self?.peers = (stat["active_peers"] as? NSNumber)?.intValue ?? 0
                     self?.speed = Int64((stat["download_speed"] as? NSNumber)?.doubleValue ?? 0)
                 }
-                try? await Task.sleep(for: .seconds(2))
+                // Пиры и скорость видны только при подкачке — во время просмотра спрашиваем реже.
+                let busy = self.map { $0.buffering || !$0.started } ?? false
+                try? await Task.sleep(for: .seconds(busy ? 2 : 15))
             }
         }
     }

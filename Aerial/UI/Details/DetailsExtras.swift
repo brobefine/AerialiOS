@@ -366,40 +366,49 @@ private struct ReviewSheet: View {
     }
 }
 
-/// «История создания» из Википедии: раздел о производстве и съёмках, ссылка на статью.
+/// «Интересные факты», как на ТВ: раздел Википедии о создании и съёмках, ссылка на статью. Блок есть всегда —
+/// пока грузится и когда статьи нет, это написано в нём (прежде без статьи раздел пропадал, и его не находили).
 struct WikiStorySection: View {
     let item: VodItem
 
     @Environment(\.openURL) private var openURL
     @State private var story: WikiStory?
+    @State private var loading = true
     @State private var expanded = false
 
     var body: some View {
-        Group {
-            if let story {
-                VStack(alignment: .leading, spacing: 10) {
-                    ShelfHeader(title: "История создания")
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(story.text)
-                            .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.9))
-                            .lineLimit(expanded ? nil : 8)
-                            .onTapGesture { withAnimation(.easeOut) { expanded.toggle() } }
-                        HStack {
-                            if !expanded { Button("Ещё") { withAnimation(.easeOut) { expanded = true } }.font(.subheadline.weight(.semibold)) }
-                            Spacer()
-                            Button { openURL(story.source) } label: {
-                                Label("Википедия · \(story.heading)", systemImage: "book").font(.caption)
-                            }
-                            .foregroundStyle(Theme.secondaryText)
+        VStack(alignment: .leading, spacing: 10) {
+            ShelfHeader(title: "Интересные факты")
+            VStack(alignment: .leading, spacing: 10) {
+                if let story {
+                    Text(story.text)
+                        .font(.subheadline)
+                        .foregroundStyle(.white.opacity(0.9))
+                        .lineLimit(expanded ? nil : 8)
+                        .onTapGesture { withAnimation(.easeOut) { expanded.toggle() } }
+                    HStack {
+                        if !expanded { Button("Ещё") { withAnimation(.easeOut) { expanded = true } }.font(.subheadline.weight(.semibold)) }
+                        Spacer()
+                        Button { openURL(story.source) } label: {
+                            Label("Википедия · \(story.heading)", systemImage: "book").font(.caption)
                         }
+                        .foregroundStyle(Theme.secondaryText)
                     }
-                    .padding(16)
-                    .background(Theme.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
-                    .padding(.horizontal, 16)
+                } else {
+                    Text(loading ? "Загружаем интересные факты…" : "История создания пока недоступна в Википедии")
+                        .font(.subheadline)
+                        .foregroundStyle(Theme.secondaryText)
                 }
             }
+            .padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Theme.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .padding(.horizontal, 16)
         }
-        .task(id: item.id) { if story == nil { story = await Wiki.story(item) } }
+        .task(id: item.id) {
+            guard story == nil else { return }
+            story = await Wiki.story(item)
+            loading = false
+        }
     }
 }

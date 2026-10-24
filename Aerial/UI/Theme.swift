@@ -27,11 +27,13 @@ extension Color {
 }
 
 extension View {
-    /// Стекло iOS 26 (Liquid Glass); на iOS 18 — материал.
+    /// Стекло iOS 26 (Liquid Glass); на iOS 18 — материал. `tint` — окраска стекла (цвет постера).
+    /// Интерактивное стекло (`.interactive()`) не используем: внутри кнопок и меню оно перехватывало касание —
+    /// не закрывался плеер, не переключались разделы на главной.
     @ViewBuilder
-    func glass<S: Shape>(in shape: S, interactive: Bool = false) -> some View {
+    func glass<S: Shape>(in shape: S, interactive: Bool = false, tint: Color? = nil) -> some View {
         if #available(iOS 26, *) {
-            self.glassEffect(interactive ? Glass.regular.interactive() : Glass.regular, in: shape)
+            self.glassEffect(tint.map { Glass.regular.tint($0) } ?? Glass.regular, in: shape)
         } else {
             self.background(.ultraThinMaterial, in: shape)
         }
@@ -52,15 +54,18 @@ extension View {
 }
 
 /// Главная кнопка, как «Смотреть» у Apple TV: белая капсула с чёрным текстом.
+/// `fill` — цвет постера: капсула окрашивается, текст белый.
 struct PrimaryButtonStyle: ButtonStyle {
+    var fill: Color?
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.headline)
-            .foregroundStyle(.black)
-            .padding(.horizontal, 22)
+            .foregroundStyle(fill == nil ? .black : .white)
+            .padding(.horizontal, 18)
             .frame(height: 48)
             .frame(maxWidth: .infinity)
-            .background(.white, in: Capsule())
+            .background(fill ?? .white, in: Capsule())
             .opacity(configuration.isPressed ? 0.75 : 1)
             .scaleEffect(configuration.isPressed ? 0.97 : 1)
             .animation(.easeOut(duration: 0.15), value: configuration.isPressed)
@@ -70,6 +75,7 @@ struct PrimaryButtonStyle: ButtonStyle {
 /// Круглая кнопка на стекле: «Мой список», трейлер, закрыть.
 struct CircleGlassButtonStyle: ButtonStyle {
     var size: CGFloat = 48
+    var tint: Color?
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -77,7 +83,7 @@ struct CircleGlassButtonStyle: ButtonStyle {
             .foregroundStyle(.white)
             .frame(width: size, height: size)
             // Интерактивное стекло внутри стиля кнопки на iOS 26 перехватывало касание — кнопка не срабатывала.
-            .glass(in: Circle())
+            .glass(in: Circle(), tint: tint?.opacity(0.55))
             .contentShape(Circle())
             .scaleEffect(configuration.isPressed ? 0.92 : 1)
             .opacity(configuration.isPressed ? 0.7 : 1)
