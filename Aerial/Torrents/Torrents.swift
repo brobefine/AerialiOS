@@ -112,6 +112,8 @@ final class EmbeddedTorrServer {
             sets["EnableBonjour"] = false
             sets["EnableLPD"] = false
             sets["DisableUPNP"] = true
+            // Телефон не раздаёт: отдача держит радио включённым и заметно садит батарею (и тратит мобильный трафик).
+            sets["DisableUpload"] = true
             try await client.setSettings(sets)
         } catch {
             Log.note("TORRSERVER", "настройки: \(error.localizedDescription)")

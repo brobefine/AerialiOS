@@ -15,6 +15,8 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
 
     /// Что идёт сейчас — подпись к замерам («плеер: …», «загрузка»). Ставят [Playback] и [Downloads].
     nonisolated(unsafe) static var activity = ""
+    /// Сторож главного потока спит, пока приложение в фоне: каждое его пробуждение — лишняя трата батареи.
+    nonisolated(unsafe) static var foreground = true
 
     private var sampler: Task<Void, Never>?
     private var watchdog: Thread?
@@ -30,6 +32,7 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
 
     /// На экране — замеры идут; в фоне — стоят (сам сборщик не должен тратить батарею).
     func resume() {
+        Self.foreground = true
         guard sampler == nil else { return }
         sampler = Task { [weak self] in
             while !Task.isCancelled {
@@ -40,6 +43,7 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
     }
 
     func pause() {
+        Self.foreground = false
         sampler?.cancel()
         sampler = nil
         sample(tag: "в фон")
@@ -68,6 +72,10 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
     private func startWatchdog() {
         let thread = Thread {
             while true {
+                if !PerfMonitor.foreground {
+                    Thread.sleep(forTimeInterval: 5)
+                    continue
+                }
                 let sent = DispatchTime.now()
                 let done = DispatchSemaphore(value: 0)
                 DispatchQueue.main.async { done.signal() }

@@ -178,14 +178,24 @@ enum Format {
     }
 
     /// «2026-10-24» → «24 октября 2026».
+    /// Форматтеры — один раз: дата считается в `body` каждой карточки серии и отзыва, а создание `DateFormatter`
+    /// дорогое — на прокрутке это лишняя работа процессора.
     static func date(_ iso: String) -> String {
+        guard let date = isoDay.date(from: String(iso.prefix(10))) else { return iso }
+        return longDay.string(from: date)
+    }
+
+    private static let isoDay: DateFormatter = {
         let parser = DateFormatter()
         parser.locale = Locale(identifier: "en_US_POSIX")
         parser.dateFormat = "yyyy-MM-dd"
-        guard let date = parser.date(from: String(iso.prefix(10))) else { return iso }
+        return parser
+    }()
+
+    private static let longDay: DateFormatter = {
         let out = DateFormatter()
         out.locale = Locale(identifier: "ru_RU")
         out.dateFormat = "d MMMM yyyy"
-        return out.string(from: date)
-    }
+        return out
+    }()
 }
