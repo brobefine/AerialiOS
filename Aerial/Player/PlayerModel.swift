@@ -16,6 +16,8 @@ struct PlaybackRequest: Identifiable {
     var runtimeMinutes: Int = 0
     /// Писать ли прогресс в медиатеку (проверка воспроизведения на CI — нет).
     var record = true
+    /// Скачанный файл — плеер берёт его с диска, без TorrServer ([Downloads]).
+    var localFile: URL?
 
     var title: String { item.title }
     var subtitle: String {
@@ -40,7 +42,7 @@ final class Playback {
 
     func play(_ request: PlaybackRequest) {
         guard controller == nil, let settings, let library, let presenter = Self.topController() else { return }
-        self.request = request
+        self.request = Self.resolved(request)
         Orientation.allowLandscape(true)
         let view = PlayerScreen { [weak self] in self?.close() }
             .environment(settings)
@@ -65,7 +67,17 @@ final class Playback {
     func advance(to next: PlaybackRequest) {
         guard controller != nil else { return }
         Log.note("ПЛЕЕР", "следующая серия: \(next.subtitle)")
-        request = next
+        request = Self.resolved(next)
+    }
+
+    /// Файл уже скачан — играем его с диска.
+    private static func resolved(_ request: PlaybackRequest) -> PlaybackRequest {
+        guard request.localFile == nil, let url = Downloads.shared.localURL(link: request.link, fileIndex: request.fileIndex) else {
+            return request
+        }
+        var local = request
+        local.localFile = url
+        return local
     }
 
     /// «Продолжить»: раздача и файл уже известны, позиция — из медиатеки.
@@ -140,6 +152,8 @@ final class PlayerModel {
     private(set) var skips: [SkipSegment] = []
     /// Следующая серия из той же раздачи; nil — фильм или серия последняя.
     private(set) var next: PlaybackRequest?
+    /// Скорость воспроизведения.
+    private(set) var rate: Double = 1
 
     /// Идёт заставка или «ранее в сериале» — кнопка пропуска (до конца отрезка больше 1,5 с).
     var skipNow: SkipSegment? {
@@ -176,45 +190,57 @@ final class PlayerModel {
         UIApplication.shared.isIdleTimerDisabled = true
         observeLifecycle()
         do {
-            let client = try await Torrents.client(settings)
-            self.client = client
-            phase = .connecting("Получаю раздачу…")
-            let poster = TMDbImage.urls(request.item.poster, "w342").first?.absoluteString ?? ""
-            var info = try await client.add(link: request.link, title: request.item.title, poster: poster)
-            phase = .connecting("Жду список файлов…")
-            info = try await client.awaitFiles(info)
-            let chosen = request.fileIndex.flatMap { index in info.files.first { $0.index == index } }
-                ?? EpisodeMatch.pick(info.files, episode: request.episode)
-                ?? info.files.max { $0.bytes < $1.bytes }
-            guard let file = chosen else { throw TorrServerError.noVideo }
-            source = WatchSource(link: request.link, hash: info.hash, fileIndex: file.index, fileName: file.name,
-                                 releaseTitle: request.releaseTitle)
-            let files = info.files
-            Task { [weak self] in
-                await self?.planNext(files: files, current: file)
-                await self?.loadSkips()
-            }
-            Log.note("ПЛЕЕР", "\(request.title): \(file.name) (\(Format.bytes(file.bytes))), с \(Int(request.startAt)) с")
-            phase = .preloading(0)
-            await client.preload(hash: info.hash, file: file, duration: Double(request.runtimeMinutes * 60)) { [weak self] value, stat in
-                let peers = (stat?["active_peers"] as? NSNumber)?.intValue
-                let speed = (stat?["download_speed"] as? NSNumber)?.doubleValue
-                DispatchQueue.main.async {
-                    MainActor.assumeIsolated { self?.preloaded(value, peers: peers, speed: speed) }
+            let url: URL
+            var statsHash: String?
+            if let local = request.localFile {
+                // Скачанный файл: без сервера и подкачки.
+                let files = Downloads.shared.localFiles(link: request.link)
+                let file = files.first { $0.index == request.fileIndex }
+                    ?? TorrentFile(index: request.fileIndex ?? 0, path: local.lastPathComponent, bytes: 0)
+                source = WatchSource(link: request.link, hash: TorrServerClient.infoHash(request.link) ?? "", fileIndex: file.index,
+                                     fileName: file.name, releaseTitle: request.releaseTitle)
+                Log.note("ПЛЕЕР", "\(request.title): с диска \(local.lastPathComponent), с \(Int(request.startAt)) с")
+                plan(files: files, current: file)
+                url = local
+            } else {
+                let client = try await Torrents.client(settings)
+                self.client = client
+                phase = .connecting("Получаю раздачу…")
+                let poster = TMDbImage.urls(request.item.poster, "w342").first?.absoluteString ?? ""
+                var info = try await client.add(link: request.link, title: request.item.title, poster: poster)
+                phase = .connecting("Жду список файлов…")
+                info = try await client.awaitFiles(info)
+                let chosen = request.fileIndex.flatMap { index in info.files.first { $0.index == index } }
+                    ?? EpisodeMatch.pick(info.files, episode: request.episode)
+                    ?? info.files.max { $0.bytes < $1.bytes }
+                guard let file = chosen else { throw TorrServerError.noVideo }
+                source = WatchSource(link: request.link, hash: info.hash, fileIndex: file.index, fileName: file.name,
+                                     releaseTitle: request.releaseTitle)
+                plan(files: info.files, current: file)
+                Log.note("ПЛЕЕР", "\(request.title): \(file.name) (\(Format.bytes(file.bytes))), с \(Int(request.startAt)) с")
+                phase = .preloading(0)
+                await client.preload(hash: info.hash, file: file, duration: Double(request.runtimeMinutes * 60)) { [weak self] value, stat in
+                    let peers = (stat?["active_peers"] as? NSNumber)?.intValue
+                    let speed = (stat?["download_speed"] as? NSNumber)?.doubleValue
+                    DispatchQueue.main.async {
+                        MainActor.assumeIsolated { self?.preloaded(value, peers: peers, speed: speed) }
+                    }
                 }
+                guard !Task.isCancelled else { return }
+                url = client.streamURL(hash: info.hash, file: file)
+                statsHash = info.hash
             }
-            guard !Task.isCancelled else { return }
             let core = MPVCore(layer: layer)
             core.onEvent = { [weak self] event in self?.handle(event) }
             self.core = core
-            core.load(client.streamURL(hash: info.hash, file: file), start: request.startAt, title: request.title)
+            core.load(url, start: request.startAt, title: request.title)
             phase = .playing
             nowPlaying.activate(title: request.title, subtitle: request.subtitle, poster: request.item.poster,
                                 toggle: { [weak self] in self?.togglePause() },
                                 setPaused: { [weak self] in self?.core?.setPaused($0) },
                                 skip: { [weak self] in self?.skip($0) },
                                 seek: { [weak self] in self?.seek(to: $0) })
-            watchStats(hash: info.hash)
+            if let statsHash { watchStats(hash: statsHash) }
         } catch {
             if HTTP.isCancellation(error) { return }
             Log.note("ПЛЕЕР", "сбой: \(error.localizedDescription)")
@@ -244,11 +270,23 @@ final class PlayerModel {
     func skip(_ seconds: Double) { core?.seek(by: seconds) }
     func selectAudio(_ track: MPVTrack) { core?.selectAudio(track.id) }
     func selectSubtitle(_ track: MPVTrack?) { core?.selectSubtitle(track?.id) }
+    func setRate(_ value: Double) {
+        rate = value
+        core?.setSpeed(value)
+    }
+
     func skipSegment() {
         if let segment = skipNow { seek(to: segment.end) }
     }
 
     // MARK: Сериал
+
+    private func plan(files: [TorrentFile], current: TorrentFile) {
+        Task { [weak self] in
+            await self?.planNext(files: files, current: current)
+            await self?.loadSkips()
+        }
+    }
 
     /// Следующая серия — следующий по сезону и номеру файл той же раздачи (пачка сезона или нескольких сезонов).
     /// Название и длительность — из TMDb, если сезон отвечает.

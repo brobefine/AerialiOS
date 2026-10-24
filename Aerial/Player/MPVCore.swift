@@ -92,7 +92,7 @@ final class MPVCore: @unchecked Sendable {
         guard let handle else { return }
         if start > 0 { mpv_set_property_string(handle, "start", String(format: "%.1f", start)) }
         mpv_set_property_string(handle, "force-media-title", title)
-        command(["loadfile", url.absoluteString, "replace"])
+        command(["loadfile", url.isFileURL ? url.path : url.absoluteString, "replace"])
     }
 
     func setPaused(_ paused: Bool) {
@@ -104,6 +104,7 @@ final class MPVCore: @unchecked Sendable {
     func seek(to seconds: Double) { command(["seek", String(format: "%.2f", seconds), "absolute"]) }
     func seek(by seconds: Double) { command(["seek", String(format: "%.2f", seconds), "relative"]) }
     func selectAudio(_ id: Int) { set("aid", String(id)) }
+    func setSpeed(_ value: Double) { set("speed", String(format: "%.2f", value)) }
     func selectSubtitle(_ id: Int?) { set("sid", id.map(String.init) ?? "no") }
     /// В фоне видео выключаем — звук играет дальше, а при возврате не бывает чёрного экрана (как в демо MPVKit).
     func setVideoEnabled(_ enabled: Bool) { set("vid", enabled ? "auto" : "no") }

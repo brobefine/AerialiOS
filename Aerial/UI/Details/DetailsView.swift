@@ -8,6 +8,7 @@ struct DetailsView: View {
 
     @Environment(Library.self) private var library
     @Environment(Playback.self) private var playback
+    @Environment(AppSettings.self) private var settings
     @Environment(\.openURL) private var openURL
     @Environment(\.horizontalSizeClass) private var sizeClass
 
@@ -16,6 +17,8 @@ struct DetailsView: View {
     @State private var season = 0
     @State private var episodes: [VodEpisode] = []
     @State private var expanded = false
+    /// Оценки IMDb, RT, Metacritic из MDBList — если в настройках есть ключ.
+    @State private var external = ""
 
     private var shown: VodItem { details?.item ?? item }
     private var art: String { shown.backdrop.isEmpty ? shown.poster : shown.backdrop }
@@ -56,6 +59,7 @@ struct DetailsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { if details == nil { await load() } }
         .task(id: season) { await loadSeason() }
+        .task(id: settings.mdblistKey) { external = await MdbList.ratings(item, key: settings.mdblistKey) }
     }
 
     private func load() async {
@@ -146,6 +150,12 @@ struct DetailsView: View {
                         .padding(.leading, rated ? 6 : 0)
                     }
                 }
+            }
+            if !external.isEmpty {
+                Text(external)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(.white.opacity(0.8))
+                    .multilineTextAlignment(.center)
             }
             actions.frame(maxWidth: 440)
             if let tagline = details?.tagline, !tagline.isEmpty {

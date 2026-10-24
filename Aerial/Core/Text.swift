@@ -59,6 +59,95 @@ enum SearchText {
     }
 }
 
+/// Подсказки поиска — перенос `rankVodSuggestions` ТВ: точное и начало названия раньше совпадения слов, затем
+/// исправленная раскладка («lsyf» → «дюна»), транслит и одна опечатка. Недавние запросы — первыми при равенстве.
+enum Suggestions {
+    struct Title: Sendable {
+        var title: String
+        var original = ""
+    }
+
+    static func rank(_ query: String, titles: [Title], recent: [String], limit: Int = 6) -> [String] {
+        let wanted = key(query)
+        let all = (recent.map { Title(title: $0) } + titles).filter { !$0.title.trimmingCharacters(in: .whitespaces).isEmpty }
+        var seen = Set<String>()
+        guard !wanted.isEmpty else {
+            return Array(all.map { $0.title.trimmingCharacters(in: .whitespaces) }.filter { seen.insert(key($0)).inserted }.prefix(limit))
+        }
+        var queries = [(query, 0)]
+        let repaired = repairKeyboard(query)
+        if key(repaired) != wanted { queries.append((repaired, 4)) }
+        let scored = all.enumerated().compactMap { index, candidate -> (String, Int, Int)? in
+            let scores = [candidate.title, candidate.original].filter { !$0.isEmpty }.flatMap { alias in
+                queries.compactMap { pair in score(pair.0, alias).map { $0 + pair.1 } }
+            }
+            guard let best = scores.min() else { return nil }
+            return (candidate.title.trimmingCharacters(in: .whitespaces), best, index)
+        }
+        return Array(scored.sorted { ($0.1, $0.2) < ($1.1, $1.2) }.map { $0.0 }.filter { seen.insert(key($0)).inserted }.prefix(limit))
+    }
+
+    /// Ключ сравнения: нижний регистр, ё → е, только буквы и цифры.
+    static func key(_ value: String) -> String {
+        String(value.lowercased().replacingOccurrences(of: "ё", with: "е").filter { $0.isLetter || $0.isNumber })
+    }
+
+    private static func words(_ value: String) -> [String] {
+        value.lowercased().replacingOccurrences(of: "ё", with: "е")
+            .components(separatedBy: CharacterSet.alphanumerics.inverted).filter { !$0.isEmpty }
+    }
+
+    private static func score(_ query: String, _ title: String) -> Int? {
+        let q = key(query), t = key(title)
+        guard !q.isEmpty else { return nil }
+        if t == q { return 0 }
+        if t.hasPrefix(q) { return 10 }
+        let qw = words(query), tw = words(title)
+        if !qw.isEmpty && qw.allSatisfy({ part in tw.contains { $0.hasPrefix(part) } }) { return 20 }
+        if q.count >= 2 && t.contains(q) { return 30 }
+        let tq = transliterate(q)
+        if tq.count >= 3 && transliterate(t).hasPrefix(tq) { return 35 }
+        if q.count >= 4 && qw.allSatisfy({ part in part.count >= 4 && tw.contains { oneTypo(part, String($0.prefix(part.count))) } }) {
+            return 60
+        }
+        return nil
+    }
+
+    static func oneTypo(_ a: String, _ b: String) -> Bool {
+        let a = Array(a), b = Array(b)
+        guard abs(a.count - b.count) <= 1 else { return false }
+        if a == b { return true }
+        if a.count == b.count {
+            let different = a.indices.filter { a[$0] != b[$0] }
+            return different.count == 1 || (different.count == 2 && different[1] == different[0] + 1
+                && a[different[0]] == b[different[1]] && a[different[1]] == b[different[0]])
+        }
+        let (longer, shorter) = a.count > b.count ? (a, b) : (b, a)
+        return longer.indices.contains { index in
+            var copy = longer
+            copy.remove(at: index)
+            return copy == shorter
+        }
+    }
+
+    /// Набрано не в той раскладке: латиница ↔ кириллица по клавишам.
+    static func repairKeyboard(_ value: String) -> String {
+        let latin = Array("qwertyuiop[]asdfghjkl;'zxcvbnm,.")
+        let russian = Array("йцукенгшщзхъфывапролджэячсмитьбю")
+        let lowered = value.lowercased()
+        let toRussian = lowered.filter { latin.contains($0) }.count > lowered.filter { russian.contains($0) }.count
+        let (from, to) = toRussian ? (latin, russian) : (russian, latin)
+        return String(lowered.map { char in from.firstIndex(of: char).map { to[$0] } ?? char })
+    }
+
+    private static func transliterate(_ value: String) -> String {
+        let letters = Array("абвгдеёжзийклмнопрстуфхцчшщъыьэюя")
+        let replacements = ["a", "b", "v", "g", "d", "e", "e", "zh", "z", "i", "y", "k", "l", "m", "n", "o", "p", "r", "s", "t", "u",
+                            "f", "h", "ts", "ch", "sh", "sch", "", "y", "", "e", "yu", "ya"]
+        return value.map { char in letters.firstIndex(of: char).map { replacements[$0] } ?? String(char) }.joined()
+    }
+}
+
 enum Format {
     static func bytes(_ value: Int64) -> String {
         ByteCountFormatter.string(fromByteCount: value, countStyle: .file)

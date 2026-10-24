@@ -1,7 +1,8 @@
 import SwiftUI
 
 /// Раздачи фильма или серии в стиле iOS 26: карточки на тёмном фоне, фильтр качества капсулами сверху и свайпом по
-/// странице, сортировка в стеклянной кнопке. Касание — раздача в TorrServer, затем файл и плеер.
+/// странице, сортировка в стеклянной кнопке. Касание — раздача в TorrServer, затем файл и плеер; удержание — «Скачать».
+/// Сортировка и выбранное качество запоминаются между страницами, как `releasePrefs` ТВ.
 struct ReleasesView: View {
     let item: VodItem
     let episode: VodEpisode?
@@ -16,7 +17,9 @@ struct ReleasesView: View {
     @State private var infos: [String: ReleaseInfo] = [:]
     @State private var loading = true
     @State private var filter = ReleasesView.all
-    @State private var sort: Sort = .seeds
+    @AppStorage("releases.sort") private var sort: Sort = .seeds
+    @AppStorage("releases.quality") private var preferredQuality = ""
+    @State private var notice: String?
     @State private var opening: Release?
     @State private var picking: Picking?
     @State private var failure: String?
@@ -25,6 +28,8 @@ struct ReleasesView: View {
         case seeds = "По сидам"
         case size = "По размеру"
         case date = "По дате"
+        case name = "По названию"
+        case tracker = "По источнику"
         var id: String { rawValue }
     }
 
@@ -48,6 +53,8 @@ struct ReleasesView: View {
         case .seeds: filtered.sorted { $0.seeds > $1.seeds }
         case .size: filtered.sorted { $0.bytes > $1.bytes }
         case .date: filtered.sorted { $0.published > $1.published }
+        case .name: filtered.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
+        case .tracker: filtered.sorted { ($0.tracker.lowercased(), -$0.seeds) < ($1.tracker.lowercased(), -$1.seeds) }
         }
         // Для серии — сначала раздачи с её сезоном, затем без указания сезона, в конце — другие сезоны.
         guard let episode else { return sorted }
@@ -73,7 +80,9 @@ struct ReleasesView: View {
                 ScrollView(.horizontal) {
                     HStack(spacing: 8) {
                         ForEach(filters, id: \.self) { value in
-                            Chip(title: value, selected: filter == value) { withAnimation(.snappy) { filter = value } }
+                            Chip(title: value, selected: filter == value) {
+                                withAnimation(.snappy) { filter = value }
+                            }
                                 .accessibilityIdentifier("quality-\(value)")
                         }
                     }
@@ -105,6 +114,10 @@ struct ReleasesView: View {
             }
         }
         .task { await search() }
+        .onChange(of: filter) { _, value in
+            // Свайп и капсула — выбор зрителя: в следующий раз страница откроется на этом качестве.
+            if !releases.isEmpty { preferredQuality = value == Self.all ? "" : value }
+        }
         .sheet(item: $picking) { picking in
             FilesSheet(info: picking.info, episode: episode) { file in
                 self.picking = nil
@@ -115,6 +128,11 @@ struct ReleasesView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(failure ?? "")
+        }
+        .alert("Загрузка", isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(notice ?? "")
         }
     }
 
@@ -141,7 +159,7 @@ struct ReleasesView: View {
                     .buttonStyle(.plain)
                 }
                 if !list.isEmpty {
-                    Text("\(list.count) \(Format.plural(list.count, "раздача", "раздачи", "раздач"))")
+                    Text("\(list.count) \(Format.plural(list.count, "раздача", "раздачи", "раздач")) · удерживайте, чтобы скачать")
                         .font(.footnote.weight(.semibold))
                         .foregroundStyle(Theme.secondaryText)
                         .padding(.horizontal, 4)
@@ -153,6 +171,16 @@ struct ReleasesView: View {
                     .buttonStyle(.plain)
                     .disabled(opening != nil)
                     .accessibilityIdentifier("release")
+                    .contextMenu {
+                        Button { download(release, all: false) } label: {
+                            Label(episode == nil ? "Скачать" : "Скачать серию", systemImage: "arrow.down.circle")
+                        }
+                        if item.kind == .series {
+                            Button { download(release, all: true) } label: {
+                                Label("Скачать все серии раздачи", systemImage: "square.and.arrow.down.on.square")
+                            }
+                        }
+                    }
                 }
             }
             .padding(.horizontal, 16)
@@ -173,6 +201,53 @@ struct ReleasesView: View {
         infos = parsed
         releases = found
         loading = false
+        if !preferredQuality.isEmpty, parsed.values.contains(where: { $0.quality == preferredQuality }) {
+            filter = preferredQuality
+        }
+    }
+
+    /// Скачать: фильм — главный файл, серия — её файл, «все серии» — все видеофайлы раздачи (серии подписаны по TMDb).
+    private func download(_ release: Release, all: Bool) {
+        opening = release
+        Task {
+            defer { opening = nil }
+            do {
+                let client = try await Torrents.client(settings)
+                let poster = TMDbImage.urls(item.poster, "w342").first?.absoluteString ?? ""
+                var info = try await client.add(link: release.link, title: item.title, poster: poster)
+                info = try await client.awaitFiles(info)
+                let chosen: [TorrentFile]
+                if all {
+                    chosen = info.files
+                } else if let file = EpisodeMatch.pick(info.files, episode: episode)
+                            ?? (episode == nil ? info.files.max(by: { $0.bytes < $1.bytes }) : nil) {
+                    chosen = [file]
+                } else {
+                    notice = "В раздаче не нашёлся файл серии \(episode?.code ?? ""). Можно скачать все серии раздачи."
+                    return
+                }
+                var seasons: [Int: [VodEpisode]] = [:]
+                if item.kind == .series {
+                    for season in Set(chosen.compactMap { EpisodeMatch.coordinates($0.path)?.season }) {
+                        seasons[season] = (try? await Catalogue.shared.season(item, season)) ?? []
+                    }
+                }
+                let files = chosen.map { file -> DownloadFile in
+                    var meta: VodEpisode?
+                    if let place = EpisodeMatch.coordinates(file.path) {
+                        meta = seasons[place.season]?.first { $0.number == place.episode }
+                            ?? VodEpisode(season: place.season, number: place.episode, title: "Серия \(place.episode)")
+                    } else if !all {
+                        meta = episode
+                    }
+                    return DownloadFile(index: file.index, path: file.path, bytes: file.bytes, episode: meta)
+                }
+                notice = Downloads.shared.add(item: item, link: release.link, releaseTitle: release.title, info: info, files: files)
+                    ?? "Загрузка началась — она в Медиатеке. Качается, пока приложение открыто."
+            } catch {
+                if !HTTP.isCancellation(error) { failure = error.localizedDescription }
+            }
+        }
     }
 
     private func open(_ release: Release) {

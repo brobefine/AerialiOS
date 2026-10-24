@@ -155,6 +155,18 @@ final class Catalogue: Sendable {
         return try await items(body.results, kind: item.kind)
     }
 
+    /// Следующая серия сериала — лёгкий запрос карточки без приложений (ряд «Скоро новые серии»).
+    func upcoming(_ item: VodItem) async throws -> UpcomingEpisode? {
+        struct Next: Decodable { var airDate: String?; var seasonNumber: Int?; var episodeNumber: Int?; var name: String?; var stillPath: String? }
+        struct Body: Decodable { var nextEpisodeToAir: Next? }
+        guard item.kind == .series else { return nil }
+        let body = try await tmdb.decode(Body.self, "tv/\(item.remoteId)", ttl: 6 * DiskCache.hour)
+        guard let next = body.nextEpisodeToAir, let date = next.airDate, date.count >= 10,
+              let number = next.episodeNumber, number > 0 else { return nil }
+        return UpcomingEpisode(item: item, date: date, season: next.seasonNumber ?? 0, number: number, title: next.name ?? "",
+                               still: next.stillPath ?? "")
+    }
+
     /// Номер IMDb — для Torrentio. Без языка: ответ один на все языки.
     func imdbId(_ item: VodItem) async -> String? {
         struct Ids: Decodable { var imdbId: String? }

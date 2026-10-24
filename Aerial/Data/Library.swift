@@ -45,6 +45,8 @@ final class Library {
     private(set) var saved: [VodItem] = []
     private(set) var entries: [String: WatchEntry] = [:]
     private(set) var marks: [String: TasteMark] = [:]
+    /// Подписки на актёров и режиссёров: их новые работы — рядом на главной.
+    private(set) var followed: [VodPerson] = []
     /// Растёт, когда меняется то, из чего считается подбор: список, оценки, новый или досмотренный просмотр.
     /// Ход позиции во время фильма его не трогает — главная не пересчитывает ряды каждые 5 с.
     private(set) var tasteRevision = 0
@@ -61,6 +63,9 @@ final class Library {
         }
         if let data = defaults.data(forKey: "library.marks"), let value = try? decoder.decode([String: TasteMark].self, from: data) {
             marks = value
+        }
+        if let data = defaults.data(forKey: "library.followed"), let value = try? decoder.decode([VodPerson].self, from: data) {
+            followed = value
         }
     }
 
@@ -113,6 +118,20 @@ final class Library {
             latest[entry.item.id] = entry
         }
         return latest
+    }
+
+    // MARK: Подписки
+
+    func isFollowed(_ person: VodPerson) -> Bool { followed.contains { $0.id == person.id } }
+
+    func toggleFollow(_ person: VodPerson) {
+        if let index = followed.firstIndex(where: { $0.id == person.id }) {
+            followed.remove(at: index)
+        } else {
+            followed.insert(person, at: 0)
+        }
+        Log.note("ДЕЙСТВИЕ", "подписка на \(person.name): \(isFollowed(person))")
+        persist(followed, "library.followed")
     }
 
     // MARK: Прогресс

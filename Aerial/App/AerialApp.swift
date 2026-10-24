@@ -9,6 +9,7 @@ struct AerialApp: App {
     @State private var settings = AppSettings()
     @State private var library = Library()
     @State private var taste = Taste()
+    @State private var feeds = Feeds()
     @State private var playback = Playback()
 
     init() {
@@ -27,6 +28,7 @@ struct AerialApp: App {
                 .environment(settings)
                 .environment(library)
                 .environment(taste)
+                .environment(feeds)
                 .environment(playback)
                 .preferredColorScheme(.dark)
                 .tint(Theme.accent)
@@ -37,10 +39,18 @@ struct AerialApp: App {
             case .background:
                 Log.note("ЖИЗНЬ", "в фоне\(playback.request == nil ? "" : ", идёт фильм")")
                 // Без фильма сервер в фоне не нужен: iOS всё равно усыпит его, а сокеты после сна мёртвые.
-                if playback.request == nil { EmbeddedTorrServer.shared.suspend() }
+                // Идёт загрузка — сервер не трогаем: iOS даст ещё полминуты дописать кусок.
+                if Downloads.shared.busy {
+                    Downloads.shared.enterBackground()
+                } else if playback.request == nil {
+                    EmbeddedTorrServer.shared.suspend()
+                }
             case .active:
                 Log.note("ЖИЗНЬ", "на экране")
-                Task { await Torrents.warmUp(settings) }
+                Task {
+                    await Torrents.warmUp(settings)
+                    Downloads.shared.resume()
+                }
             default:
                 break
             }
@@ -71,6 +81,7 @@ struct RootView: View {
         .transaction { if UITestHooks.active { $0.disablesAnimations = true } }
         .onAppear {
             playback.attach(settings: settings, library: library)
+            Downloads.shared.attach(settings)
             UITestHooks.start(playback)
         }
     }

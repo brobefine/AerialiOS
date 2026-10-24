@@ -39,6 +39,8 @@ final class AppSettings {
     /// Кэш встроенного TorrServer в памяти, МБ.
     var cacheMB: Int { didSet { defaults.set(cacheMB, forKey: "torrserver.cacheMB") } }
     var tmdbProxy: String { didSet { defaults.set(tmdbProxy, forKey: TMDb.proxyKey) } }
+    /// Ключ MDBList: оценки IMDb, Rotten Tomatoes и Metacritic на странице фильма. Пусто — не спрашиваем.
+    var mdblistKey: String { didSet { defaults.set(mdblistKey, forKey: "mdblist.key"); MdbList.unblock() } }
     /// «Учитывать историю просмотра» в подборе «Вам понравится?».
     var tasteHistory: Bool { didSet { defaults.set(tasteHistory, forKey: "taste.history") } }
     /// Следующая серия — сама через 10 с после конца серии.
@@ -52,6 +54,7 @@ final class AppSettings {
         externalAddress = defaults.string(forKey: "torrserver.address") ?? ""
         cacheMB = defaults.object(forKey: "torrserver.cacheMB") as? Int ?? 256
         tmdbProxy = defaults.string(forKey: TMDb.proxyKey) ?? TMDb.defaultProxy
+        mdblistKey = defaults.string(forKey: "mdblist.key") ?? ""
         tasteHistory = defaults.object(forKey: "taste.history") as? Bool ?? true
         autoplayNext = defaults.object(forKey: "player.autoplayNext") as? Bool ?? true
     }

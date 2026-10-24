@@ -253,6 +253,14 @@ struct PlayerView: View {
                     Button { model.selectAudio(track) } label: { choice(track.label, track.selected) }
                 }
             }
+            Section("Скорость") {
+                Picker("Скорость", selection: Binding(get: { model.rate }, set: { model.setRate($0) })) {
+                    ForEach([0.5, 0.75, 1, 1.25, 1.5, 2], id: \.self) { value in
+                        Text(value == 1 ? "Обычная" : String(format: "%g×", value)).tag(value)
+                    }
+                }
+                .pickerStyle(.menu)
+            }
             Section("Субтитры") {
                 Button { model.selectSubtitle(nil) } label: {
                     choice("Выключены", !model.subtitleTracks.contains(where: \.selected))
@@ -268,7 +276,7 @@ struct PlayerView: View {
                 .frame(width: 42, height: 42)
                 .glass(in: Circle(), interactive: true)
         }
-        .accessibilityLabel("Звук и субтитры")
+        .accessibilityLabel("Звук, субтитры и скорость")
     }
 
     @ViewBuilder

@@ -42,6 +42,7 @@ final class HomeModel {
 struct HomeView: View {
     @Environment(Library.self) private var library
     @Environment(Taste.self) private var taste
+    @Environment(Feeds.self) private var feeds
     @Environment(AppSettings.self) private var settings
     @State private var shelf: VodShelf = .all
     @State private var models: [VodShelf: HomeModel] =
@@ -64,6 +65,8 @@ struct HomeView: View {
         }
         // Соседи TMDb для подбора — при новых оценках и просмотрах.
         .onChange(of: library.tasteRevision, initial: true) { taste.refresh(library, useHistory: settings.tasteHistory) }
+        .task(id: library.tasteRevision) { await feeds.refreshUpcoming(library) }
+        .task(id: library.followed.map(\.id)) { await feeds.refreshFollowed(library) }
     }
 }
 
@@ -73,6 +76,7 @@ private struct ShelfPage: View {
 
     @Environment(Library.self) private var library
     @Environment(Taste.self) private var taste
+    @Environment(Feeds.self) private var feeds
     @Environment(AppSettings.self) private var settings
     @State private var forYou: [VodItem] = []
     @State private var because: [BecauseRow] = []
@@ -91,6 +95,14 @@ private struct ShelfPage: View {
                 }
                 ForEach(because) { row in
                     PosterShelf(title: "Потому что вам понравилось «\(row.seed.title)»", items: row.items)
+                }
+                let upcoming = feeds.upcoming.filter { shelf.accepts($0.item) }
+                if !upcoming.isEmpty && (shelf == .all || shelf == .series || shelf == .cartoonSeries) {
+                    UpcomingShelf(episodes: upcoming)
+                }
+                let followed = feeds.followed.filter(shelf.accepts)
+                if !followed.isEmpty {
+                    PosterShelf(title: "Новое с вашими актёрами", items: followed)
                 }
                 if model.failed {
                     ContentUnavailableView {
@@ -193,6 +205,70 @@ struct TitleArt: View {
                 .frame(maxWidth: 300, maxHeight: maxHeight)
                 .shadow(color: .black.opacity(0.4), radius: 10)
                 .accessibilityLabel(title)
+        }
+    }
+}
+
+/// «Скоро новые серии»: кадр серии (или сериала), дата и сколько ждать; касание — страница сериала.
+struct UpcomingShelf: View {
+    let episodes: [UpcomingEpisode]
+
+    @Environment(\.horizontalSizeClass) private var sizeClass
+
+    var body: some View {
+        let width = Theme.landscapeWidth(sizeClass)
+        VStack(alignment: .leading, spacing: 10) {
+            ShelfHeader(title: "Скоро новые серии")
+            ScrollView(.horizontal) {
+                LazyHStack(alignment: .top, spacing: 12) {
+                    ForEach(episodes) { episode in
+                        NavigationLink(value: Route.details(episode.item)) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Color.clear
+                                    .aspectRatio(16.0 / 9.0, contentMode: .fit)
+                                    .overlay {
+                                        CachedImage(path: episode.still.isEmpty ? episode.item.backdrop : episode.still,
+                                                    size: "w780", pixelWidth: Int(width * 3))
+                                    }
+                                    .overlay(alignment: .topLeading) {
+                                        Text(Self.when(episode.date))
+                                            .font(.caption.weight(.bold))
+                                            .foregroundStyle(.black)
+                                            .padding(.horizontal, 10)
+                                            .frame(height: 26)
+                                            .background(Theme.accent, in: Capsule())
+                                            .padding(8)
+                                    }
+                                    .background(Theme.card)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                Text(episode.item.title).font(.subheadline.weight(.semibold)).lineLimit(1)
+                                Text([episode.code, episode.title].filter { !$0.isEmpty }.joined(separator: " · "))
+                                    .font(.caption).foregroundStyle(.white.opacity(0.8)).lineLimit(1)
+                                Text(Format.date(episode.date)).font(.caption2).foregroundStyle(Theme.secondaryText)
+                            }
+                            .frame(width: width)
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu { PosterMenu(item: episode.item) }
+                    }
+                }
+                .scrollTargetLayout()
+            }
+            .contentMargins(.horizontal, 16, for: .scrollContent)
+            .scrollTargetBehavior(.viewAligned(limitBehavior: .never))
+            .scrollIndicators(.hidden)
+        }
+    }
+
+    /// «Сегодня», «Завтра», «Через 5 дн.».
+    static func when(_ iso: String) -> String {
+        let calendar = Calendar.current
+        guard let date = ISO8601DateFormatter.day.date(from: String(iso.prefix(10))) else { return iso }
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: .now), to: calendar.startOfDay(for: date)).day ?? 0
+        switch days {
+        case ..<1: return "Сегодня"
+        case 1: return "Завтра"
+        default: return "Через \(days) \(Format.plural(days, "день", "дня", "дней"))"
         }
     }
 }

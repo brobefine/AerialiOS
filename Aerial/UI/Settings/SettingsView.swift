@@ -81,7 +81,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Плеер")
                 } footer: {
-                    Text("Серия кончилась — через 10 с начнётся следующая из той же раздачи. Заставку можно пропустить кнопкой, если её отметили зрители IntroDB или AniSkip.")
+                    Text("Серия кончилась — через 10 с начнётся следующая из той же раздачи. Заставку можно пропустить кнопкой, если её отметили зрители IntroDB или AniSkip. Скачанное (удерживайте раздачу — «Скачать») играет с телефона без сети и лежит в «Файлах» › Aerial › Downloads.")
                 }
 
                 Section {
@@ -99,6 +99,7 @@ struct SettingsView: View {
                     TextField("Прокси TMDb", text: $settings.tmdbProxy)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
+                    SecureField("Ключ MDBList (оценки IMDb, RT)", text: $settings.mdblistKey)
                     LabeledContent("Кэш ответов", value: Format.bytes(Int64(cacheBytes)))
                     Button("Очистить кэш", role: .destructive) {
                         DiskCache.api.clear()
@@ -108,7 +109,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Каталог")
                 } footer: {
-                    Text("Если TMDb недоступен напрямую, запросы идут через этот Worker.")
+                    Text("Если TMDb недоступен напрямую, запросы идут через этот Worker. Бесплатный ключ MDBList — на mdblist.com, в разделе Preferences: с ним на странице фильма видны оценки IMDb, Rotten Tomatoes и Metacritic.")
                 }
 
                 Section {

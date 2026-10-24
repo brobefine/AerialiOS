@@ -1,18 +1,57 @@
 import SwiftUI
 
-/// Поиск фильмов и сериалов; пока запрос пуст — «Популярно сейчас».
+/// Поиск фильмов и сериалов; пока запрос пуст — недавние запросы и «Популярно сейчас». Под полем — подсказки
+/// с исправлением раскладки и опечаток ([Suggestions]).
 struct SearchView: View {
+    @Environment(Library.self) private var library
     @State private var query = ""
     @State private var results: [VodItem] = []
     @State private var popular: [VodItem] = []
     @State private var searching = false
+    @AppStorage("search.recent") private var recentRaw = ""
 
     private var trimmed: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
+    private var recent: [String] { recentRaw.split(separator: "\n").map(String.init) }
+
+    private var suggestions: [String] {
+        guard !trimmed.isEmpty else { return [] }
+        var seen = Set<String>()
+        let titles = (results + popular + library.saved + library.likedItems + library.continueWatching.map(\.item))
+            .filter { seen.insert($0.id).inserted }
+            .map { Suggestions.Title(title: $0.title, original: $0.originalTitle) }
+        return Suggestions.rank(trimmed, titles: titles, recent: recent).filter { Suggestions.key($0) != Suggestions.key(trimmed) }
+    }
+
+    /// Запрос отправлен — в начало недавних (до 10, без повторов).
+    private func remember(_ text: String) {
+        let value = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard value.count >= 2 else { return }
+        let rest = recent.filter { Suggestions.key($0) != Suggestions.key(value) }
+        recentRaw = ([value] + rest).prefix(10).joined(separator: "\n")
+    }
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
+                    if trimmed.isEmpty && !recent.isEmpty {
+                        HStack {
+                            Text("Недавние").font(.title3.weight(.bold))
+                            Spacer()
+                            Button("Очистить") { recentRaw = "" }.font(.subheadline)
+                        }
+                        .padding(.horizontal, 16)
+                        ScrollView(.horizontal) {
+                            HStack(spacing: 8) {
+                                ForEach(recent, id: \.self) { text in
+                                    Chip(title: text, selected: false) { query = text }
+                                }
+                            }
+                        }
+                        .contentMargins(.horizontal, 16, for: .scrollContent)
+                        .scrollIndicators(.hidden)
+                        .padding(.bottom, 8)
+                    }
                     if trimmed.isEmpty && !popular.isEmpty {
                         Text("Популярно сейчас").font(.title3.weight(.bold)).padding(.horizontal, 16)
                     }
@@ -30,6 +69,13 @@ struct SearchView: View {
             }
             .navigationTitle("Поиск")
             .searchable(text: $query, prompt: "Фильмы и сериалы")
+            .searchSuggestions {
+                ForEach(suggestions, id: \.self) { text in
+                    Label(text, systemImage: recent.contains(text) ? "clock.arrow.circlepath" : "magnifyingglass")
+                        .searchCompletion(text)
+                }
+            }
+            .onSubmit(of: .search) { remember(query) }
             .task(id: trimmed) {
                 guard trimmed.count >= 2 else {
                     results = []
@@ -42,6 +88,8 @@ struct SearchView: View {
                 guard !Task.isCancelled else { return }
                 results = found
                 searching = false
+                // Подсказку выбрали или запрос постоял и что-то нашёл — тоже в недавние.
+                if !found.isEmpty, (try? await Task.sleep(for: .seconds(2))) != nil, !Task.isCancelled { remember(trimmed) }
             }
             .task {
                 guard popular.isEmpty else { return }
@@ -119,6 +167,8 @@ struct SectionView: View {
 struct PersonView: View {
     let person: VodPerson
 
+    @Environment(Library.self) private var library
+
     @State private var info: VodPersonInfo?
     @State private var expanded = false
 
@@ -158,11 +208,20 @@ struct PersonView: View {
         .background(Theme.background)
         .navigationTitle(person.name)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                // Подписка: новые работы человека — рядом «Новое с вашими актёрами» на главной.
+                Button { library.toggleFollow(person) } label: {
+                    Image(systemName: library.isFollowed(person) ? "bell.fill" : "bell")
+                }
+                .accessibilityLabel(library.isFollowed(person) ? "Отписаться" : "Подписаться")
+            }
+        }
         .task { if info == nil { info = try? await Catalogue.shared.person(person) } }
     }
 }
 
-/// Медиатека: «Продолжить просмотр», «Мой список» и «Нравится».
+/// Медиатека: «Продолжить просмотр», загрузки, «Мой список» и «Нравится».
 struct LibraryView: View {
     @Environment(Library.self) private var library
 
@@ -172,6 +231,7 @@ struct LibraryView: View {
                 VStack(alignment: .leading, spacing: 26) {
                     let continuing = library.continueWatching
                     if !continuing.isEmpty { ContinueShelf(entries: continuing) }
+                    if !Downloads.shared.jobs.isEmpty { DownloadsShelf() }
                     if !library.saved.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {
                             ShelfHeader(title: "Мой список")
@@ -190,7 +250,7 @@ struct LibraryView: View {
             }
             .background(Theme.background)
             .overlay {
-                if library.saved.isEmpty && library.continueWatching.isEmpty && library.likedItems.isEmpty {
+                if library.saved.isEmpty && library.continueWatching.isEmpty && library.likedItems.isEmpty && Downloads.shared.jobs.isEmpty {
                     ContentUnavailableView("Здесь пока пусто", systemImage: "rectangle.stack",
                                            description: Text("Добавляйте фильмы кнопкой «+», а начатое появится в «Продолжить»."))
                 }
