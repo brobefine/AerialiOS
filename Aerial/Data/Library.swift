@@ -54,6 +54,11 @@ final class Library {
     private let defaults = UserDefaults.standard
 
     init() {
+        reload()
+    }
+
+    /// Перечитать медиатеку из UserDefaults (после восстановления копии).
+    func reload() {
         let decoder = JSONDecoder()
         if let data = defaults.data(forKey: "library.saved"), let value = try? decoder.decode([VodItem].self, from: data) {
             saved = value
@@ -67,6 +72,7 @@ final class Library {
         if let data = defaults.data(forKey: "library.followed"), let value = try? decoder.decode([VodPerson].self, from: data) {
             followed = value
         }
+        tasteRevision += 1
     }
 
     static func key(_ item: VodItem, _ episode: VodEpisode?) -> String {

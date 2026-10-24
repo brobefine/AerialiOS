@@ -195,4 +195,5 @@ final class Flag: @unchecked Sendable {
     private var raised = false
     var value: Bool { lock.withLock { raised } }
     func set() { lock.withLock { raised = true } }
+    func lower() { lock.withLock { raised = false } }
 }

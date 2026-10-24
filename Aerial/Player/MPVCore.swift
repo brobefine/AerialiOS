@@ -105,6 +105,8 @@ final class MPVCore: @unchecked Sendable {
     func seek(by seconds: Double) { command(["seek", String(format: "%.2f", seconds), "relative"]) }
     func selectAudio(_ id: Int) { set("aid", String(id)) }
     func setSpeed(_ value: Double) { set("speed", String(format: "%.2f", value)) }
+    /// Внешний файл субтитров — сразу включённым.
+    func addSubtitle(_ file: URL) { command(["sub-add", file.path, "select"]) }
     func selectSubtitle(_ id: Int?) { set("sid", id.map(String.init) ?? "no") }
     /// В фоне видео выключаем — звук играет дальше, а при возврате не бывает чёрного экрана (как в демо MPVKit).
     func setVideoEnabled(_ enabled: Bool) { set("vid", enabled ? "auto" : "no") }

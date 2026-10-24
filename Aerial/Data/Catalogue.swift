@@ -155,6 +155,66 @@ final class Catalogue: Sendable {
         return try await items(body.results, kind: item.kind)
     }
 
+    /// Название от ИИ → работа TMDb. Строго: название (русское или оригинальное) совпадает целиком, год — с точностью до
+    /// года; иначе nil (ИИ назвал «The Box» про запертых людей — первый результат поиска был бы корейской мелодрамой).
+    func resolve(_ title: AiTitle) async -> VodItem? {
+        let kind: VodKind = title.tv ? .series : .movie
+        let type = title.tv ? "tv" : "movie"
+        let yearKey = title.tv ? "first_air_date_year" : "primary_release_year"
+        let wanted = Set([title.title, title.original].map(SearchText.normalized).filter { !$0.isEmpty })
+        let names = await genres.names()
+        var tried = Set<String>()
+        for (query, year) in [(title.original, title.year), (title.title, title.year), (title.original, 0)] {
+            guard !query.isEmpty, tried.insert("\(query)|\(year)").inserted else { continue }
+            var params = ["query": query]
+            if year > 0 { params[yearKey] = String(year) }
+            guard let page = try? await tmdb.decode(TMDbPage.self, "search/\(type)", params, ttl: 7 * DiskCache.day) else { continue }
+            for row in page.results {
+                let candidates = [row.title, row.name, row.originalTitle, row.originalName].compactMap { $0 }.map(SearchText.normalized)
+                guard candidates.contains(where: wanted.contains) else { continue }
+                let found = Int(((title.tv ? row.firstAirDate : row.releaseDate) ?? "").prefix(4)) ?? 0
+                if title.year > 0 && found > 0 && abs(found - title.year) > 1 { continue }
+                if let item = row.item(kind: kind, genres: names) { return item }
+            }
+        }
+        return nil
+    }
+
+    /// Отзывы TMDb: русские и английские вместе (русских почти нет), без повторов.
+    func reviews(_ item: VodItem) async -> [VodReview] {
+        struct Author: Decodable { var rating: Double? }
+        struct Row: Decodable { var author: String?; var authorDetails: Author?; var content: String?; var createdAt: String? }
+        struct Page: Decodable { var results: [Row]? }
+        let path = "\(item.tmdbType)/\(item.remoteId)/reviews"
+        async let local = tmdb.decode(Page.self, path, ttl: DiskCache.day)
+        async let english = tmdb.decode(Page.self, path, ["language": "en-US"], ttl: DiskCache.day)
+        var seen = Set<String>()
+        let rows = ((try? await local)?.results ?? []) + ((try? await english)?.results ?? [])
+        return rows
+            .compactMap { row -> VodReview? in
+                let text = (row.content ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !text.isEmpty else { return nil }
+                return VodReview(author: row.author ?? "TMDb", rating: row.authorDetails?.rating ?? 0, text: text,
+                                 date: String((row.createdAt ?? "").prefix(10)))
+            }
+            .filter { seen.insert("\($0.author)|\($0.date)").inserted }
+    }
+
+    /// Фильмы, вышедшие в онлайн или на диске за последние [days] дней (ряд «Вышли в 4K»), по популярности.
+    func recentHomeReleases(days: Int = 120, pages: Int = 3) async -> [VodItem] {
+        let today = ISO8601DateFormatter.day.string(from: .now)
+        let from = ISO8601DateFormatter.day.string(from: .now.addingTimeInterval(-Double(days) * 86400))
+        let params = ["with_release_type": "4|5", "release_date.gte": from, "release_date.lte": today,
+                      "sort_by": "popularity.desc", "vote_count.gte": "80"]
+        var all: [VodItem] = []
+        for page in 1...pages {
+            let section = CinemaSection(id: "home-\(page)", title: "", path: "discover/movie", kind: .movie, params: params)
+            all += (try? await self.section(section, page: page).items) ?? []
+        }
+        var seen = Set<String>()
+        return all.filter { seen.insert($0.id).inserted }
+    }
+
     /// Следующая серия сериала — лёгкий запрос карточки без приложений (ряд «Скоро новые серии»).
     func upcoming(_ item: VodItem) async throws -> UpcomingEpisode? {
         struct Next: Decodable { var airDate: String?; var seasonNumber: Int?; var episodeNumber: Int?; var name: String?; var stillPath: String? }

@@ -37,6 +37,7 @@ struct AerialApp: App {
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .background:
+                Friends.shared.setForeground(false)
                 Log.note("ЖИЗНЬ", "в фоне\(playback.request == nil ? "" : ", идёт фильм")")
                 // Без фильма сервер в фоне не нужен: iOS всё равно усыпит его, а сокеты после сна мёртвые.
                 // Идёт загрузка — сервер не трогаем: iOS даст ещё полминуты дописать кусок.
@@ -47,6 +48,7 @@ struct AerialApp: App {
                 }
             case .active:
                 Log.note("ЖИЗНЬ", "на экране")
+                Friends.shared.setForeground(true)
                 Task {
                     await Torrents.warmUp(settings)
                     Downloads.shared.resume()
@@ -78,10 +80,16 @@ struct RootView: View {
             Tab("Поиск", systemImage: "magnifyingglass", value: AppTab.search, role: .search) { SearchView() }
         }
         .tabViewStyle(.sidebarAdaptable)
+        // Вошли в комнату не из плеера (код, комната друга) — фильм комнаты открывается сам.
+        .onChange(of: WatchParty.shared.media) { _, media in
+            guard let media, playback.request == nil else { return }
+            playback.play(.party(media, at: WatchParty.shared.room?.target() ?? 0))
+        }
         .transaction { if UITestHooks.active { $0.disablesAnimations = true } }
         .onAppear {
             playback.attach(settings: settings, library: library)
             Downloads.shared.attach(settings)
+            Friends.shared.setForeground(true)
             UITestHooks.start(playback)
         }
     }

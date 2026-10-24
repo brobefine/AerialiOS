@@ -20,6 +20,51 @@ struct UpcomingEpisode: Identifiable, Hashable, Sendable {
 final class Feeds {
     private(set) var upcoming: [UpcomingEpisode] = []
     private(set) var followed: [VodItem] = []
+    /// «Вышли в 4K»: недавние домашние релизы, у которых парсер нашёл раздачу 4K того же года.
+    private(set) var fourK: [VodItem] = {
+        guard let data = UserDefaults.standard.data(forKey: "feeds.fourK") else { return [] }
+        return (try? JSONDecoder().decode([VodItem].self, from: data)) ?? []
+    }()
+
+    @ObservationIgnored private var fourKJob: Task<Void, Never>?
+
+    /// Перенос `refreshFourK` ТВ: популярные фильмы, вышедшие в онлайн или на диске за 4 месяца (TMDb), и для каждого —
+    /// поиск раздачи 4K с тем же годом. По одному запросу с паузой (парсер ограничивает частоту). Раз в 6 часов.
+    func refreshFourK(_ settings: AppSettings) {
+        let defaults = UserDefaults.standard
+        guard !settings.parserAddress.isEmpty, fourKJob == nil else { return }
+        if Date().timeIntervalSince1970 - defaults.double(forKey: "feeds.fourKAt") < 6 * 3600 && !fourK.isEmpty { return }
+        let parser = ReleaseSearch.Parser(address: settings.parserAddress, key: settings.parserKey, torrentio: false)
+        fourKJob = Task { [weak self] in
+            defer { self?.fourKJob = nil }
+            let candidates = await Catalogue.shared.recentHomeReleases().prefix(45)
+            var films: [VodItem] = []
+            for film in candidates {
+                if films.count >= 24 || Task.isCancelled { break }
+                if await Self.hasFourK(film, parser: parser) {
+                    films.append(film)
+                    if films.count >= 3 { self?.fourK = films }
+                }
+                try? await Task.sleep(for: .milliseconds(1200))
+            }
+            guard !films.isEmpty else { return }
+            self?.fourK = films
+            if let data = try? JSONEncoder().encode(films) { defaults.set(data, forKey: "feeds.fourK") }
+            defaults.set(Date().timeIntervalSince1970, forKey: "feeds.fourKAt")
+            Log.note("4K", "найдено \(films.count) из \(candidates.count)")
+        }
+    }
+
+    /// Раздача 4K с годом фильма и его названием в заголовке.
+    private nonisolated static func hasFourK(_ film: VodItem, parser: ReleaseSearch.Parser) async -> Bool {
+        let found = await ReleaseSearch.search(item: film, episode: nil, imdbId: nil, parser: parser)
+        let names = Set([film.originalTitle, film.title].map(SearchText.normalized).filter { $0.count > 1 })
+        return found.contains { release in
+            guard release.title.contains(film.year), release.info.quality == "4K" else { return false }
+            let title = SearchText.normalized(release.title)
+            return names.contains { title.contains($0) }
+        }
+    }
 
     @ObservationIgnored private var upcomingKey = ""
     @ObservationIgnored private var upcomingAt = Date.distantPast

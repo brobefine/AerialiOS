@@ -12,6 +12,8 @@ struct PlayerView: View {
     @State private var hideTask: Task<Void, Never>?
     @State private var nextDismissed = false
     @State private var countdown = 10
+    @State private var findingSubtitles = false
+    @State private var partyOpen = false
     private let dismiss: () -> Void
     private let onNext: (PlaybackRequest) -> Void
 
@@ -44,6 +46,8 @@ struct PlayerView: View {
                 overlay.transition(.opacity)
             }
             corner
+            PartyOverlay(party: WatchParty.shared)
+            knockBanner
         }
         .animation(.easeOut(duration: 0.2), value: controls)
         .statusBarHidden(true)
@@ -55,6 +59,55 @@ struct PlayerView: View {
             if finished && (model.next == nil || nextDismissed) { dismiss() }
         }
         .task(id: model.finished) { await autoplay() }
+        .sheet(isPresented: $partyOpen) { PartySheet(model: model) }
+        .onChange(of: WatchParty.shared.media) { _, media in followRoom(media) }
+        .sheet(isPresented: $findingSubtitles) {
+            SubtitleSearch(item: model.request.item, episode: model.request.episode, key: settings.openSubsKey,
+                           languages: settings.subsLanguages) { file in
+                findingSubtitles = false
+                model.addSubtitle(file)
+            }
+        }
+    }
+
+    // MARK: Комната
+
+    /// Комната переключила серию или фильм — открываем то же у себя (своё переключение комната уже знает).
+    private func followRoom(_ media: PartyMedia?) {
+        guard let media, WatchParty.shared.active, let source = model.partyMedia, source != media else { return }
+        guard media.hash != source.hash || media.file != source.file else { return }
+        var request = PlaybackRequest.party(media, at: 0)
+        if media.hash == source.hash { request.item = model.request.item }
+        request.fromParty = true
+        model.stop()
+        onNext(request)
+    }
+
+    /// Друг постучался — предложить комнату: код уйдёт в его список друзей.
+    @ViewBuilder private var knockBanner: some View {
+        if let from = Friends.shared.knockFrom {
+            VStack {
+                HStack(spacing: 12) {
+                    Image(systemName: "hand.wave.fill").foregroundStyle(Theme.accent)
+                    Text("\(from) хочет смотреть вместе").font(.subheadline.weight(.semibold)).lineLimit(2)
+                    if !WatchParty.shared.active && model.partyMedia != nil {
+                        Button("Открыть комнату") {
+                            model.hostParty()
+                            Friends.shared.knockFrom = nil
+                            partyOpen = true
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    Button { Friends.shared.knockFrom = nil } label: { Image(systemName: "xmark") }.foregroundStyle(.white.opacity(0.7))
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .glass(in: Capsule())
+                .padding(.top, 16)
+                Spacer()
+            }
+            .transition(.move(edge: .top).combined(with: .opacity))
+        }
     }
 
     // MARK: Серии
@@ -177,6 +230,13 @@ struct PlayerView: View {
                     .buttonStyle(CircleGlassButtonStyle(size: 44))
                     .accessibilityLabel("Закрыть")
                 Spacer()
+                if WatchParty.shared.enabled && model.partyMedia != nil {
+                    Button { partyOpen = true } label: {
+                        Image(systemName: WatchParty.shared.active ? "person.2.fill" : "person.2")
+                    }
+                    .buttonStyle(CircleGlassButtonStyle(size: 42))
+                    .accessibilityLabel("Смотреть вместе")
+                }
                 if model.next != nil {
                     Button { playNext() } label: { Image(systemName: "forward.end.fill") }
                         .buttonStyle(CircleGlassButtonStyle(size: 42))
@@ -267,6 +327,9 @@ struct PlayerView: View {
                 }
                 ForEach(model.subtitleTracks) { track in
                     Button { model.selectSubtitle(track) } label: { choice(track.label, track.selected) }
+                }
+                if !settings.openSubsKey.isEmpty {
+                    Button { findingSubtitles = true } label: { Label("Найти субтитры…", systemImage: "magnifyingglass") }
                 }
             }
         } label: {
@@ -401,5 +464,72 @@ enum Orientation {
 final class AppDelegate: NSObject, UIApplicationDelegate {
     func application(_ application: UIApplication, supportedInterfaceOrientationsFor window: UIWindow?) -> UIInterfaceOrientationMask {
         Orientation.mask
+    }
+}
+
+/// «Найти субтитры…»: выдача OpenSubtitles по фильму или серии; выбор — файл скачивается и сразу включается.
+private struct SubtitleSearch: View {
+    let item: VodItem
+    let episode: VodEpisode?
+    let key: String
+    let languages: String
+    let onPick: (URL) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var results: [OpenSubtitles.Result] = []
+    @State private var loading = true
+    @State private var busy: Int?
+    @State private var failure: String?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if let failure { Text(failure).foregroundStyle(Theme.secondaryText) }
+                ForEach(results) { result in
+                    Button {
+                        Task { await pick(result) }
+                    } label: {
+                        HStack(spacing: 12) {
+                            Text(result.language.uppercased())
+                                .font(.caption.weight(.bold))
+                                .frame(width: 34, height: 24)
+                                .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(result.release).font(.subheadline).foregroundStyle(.white).lineLimit(2)
+                                Text("Скачиваний: \(result.downloads)").font(.caption2).foregroundStyle(Theme.secondaryText)
+                            }
+                            Spacer(minLength: 0)
+                            if busy == result.fileId { ProgressView() }
+                        }
+                    }
+                    .disabled(busy != nil)
+                }
+            }
+            .overlay {
+                if loading { ProgressView("Ищу на OpenSubtitles…") }
+                else if results.isEmpty && failure == nil { ContentUnavailableView("Субтитров не нашлось", systemImage: "captions.bubble") }
+            }
+            .navigationTitle(episode.map { "Субтитры · \($0.code)" } ?? "Субтитры")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Отмена") { dismiss() } } }
+        }
+        .task {
+            do {
+                results = try await OpenSubtitles.search(key: key, item: item, episode: episode, languages: languages)
+            } catch {
+                failure = error.localizedDescription
+            }
+            loading = false
+        }
+    }
+
+    private func pick(_ result: OpenSubtitles.Result) async {
+        busy = result.fileId
+        defer { busy = nil }
+        do {
+            onPick(try await OpenSubtitles.download(key: key, result))
+        } catch {
+            failure = error.localizedDescription
+        }
     }
 }

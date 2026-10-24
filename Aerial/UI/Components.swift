@@ -7,6 +7,8 @@ enum Route: Hashable {
     case person(VodPerson)
     case releases(VodItem, VodEpisode?, runtime: Int)
     case download(String)
+    case friends
+    case universes
 }
 
 extension View {
@@ -18,6 +20,8 @@ extension View {
             case .person(let person): PersonView(person: person)
             case .releases(let item, let episode, let runtime): ReleasesView(item: item, episode: episode, runtime: runtime)
             case .download(let hash): DownloadView(hash: hash)
+            case .friends: FriendsView()
+            case .universes: UniversesView()
             }
         }
     }

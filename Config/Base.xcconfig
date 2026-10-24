@@ -1,4 +1,7 @@
-// Общие настройки сборки. Ключи TMDb — в Secrets.xcconfig (не в git): CI пишет его из секретов репозитория.
+// Общие настройки сборки. Ключи TMDb, Worker и MDBList — в Secrets.xcconfig (не в git): CI пишет его из секретов репозитория.
 TMDB_API_KEY =
 TMDB_READ_TOKEN =
+AERIAL_API_HOST =
+AERIAL_API_TOKEN =
+MDBLIST_API_KEY =
 #include? "Secrets.xcconfig"

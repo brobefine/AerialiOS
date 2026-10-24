@@ -263,12 +263,26 @@ struct BecauseRow: Identifiable, Sendable {
 /// Соседи хранятся на диске (UserDefaults), чтобы первый показ главной после запуска не ждал их сбора.
 @MainActor @Observable
 final class Taste {
+    /// Подборка ИИ по ощущению, атмосфере или механике сюжета — ряд под «Вам понравится?».
+    struct AiShelf: Codable, Identifiable, Sendable {
+        var title: String
+        var why: String
+        var items: [VodItem]
+        var id: String { title }
+    }
+
     private(set) var related: [String: [VodItem]] = [:]
+    /// Подбор ИИ для «Вам понравится?» — вперемешку с подбором по жанрам и соседям.
+    private(set) var aiPicks: [VodItem] = []
+    private(set) var aiShelves: [AiShelf] = []
+    /// Почему ИИ не ответил — для настроек.
+    private(set) var aiError: String?
 
     @ObservationIgnored private let defaults = UserDefaults.standard
     @ObservationIgnored private var relatedKey: String
     @ObservationIgnored private var job: Task<Void, Never>?
     @ObservationIgnored private var again = false
+    @ObservationIgnored private var aiJob: Task<Void, Never>?
 
     init() {
         relatedKey = defaults.string(forKey: "taste.relatedKey") ?? ""
@@ -276,6 +290,107 @@ final class Taste {
            let value = try? JSONDecoder().decode([String: [VodItem]].self, from: data) {
             related = value
         }
+        if let data = defaults.data(forKey: "taste.aiPicks"), let value = try? JSONDecoder().decode([VodItem].self, from: data) {
+            aiPicks = value
+        }
+        if let data = defaults.data(forKey: "taste.aiShelves"), let value = try? JSONDecoder().decode([AiShelf].self, from: data) {
+            aiShelves = value
+        }
+    }
+
+    /// Сброс подбора ИИ (оценки сброшены, ИИ выключен).
+    func clearAI() {
+        aiPicks = []
+        aiShelves = []
+        defaults.removeObject(forKey: "taste.aiPicks")
+        defaults.removeObject(forKey: "taste.aiShelves")
+        defaults.removeObject(forKey: "taste.aiAt")
+    }
+
+    /// Подбор ИИ — перенос `refreshAiRecommendations` ТВ: по «Обожаю», «Нравится», списку и досмотренному (с завязкой
+    /// сюжета в [скобках]), отказам и брошенному. Раз в 12 часов или когда меняется любимое, но не чаще раза в 20 минут.
+    func refreshAI(_ library: Library, useHistory: Bool, moods: Bool) {
+        guard AI.enabled, aiJob == nil else { return }
+        let now = Date.now
+        let known = knownItems(library)
+        let loved = library.loved
+        let likedIds = library.liked
+        let rejected = library.rejected
+        let progress = library.progressByItem
+        func label(_ item: VodItem) -> String {
+            (item.originalTitle.isEmpty ? item.title : item.originalTitle) + (item.year.isEmpty ? "" : " (\(item.year))")
+                + (loved.contains(item.id) ? " — любимое" : "")
+        }
+        let liked = Recommendations.pickSeeds(tasteOrder(library, useHistory: useHistory, now: now).filter { known[$0] != nil }, limit: 25, now: now)
+            .compactMap { known[$0] }
+        guard liked.count >= 2 else { return }
+        let disliked = library.marks.values.filter { $0.level == -1 }.sorted { $0.marked > $1.marked }.prefix(15).map(\.item)
+        let finished = useHistory ? Set(progress.filter { $0.value.duration > 0 && $0.value.fraction >= 0.7 }.keys) : []
+        let abandoned = useHistory ? known.values.filter { item in
+            !likedIds.contains(item.id) && !rejected.contains(item.id)
+                && progress[item.id].map { Recommendations.watchWeight($0, now: now) < 0 } == true
+        }.sorted { (progress[$0.id]?.updated ?? .distantPast) > (progress[$1.id]?.updated ?? .distantPast) }.prefix(10).map { $0 } : []
+        // Завязка сюжета к любимому: по одному названию модель путает свежий фильм с одноимённым.
+        func hint(_ item: VodItem) -> String {
+            var plot = item.overview.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !plot.isEmpty else { return "" }
+            if plot.count > 260 { plot = String(plot.prefix(260)).components(separatedBy: " ").dropLast().joined(separator: " ") + "…" }
+            let genres = item.genres.joined(separator: " / ").prefix(60)
+            return " [" + (genres.isEmpty ? "" : "\(genres): ") + plot + "]"
+        }
+        func seed(_ item: VodItem) -> String { label(item) + (finished.contains(item.id) ? " — досмотрел" : "") + hint(item) }
+        let seedKey = (liked.map { (loved.contains($0.id) ? "*" : "") + (likedIds.contains($0.id) ? "+" : "") + $0.id }
+            + disliked.map { "-" + $0.id } + abandoned.map { "~" + $0.id }).sorted().joined(separator: ",")
+        let age = now.timeIntervalSince(Date(timeIntervalSince1970: defaults.double(forKey: "taste.aiAt")))
+        if age < 12 * 3600 && defaults.string(forKey: "taste.aiKey") == seedKey && (!moods || !aiShelves.isEmpty) { return }
+        // Оценки меняют семя на каждое нажатие — ИИ не чаще раза в 20 минут.
+        if age >= 0 && age < 20 * 60 && !aiPicks.isEmpty { return }
+        let exclude = known.values.filter { progress[$0.id] != nil || library.isSaved($0) }.prefix(60).map(label)
+        let saved = Set(library.saved.map(\.id))
+        aiJob = Task { [weak self] in
+            defer { self?.aiJob = nil }
+            do {
+                let picks = try await AI.recommend(liked: liked.map(seed), disliked: disliked.map(label), exclude: Array(exclude),
+                                                   abandoned: abandoned.map(label))
+                let films = await Self.resolve(picks).filter { !saved.contains($0.id) && !rejected.contains($0.id) && progress[$0.id] == nil }
+                guard let self else { return }
+                aiPicks = films
+                aiError = nil
+                if let data = try? JSONEncoder().encode(films) { defaults.set(data, forKey: "taste.aiPicks") }
+                defaults.set(seedKey, forKey: "taste.aiKey")
+                defaults.set(Date.now.timeIntervalSince1970, forKey: "taste.aiAt")
+                Log.note("ИИ", "подбор: \(picks.count) назв. → \(films.count) в TMDb")
+                guard moods else { return }
+                let rows = try await AI.collections(liked: liked.map(seed), disliked: disliked.map(label), exclude: Array(exclude),
+                                                    abandoned: abandoned.map(label))
+                var shelves: [AiShelf] = []
+                for row in rows {
+                    let items = await Self.resolve(row.items).filter {
+                        !saved.contains($0.id) && !likedIds.contains($0.id) && !rejected.contains($0.id) && progress[$0.id] == nil
+                    }
+                    if items.count >= 3 { shelves.append(AiShelf(title: row.title, why: row.why, items: items)) }
+                }
+                aiShelves = shelves
+                if let data = try? JSONEncoder().encode(shelves) { defaults.set(data, forKey: "taste.aiShelves") }
+            } catch {
+                if HTTP.isCancellation(error) { return }
+                self?.aiError = AI.failure(error)
+                Log.note("ИИ", "подбор: \(error.localizedDescription.prefix(200))")
+            }
+        }
+    }
+
+    /// Названия ИИ → работы TMDb (по шесть запросов сразу), без повторов, в порядке ответа.
+    static func resolve(_ titles: [AiTitle]) async -> [VodItem] {
+        var found: [Int: VodItem] = [:]
+        await withTaskGroup(of: (Int, VodItem?).self) { group in
+            for (index, title) in titles.enumerated() {
+                group.addTask { (index, await Catalogue.shared.resolve(title)) }
+            }
+            for await (index, item) in group { if let item { found[index] = item } }
+        }
+        var seen = Set<String>()
+        return titles.indices.compactMap { found[$0] }.filter { seen.insert($0.id).inserted }
     }
 
     func signals(_ library: Library, useHistory: Bool) -> TasteSignals {
@@ -363,17 +478,29 @@ final class Taste {
     /// в конец (каталог приходит порциями — иначе верх ряда менялся на глазах). Новая оценка или соседи — пересчёт.
     func forYou(_ shelf: VodShelf, pool: [VodItem], library: Library, useHistory: Bool) -> [VodItem] {
         let signals = signals(library, useHistory: useHistory)
-        let fresh = Recommendations.rank(pool, signals, accept: shelf.accepts)
+        let byGenre = Recommendations.rank(pool, signals, accept: shelf.accepts)
+        // Подбор ИИ — только то, чего нет в подборе по жанрам, вперемешку через один (как у ТВ).
+        let taken = Set(byGenre.map(\.id))
+        let fromAi = aiPicks.filter {
+            shelf.accepts($0) && !taken.contains($0.id) && !signals.saved.contains($0.id) && !signals.liked.contains($0.id)
+                && !signals.rejected.contains($0.id) && signals.progress[$0.id] == nil
+        }
+        var mixed: [VodItem] = []
+        for index in 0..<max(byGenre.count, fromAi.count) {
+            if index < byGenre.count { mixed.append(byGenre[index]) }
+            if index < fromAi.count { mixed.append(fromAi[index]) }
+        }
+        let fresh = Array(mixed.prefix(40))
         let signal = String(Recommendations.javaHash([
             signals.saved.sorted(), signals.liked.sorted(), signals.loved.sorted(), signals.rejected.sorted(),
-            signals.progress.keys.sorted(), related.keys.sorted(), [String(useHistory)],
+            signals.progress.keys.sorted(), related.keys.sorted(), [String(useHistory)], aiPicks.map(\.id),
         ].map { $0.joined(separator: ",") }))
         let key = "taste.forYou.\(shelf.rawValue)"
         let stored = defaults.string(forKey: key)?.split(separator: "\n", maxSplits: 1).map(String.init)
         var result = fresh
         if let stored, stored.count == 2, stored[0] == signal {
             var byId: [String: VodItem] = [:]
-            for item in pool + related.values.flatMap({ $0 }) where byId[item.id] == nil { byId[item.id] = item }
+            for item in pool + aiPicks + related.values.flatMap({ $0 }) where byId[item.id] == nil { byId[item.id] = item }
             for item in fresh { byId[item.id] = item }
             let allowed = Set(fresh.map(\.id))
             let kept = stored[1].split(separator: ",").map(String.init).compactMap { id -> VodItem? in

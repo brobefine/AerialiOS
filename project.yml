@@ -64,6 +64,9 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         TMDBApiKey: $(TMDB_API_KEY)
         TMDBReadToken: $(TMDB_READ_TOKEN)
+        AerialApiHost: $(AERIAL_API_HOST)
+        AerialApiToken: $(AERIAL_API_TOKEN)
+        MDBListKey: $(MDBLIST_API_KEY)
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.aerial.ios

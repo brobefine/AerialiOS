@@ -46,7 +46,33 @@ final class AppSettings {
     /// Следующая серия — сама через 10 с после конца серии.
     var autoplayNext: Bool { didSet { defaults.set(autoplayNext, forKey: "player.autoplayNext") } }
 
+    // MARK: ИИ и сервисы
+
+    /// ИИ включён; ключи хранятся и при выключенном. Читает их [AI] прямо из UserDefaults.
+    var aiOn: Bool { didSet { defaults.set(aiOn, forKey: "ai.on") } }
+    var geminiKey: String { didSet { defaults.set(geminiKey.trimmingCharacters(in: .whitespaces), forKey: "ai.gemini") } }
+    var groqKey: String { didSet { defaults.set(groqKey.trimmingCharacters(in: .whitespaces), forKey: "ai.groq") } }
+    /// Подборки ИИ по настроению — ряды под «Вам понравится?».
+    var aiMoodShelves: Bool { didSet { defaults.set(aiMoodShelves, forKey: "ai.moodShelves") } }
+    /// Над отзывами — коротко, что думают зрители (от трёх отзывов).
+    var summarizeReviews: Bool { didSet { defaults.set(summarizeReviews, forKey: "ai.summarizeReviews") } }
+    /// Открытый отзыв сразу переводится на русский.
+    var translateReviews: Bool { didSet { defaults.set(translateReviews, forKey: "ai.translateReviews") } }
+    /// Ключ OpenSubtitles: поиск субтитров прямо в плеере.
+    var openSubsKey: String { didSet { defaults.set(openSubsKey.trimmingCharacters(in: .whitespaces), forKey: "opensubs.key") } }
+    /// Языки субтитров для поиска, через запятую (коды ISO 639-1).
+    var subsLanguages: String { didSet { defaults.set(subsLanguages, forKey: "opensubs.languages") } }
+    var aiEnabled: Bool { aiOn && (!geminiKey.trimmingCharacters(in: .whitespaces).isEmpty || !groqKey.trimmingCharacters(in: .whitespaces).isEmpty) }
+
     init() {
+        aiOn = defaults.object(forKey: "ai.on") as? Bool ?? true
+        geminiKey = defaults.string(forKey: "ai.gemini") ?? ""
+        groqKey = defaults.string(forKey: "ai.groq") ?? ""
+        aiMoodShelves = defaults.object(forKey: "ai.moodShelves") as? Bool ?? true
+        summarizeReviews = defaults.object(forKey: "ai.summarizeReviews") as? Bool ?? true
+        translateReviews = defaults.object(forKey: "ai.translateReviews") as? Bool ?? true
+        openSubsKey = defaults.string(forKey: "opensubs.key") ?? ""
+        subsLanguages = defaults.string(forKey: "opensubs.languages") ?? "ru,en"
         parserAddress = defaults.string(forKey: "parser.address") ?? Self.parserCatalog[0].address
         parserKey = defaults.string(forKey: "parser.key") ?? ""
         torrentio = defaults.object(forKey: "parser.torrentio") as? Bool ?? true

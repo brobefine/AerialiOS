@@ -18,8 +18,22 @@ struct PlaybackRequest: Identifiable {
     var record = true
     /// Скачанный файл — плеер берёт его с диска, без TorrServer ([Downloads]).
     var localFile: URL?
+    /// Открыт по команде комнаты (она переключила серию) — сообщать ей о смене не нужно.
+    var fromParty = false
 
     var title: String { item.title }
+
+    /// Гость комнаты: раздача по хэшу, файл и оформление — от создателя; сериал TMDb, если он его назвал.
+    static func party(_ media: PartyMedia, at position: Double) -> PlaybackRequest {
+        let series = Int(media.series) ?? 0
+        let item = VodItem(id: series > 0 ? "tmdb:series:\(series)" : "torrent:\(media.hash)", remoteId: series,
+                           kind: series > 0 ? .series : .movie, title: media.title, poster: media.poster, backdrop: media.backdrop,
+                           releaseDate: media.year)
+        let episode = media.episode > 0
+            ? VodEpisode(season: media.season, number: media.episode, title: "Серия \(media.episode)") : nil
+        return PlaybackRequest(item: item, episode: episode, link: "magnet:?xt=urn:btih:\(media.hash)", fileIndex: media.file,
+                               releaseTitle: media.title, startAt: position, record: series > 0)
+    }
     var subtitle: String {
         guard let episode else { return item.year }
         return "Сезон \(episode.season), серия \(episode.number) · \(episode.title)"
@@ -241,6 +255,9 @@ final class PlayerModel {
                                 skip: { [weak self] in self?.skip($0) },
                                 seek: { [weak self] in self?.seek(to: $0) })
             if let statsHash { watchStats(hash: statsHash) }
+            startPartySync()
+            Friends.shared.watching = FriendWatching(title: request.item.title, sub: request.episode?.code ?? "", poster: request.item.poster,
+                                                     room: WatchParty.shared.code ?? "")
         } catch {
             if HTTP.isCancellation(error) { return }
             Log.note("ПЛЕЕР", "сбой: \(error.localizedDescription)")
@@ -252,6 +269,8 @@ final class PlayerModel {
     func stop() {
         guard !stopped else { return }
         stopped = true
+        partySync?.cancel()
+        Friends.shared.watching = nil
         save(force: true)
         stats?.cancel()
         core?.destroy()
@@ -265,11 +284,103 @@ final class PlayerModel {
 
     // MARK: Управление
 
-    func togglePause() { core?.setPaused(!paused) }
-    func seek(to seconds: Double) { core?.seek(to: max(0, min(seconds, duration > 0 ? duration - 1 : seconds))) }
-    func skip(_ seconds: Double) { core?.seek(by: seconds) }
+    func togglePause() {
+        let playing = paused
+        core?.setPaused(!paused)
+        partyPush(playing: playing, position: position)
+    }
+
+    func seek(to seconds: Double) {
+        let target = max(0, min(seconds, duration > 0 ? duration - 1 : seconds))
+        core?.seek(to: target)
+        partyPush(playing: !paused, position: target, seeking: true)
+    }
+
+    func skip(_ seconds: Double) {
+        core?.seek(by: seconds)
+        partyPush(playing: !paused, position: max(0, position + seconds), seeking: true)
+    }
+
+    // MARK: Совместный просмотр
+
+    /// Комната смотрит эту раздачу (файл может быть другим — тогда плеер переключится на него).
+    var inParty: Bool {
+        let party = WatchParty.shared
+        guard party.active, let media = party.media, let source else { return false }
+        return media.hash == source.hash.lowercased()
+    }
+
+    var partyFile: Bool { inParty && WatchParty.shared.media?.file == source?.fileIndex }
+
+    @ObservationIgnored private var partySync: Task<Void, Never>?
+    @ObservationIgnored private var seekingUntil: TimeInterval = 0
+
+    /// Сведения комнате: эта раздача, этот файл и серия — по ним гость найдёт заставку и титры.
+    var partyMedia: PartyMedia? {
+        guard let source, !source.hash.isEmpty else { return nil }
+        return PartyMedia(hash: source.hash.lowercased(), file: source.fileIndex, title: request.item.title, poster: request.item.poster,
+                          backdrop: request.item.backdrop, year: request.item.year,
+                          series: request.item.kind == .series && request.item.remoteId > 0 ? String(request.item.remoteId) : "",
+                          season: request.episode?.season ?? 0, episode: request.episode?.number ?? 0)
+    }
+
+    /// Создать комнату с этим фильмом; код — друзьям в статус.
+    @discardableResult
+    func hostParty() -> String? {
+        guard let media = partyMedia else { return nil }
+        let code = WatchParty.shared.host(media, playing: !paused, position: position)
+        Friends.shared.watching = FriendWatching(title: request.item.title, sub: request.episode?.code ?? "", poster: request.item.poster, room: code)
+        return code
+    }
+
+    /// Своё действие — в комнату: пауза, ход, перемотка применятся у всех.
+    private func partyPush(playing: Bool, position: Double, seeking: Bool = false) {
+        guard partyFile else { return }
+        if seeking { seekingUntil = ProcessInfo.processInfo.systemUptime + 4 }
+        WatchParty.shared.sendState(playing: playing, position: position)
+    }
+
+    /// Общий ход комнаты → свой плеер: раз в секунду сверка паузы и места (расхождение больше 2,5 с — перемотка к общему).
+    /// Пока сами перематываем или догружаем место, комнату не слушаем, иначе её эхо возвращало бы назад.
+    private func startPartySync() {
+        partySync?.cancel()
+        // Сами переключили серию той же раздачи в комнате — сообщаем комнате, у всех откроется она же.
+        let party = WatchParty.shared
+        if party.active, !request.fromParty, let mine = partyMedia, let roomMedia = party.media,
+           roomMedia.hash == mine.hash, roomMedia.file != mine.file {
+            party.switchMedia(mine)
+        }
+        partySync = Task { [weak self] in
+            var wasBuffering = false
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(1))
+                guard let self else { return }
+                let party = WatchParty.shared
+                guard partyFile, started, let room = party.room else { continue }
+                if buffering != wasBuffering {
+                    wasBuffering = buffering
+                    party.sendBuffering(buffering)
+                    // Догрузил место после перемотки — комната ждёт всех.
+                    if !buffering && ProcessInfo.processInfo.systemUptime < seekingUntil { party.sendReady() }
+                }
+                guard party.connected, ProcessInfo.processInfo.systemUptime > seekingUntil, !buffering else { continue }
+                if room.effectivePlaying == paused { core?.setPaused(!room.effectivePlaying) }
+                let target = room.target()
+                if abs(target - position) > 2.5 && (duration <= 0 || target < duration - 1) {
+                    Log.note("PARTY", "сверка: \(Int(position)) → \(Int(target)) с")
+                    seekingUntil = ProcessInfo.processInfo.systemUptime + 3
+                    core?.seek(to: target)
+                }
+            }
+        }
+    }
     func selectAudio(_ track: MPVTrack) { core?.selectAudio(track.id) }
     func selectSubtitle(_ track: MPVTrack?) { core?.selectSubtitle(track?.id) }
+    func addSubtitle(_ file: URL) {
+        Log.note("ПЛЕЕР", "субтитры: \(file.lastPathComponent)")
+        core?.addSubtitle(file)
+    }
+
     func setRate(_ value: Double) {
         rate = value
         core?.setSpeed(value)

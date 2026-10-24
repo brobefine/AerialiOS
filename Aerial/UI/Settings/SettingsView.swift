@@ -8,6 +8,11 @@ struct SettingsView: View {
     @State private var probes: [String: Bool] = [:]
     @State private var externalCheck: String?
     @State private var cacheBytes = 0
+    @State private var exporting = false
+    @State private var importing = false
+    @State private var backupFile = BackupFile(data: Data())
+    @State private var backupNote: String?
+    @Environment(Taste.self) private var taste
 
     private var server: EmbeddedTorrServer { .shared }
 
@@ -87,7 +92,10 @@ struct SettingsView: View {
                 Section {
                     Toggle("Учитывать историю просмотра", isOn: $settings.tasteHistory)
                     LabeledContent("Оценок", value: String(library.marks.count))
-                    Button("Сбросить оценки", role: .destructive) { library.clearMarks() }
+                    Button("Сбросить оценки", role: .destructive) {
+                        library.clearMarks()
+                        taste.clearAI()
+                    }
                         .disabled(library.marks.isEmpty)
                 } header: {
                     Text("Рекомендации")
@@ -113,6 +121,64 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Toggle("ИИ включён", isOn: $settings.aiOn)
+                    SecureField("Ключ Gemini (aistudio.google.com)", text: $settings.geminiKey)
+                    SecureField("Ключ Groq (console.groq.com)", text: $settings.groqKey)
+                    if settings.aiEnabled {
+                        Toggle("Подборки по настроению на главной", isOn: $settings.aiMoodShelves)
+                        Toggle("Сводка отзывов", isOn: $settings.summarizeReviews)
+                        Toggle("Переводить отзывы сразу", isOn: $settings.translateReviews)
+                    }
+                    if AI.regionBlocked {
+                        Label("Google и Groq не обслуживают вашу страну — ИИ работает только через VPN.", systemImage: "exclamationmark.triangle")
+                            .font(.footnote).foregroundStyle(.yellow)
+                    } else if let error = taste.aiError {
+                        Text(error).font(.footnote).foregroundStyle(Theme.secondaryText)
+                    }
+                } header: {
+                    Text("ИИ")
+                } footer: {
+                    Text("Свои бесплатные ключи. ИИ ищет фильм по описанию своими словами, подбирает «Вам понравится?» и подборки по настроению, находит «Духовных родственников», делает «Разбор» после просмотра, сводит и переводит отзывы. Есть оба ключа — основной Gemini, Groq подхватывает при лимите.")
+                }
+
+                Section {
+                    SecureField("Ключ OpenSubtitles", text: $settings.openSubsKey)
+                    TextField("Языки субтитров, например ru,en", text: $settings.subsLanguages)
+                        .textInputAutocapitalization(.never)
+                        .autocorrectionDisabled()
+                } header: {
+                    Text("Субтитры")
+                } footer: {
+                    Text("С ключом (бесплатно: opensubtitles.com/consumers) в плеере появляется «Субтитры › Найти субтитры…». Без ключа — только субтитры из самой раздачи.")
+                }
+
+                if Friends.shared.enabled {
+                    Section {
+                        NavigationLink("Друзья и комнаты") { FriendsView() }
+                        LabeledContent("Ваш код", value: Friends.shared.friendCode)
+                    } header: {
+                        Text("Вместе")
+                    } footer: {
+                        Text("Друзья видят, что вы смотрите, и могут войти в вашу комнату: пауза и перемотка — у всех сразу.")
+                    }
+                }
+
+                Section {
+                    Button("Сохранить копию…") {
+                        if let data = try? Backup.export() {
+                            backupFile = BackupFile(data: data)
+                            exporting = true
+                        }
+                    }
+                    Button("Восстановить из копии…") { importing = true }
+                    if let backupNote { Text(backupNote).font(.footnote).foregroundStyle(Theme.secondaryText) }
+                } header: {
+                    Text("Данные")
+                } footer: {
+                    Text("Настройки, ключи, «Мой список», оценки, прогресс, подписки и друзья — одним файлом. Его можно сохранить в «Файлы» или iCloud и восстановить на другом iPhone.")
+                }
+
+                Section {
                     LabeledContent("Версия", value: version)
                     LabeledContent("Журналы", value: "Файлы › На iPhone › Aerial › logs")
                 } header: {
@@ -120,6 +186,22 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Настройки")
+            .fileExporter(isPresented: $exporting, document: backupFile, contentType: .propertyList, defaultFilename: Backup.fileName) { result in
+                if case .success = result { backupNote = "Копия сохранена." }
+            }
+            .fileImporter(isPresented: $importing, allowedContentTypes: [.propertyList, .data]) { result in
+                guard case .success(let url) = result else { return }
+                let access = url.startAccessingSecurityScopedResource()
+                defer { if access { url.stopAccessingSecurityScopedResource() } }
+                do {
+                    let count = try Backup.restore(Data(contentsOf: url))
+                    library.reload()
+                    backupNote = "Восстановлено \(count) значений. Настройки применятся полностью после перезапуска Aerial."
+                } catch {
+                    backupNote = "Это не копия Aerial для iPhone."
+                }
+            }
+
             .task { await probe() }
             .task { cacheBytes = DiskCache.api.bytes }
         }

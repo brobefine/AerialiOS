@@ -7,7 +7,9 @@ enum MdbList {
     private static let blockedKey = "mdblist.blocked"
 
     static func ratings(_ item: VodItem, key: String) async -> String {
-        let token = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        // Свой ключ пользователя главнее; нет — ключ приложения из сборки (как режим «app» у ТВ).
+        let own = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        let token = own.isEmpty ? BuildKeys.mdblist : own
         guard !token.isEmpty, item.remoteId > 0 else { return "" }
         let blocked = UserDefaults.standard.dictionary(forKey: blockedKey) as? [String: Double] ?? [:]
         let authId = stableId(token)

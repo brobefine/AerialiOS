@@ -114,6 +114,16 @@ struct VodDetails: Sendable {
     var facts: [VodFact] = []
 }
 
+/// Отзыв зрителя TMDb.
+struct VodReview: Hashable, Identifiable, Sendable {
+    var author: String
+    var rating: Double
+    var text: String
+    var date: String
+
+    var id: String { "\(author)|\(date)" }
+}
+
 struct VodPersonInfo: Sendable {
     var id: Int
     var name: String

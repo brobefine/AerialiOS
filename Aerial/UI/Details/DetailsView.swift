@@ -263,9 +263,13 @@ struct DetailsView: View {
         if let details {
             VStack(alignment: .leading, spacing: 28) {
                 if item.kind == .series && !details.seasons.isEmpty { episodesSection(details) }
+                RecapCard(details: details)
                 if !details.cast.isEmpty || !details.directors.isEmpty { peopleSection(details) }
                 if !details.collection.isEmpty { PosterShelf(title: details.collectionTitle, items: details.collection) }
+                RelativesSection(details: details)
                 if !details.related.isEmpty { PosterShelf(title: "Похожие", items: details.related) }
+                ReviewsSection(item: details.item)
+                WikiStorySection(item: details.item)
                 if !details.facts.isEmpty { factsSection(details) }
             }
         } else {

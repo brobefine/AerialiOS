@@ -64,7 +64,11 @@ struct HomeView: View {
             .aerialDestinations()
         }
         // Соседи TMDb для подбора — при новых оценках и просмотрах.
-        .onChange(of: library.tasteRevision, initial: true) { taste.refresh(library, useHistory: settings.tasteHistory) }
+        .onChange(of: library.tasteRevision, initial: true) {
+            taste.refresh(library, useHistory: settings.tasteHistory)
+            taste.refreshAI(library, useHistory: settings.tasteHistory, moods: settings.aiMoodShelves)
+            feeds.refreshFourK(settings)
+        }
         .task(id: library.tasteRevision) { await feeds.refreshUpcoming(library) }
         .task(id: library.followed.map(\.id)) { await feeds.refreshFollowed(library) }
     }
@@ -82,7 +86,7 @@ private struct ShelfPage: View {
     @State private var because: [BecauseRow] = []
 
     private var tasteKey: String {
-        "\(library.tasteRevision)|\(taste.related.count)|\(model.version)|\(settings.tasteHistory)"
+        "\(library.tasteRevision)|\(taste.related.count)|\(model.version)|\(settings.tasteHistory)|\(taste.aiPicks.count)"
     }
 
     var body: some View {
@@ -93,6 +97,14 @@ private struct ShelfPage: View {
                 if !forYou.isEmpty {
                     PosterShelf(title: "Вам понравится?", items: forYou)
                 }
+                if settings.aiMoodShelves && AI.enabled {
+                    ForEach(taste.aiShelves) { row in
+                        let items = row.items.filter(shelf.accepts)
+                        if items.count >= 3 { PosterShelf(title: row.title, items: items) }
+                    }
+                }
+                let fourK = feeds.fourK.filter(shelf.accepts)
+                if fourK.count >= 3 { PosterShelf(title: "Вышли в 4K", items: fourK) }
                 ForEach(because) { row in
                     PosterShelf(title: "Потому что вам понравилось «\(row.seed.title)»", items: row.items)
                 }

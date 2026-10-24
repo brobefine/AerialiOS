@@ -9,6 +9,20 @@ struct SearchView: View {
     @State private var popular: [VodItem] = []
     @State private var searching = false
     @AppStorage("search.recent") private var recentRaw = ""
+    /// Что в выдаче подобрал ИИ по описанию.
+    @State private var aiPicked: Set<String> = []
+    @State private var aiThinking = false
+    @State private var aiNote: String?
+
+    /// Описание своими словами → до пяти работ TMDb.
+    private static func describe(_ text: String) async -> Result<[VodItem], Error> {
+        do {
+            let titles = try await AI.find(text)
+            return .success(await Taste.resolve(Array(titles.prefix(5))))
+        } catch {
+            return .failure(error)
+        }
+    }
 
     private var trimmed: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var recent: [String] { recentRaw.split(separator: "\n").map(String.init) }
@@ -57,6 +71,16 @@ struct SearchView: View {
                     if trimmed.isEmpty && !popular.isEmpty {
                         Text("Популярно сейчас").font(.title3.weight(.bold)).padding(.horizontal, 16)
                     }
+                    if !trimmed.isEmpty && (aiThinking || !aiPicked.isEmpty || aiNote != nil) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "sparkles").foregroundStyle(Theme.accent)
+                            Text(aiThinking ? "ИИ ищет по описанию…" : aiNote ?? "Первые \(aiPicked.count) — найдены ИИ по описанию")
+                                .font(.footnote)
+                                .foregroundStyle(Theme.secondaryText)
+                            if aiThinking { ProgressView().controlSize(.small).tint(.white) }
+                        }
+                        .padding(.horizontal, 16)
+                    }
                     PosterGrid(items: trimmed.isEmpty ? popular : results)
                 }
                 .padding(.vertical, 8)
@@ -87,10 +111,33 @@ struct SearchView: View {
                 try? await Task.sleep(for: .milliseconds(350))
                 guard !Task.isCancelled else { return }
                 searching = true
-                let found = (try? await Catalogue.shared.search(trimmed)) ?? []
+                aiPicked = []
+                aiNote = nil
+                // Запрос из трёх слов и больше похож на описание («мужик застрял на Марсе»): параллельно обычному поиску
+                // спрашиваем ИИ, его названия проверяются поиском TMDb и встают первыми (как `searchCinema` ТВ).
+                let text = trimmed
+                let described = AI.enabled && text.split(whereSeparator: \.isWhitespace).count >= 3
+                async let ai: Result<[VodItem], Error>? = described ? Self.describe(text) : nil
+                let found = (try? await Catalogue.shared.search(text)) ?? []
                 guard !Task.isCancelled else { return }
                 results = found
                 searching = false
+                if described {
+                    aiThinking = true
+                    let outcome = await ai
+                    aiThinking = false
+                    guard !Task.isCancelled else { return }
+                    switch outcome {
+                    case .success(let picks)?:
+                        aiPicked = Set(picks.map(\.id))
+                        var seen = Set<String>()
+                        results = (picks + found).filter { seen.insert($0.id).inserted }
+                    case .failure(let error)?:
+                        aiNote = "Поиск по описанию не сработал. " + AI.failure(error)
+                    case nil:
+                        break
+                    }
+                }
                 // Подсказку выбрали или запрос постоял и что-то нашёл — тоже в недавние.
                 if !found.isEmpty, (try? await Task.sleep(for: .seconds(2))) != nil, !Task.isCancelled { remember(trimmed) }
             }
@@ -259,6 +306,18 @@ struct LibraryView: View {
                 }
             }
             .navigationTitle("Медиатека")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink(value: Route.universes) { Image(systemName: "circle.grid.2x2") }
+                        .accessibilityLabel("Вселенные")
+                }
+                if Friends.shared.enabled {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        NavigationLink(value: Route.friends) { Image(systemName: "person.2") }
+                            .accessibilityLabel("Друзья")
+                    }
+                }
+            }
             .aerialDestinations()
         }
     }

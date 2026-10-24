@@ -56,8 +56,14 @@ jobs:
         env:
           TMDB_API_KEY: ${{ secrets.TMDB_API_KEY }}
           TMDB_READ_TOKEN: ${{ secrets.TMDB_READ_TOKEN }}
+          AERIAL_API_URL: ${{ secrets.AERIAL_API_URL }}
+          AERIAL_API_TOKEN: ${{ secrets.AERIAL_API_TOKEN }}
+          MDBLIST_API_KEY: ${{ secrets.MDBLIST_API_KEY }}
         run: |
           printf 'TMDB_API_KEY = %s\nTMDB_READ_TOKEN = %s\n' "$TMDB_API_KEY" "$TMDB_READ_TOKEN" > Config/Secrets.xcconfig
+          # Worker друзей и комнат: в xcconfig «//» — начало комментария, поэтому адрес без схемы (приложение добавит https).
+          printf 'AERIAL_API_HOST = %s\nAERIAL_API_TOKEN = %s\nMDBLIST_API_KEY = %s\n' \
+            "${AERIAL_API_URL#*://}" "$AERIAL_API_TOKEN" "$MDBLIST_API_KEY" >> Config/Secrets.xcconfig
           # Готовая сборка XcodeGen из релиза — секунды; brew install шёл 2–3 минуты.
           curl -sSL -o "$RUNNER_TEMP/xcodegen.zip" https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip
           unzip -q -o "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP/xcodegen"

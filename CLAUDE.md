@@ -4,7 +4,10 @@
 Брат приложений для Android TV и Windows из `F:\Aerial`: оттуда перенесены каталог TMDb (`VodTmdbClient`), поиск раздач
 (`ParserState`, `Torrentio`), клиент TorrServer, разбор названий раздач (`ReleaseInfo.kt`), правило разделов, подбор
 «Вам понравится?» (`VodRecommendations`), оценки «Нравится/Обожаю/Не моё», пропуск заставки (`SkipSegments`), загрузки
-(`TorrentDownloads`), «Скоро новые серии», подписки на актёров, подсказки поиска (`SearchSuggestions`), оценки MDBList. Меняется
+(`TorrentDownloads`), «Скоро новые серии», подписки на актёров, подсказки поиска (`SearchSuggestions`), оценки MDBList,
+ИИ (`AiClient`: поиск по описанию, подбор и подборки по настроению, «Духовные родственники», «Разбор», сводка и перевод
+отзывов), отзывы TMDb, история создания из Википедии (`WikiStories`), «Вышли в 4K», OpenSubtitles (ПК), друзья и комнаты
+(`Friends`, `WatchParty`), «Вселенные» (готовые стены из `universes-data`), резервная копия. Меняется
 поведение там — сверить здесь. Вид — по образцу приложения Apple TV для iPhone, с цветами Aerial (#7FDCFF, #3E7BEA).
 
 **Документация — часть изменения.** Переносишь, переименовываешь, добавляешь файл или меняешь путь данных — в той же
@@ -25,6 +28,10 @@
   Скачать: `gh run download <id> -R brobefine/AerialiOS`. Репозиторий открытый — минуты macOS не считаются.
 - Ключи TMDb — секреты репозитория `TMDB_API_KEY`, `TMDB_READ_TOKEN` → `Config/Secrets.xcconfig` (не в git) → Info.plist
   (`TMDBApiKey`, `TMDBReadToken`). Значения — из `tmdb.apiKey`/`tmdb.readToken` в `F:\Aerial\local.properties`.
+  Так же Worker друзей и комнат — `AERIAL_API_URL`, `AERIAL_API_TOKEN` (из `aerial.apiUrl`/`aerial.apiToken`; в xcconfig
+  адрес без схемы — `AERIAL_API_HOST`, «//» там комментарий) и ключ MDBList приложения — `MDBLIST_API_KEY`
+  (`mdblist.apiKey`) → Info.plist `AerialApiHost`, `AerialApiToken`, `MDBListKey` → `Core/BuildKeys`. Нет секретов —
+  друзья и комнаты выключены, MDBList — только по ключу пользователя.
 - Установка на iPhone — .ipa через Sideloadly или AltStore с Windows (бесплатный Apple ID — подпись на 7 дней).
 - Язык Swift 5 (строгая проверка параллельности не включена): без Mac каждая ошибка компиляции стоит круга CI.
 - Иконка — `tools/make_icon.py`: знак из вектора ТВ в стекле (Liquid Glass вручную, `.icon` из Icon Composer требует Mac).
@@ -35,7 +42,7 @@
   в фоне без фильма и загрузки встроенный TorrServer останавливается, при возврате поднимается, загрузки продолжаются); `RootView` — вкладки в нижней
   пилюле: «Главная», «Медиатека», «Настройки», «Поиск»; плеер показывает `Playback` через UIKit (`PlayerHostingController`,
   альбомная ориентация); `UITestHooks` — запуск из UI-тестов (`-uiTest`, `-smokeLink`).
-- `Core/` — `Log` (журналы `Documents/logs`), `HTTP`, `DiskCache` (ответы TMDb: срок по виду запроса, при сбое — старый
+- `Core/` — `BuildKeys` (ключи сборки из Info.plist), `Log` (журналы `Documents/logs`), `HTTP`, `DiskCache` (ответы TMDb: срок по виду запроса, при сбое — старый
   ответ), `Text` (`Rx` — NSRegularExpression с просмотром назад; `SearchText`, `Suggestions` — подсказки поиска с раскладкой и опечатками,
   `Format`).
 - `Data/` — `Models` (`VodItem`, `VodShelf.accepts`, `CinemaSection`), `TMDb` (прямой API → Worker-прокси, последний
@@ -45,7 +52,12 @@
   `Recommendations` (алгоритм подбора — перенос `VodRecommendations` ТВ; `Taste` — соседи TMDb по оценкам и просмотрам,
   устойчивый порядок «Вам понравится?» по разделу, ряды «Потому что вам понравилось…» — `BecauseRow`), `Feeds`
   («Скоро новые серии» — `UpcomingEpisode` из `next_episode_to_air`; «Новое с вашими актёрами» по подпискам
-  `Library.followed`), `MdbList` (оценки IMDb/RT/Metacritic по ключу пользователя).
+  `Library.followed`; «Вышли в 4K» — `refreshFourK`), `MdbList` (оценки IMDb/RT/Metacritic: ключ пользователя или
+  приложения), `AI` (перенос `AiClient`: Gemini → Groq, ключи пользователя в UserDefaults `ai.*`, ответы в `DiskCache`;
+  `Taste.refreshAI` — подбор и подборки по настроению, `Taste.resolve`/`Catalogue.resolve` — название ИИ → работа TMDb),
+  `Wiki` (история создания и сюжет по номеру TMDb в Wikidata; `WikiPolicy` — разделы и очистка HTML), `Friends`
+  (друзья по кодам, аккаунт устройств по PIN, статус «что смотрю» и стук — `presence` Worker'а), `Backup` (копия
+  ключей UserDefaults в plist).
 - `Torrents/` — `TorrServerClient` (HTTP-API: add, stat, awaitFiles, preload с ранним стартом, streamURL, settings),
   `Torrents` (`EmbeddedTorrServer` — 127.0.0.1:18090, перезапуск после сна, настройки кэша; выбор встроенный/внешний),
   `Release` (`Release`, `ReleaseInfo` — разбор названия, `EpisodeMatch` — файл серии), `ReleaseSearch` (JacRed exact →
@@ -56,7 +68,10 @@
   `PlayerModel` (TorrServer → подкачка → mpv или скачанный файл; скорость; прогресс каждые 5 с; следующая серия — следующий файл той же раздачи,
   `planNext`; `PlayerScreen` — новая серия открывается новым `PlayerView` в том же окне через `Playback.advance`),
   `PlayerView` (панель в духе Apple TV, поворот; справа внизу — «Пропустить заставку» и карточка «Далее» с отсчётом),
-  `SkipSegments` (заставка и титры: IntroDB по IMDb, затем AniSkip через ARM), `NowPlaying` (экран блокировки и
+  `SkipSegments` (заставка и титры: IntroDB по IMDb, затем AniSkip через ARM), `OpenSubtitles` (поиск и `sub-add`),
+  `WatchParty` (комната: WebSocket к `party/<код>`, действия ещё и POST с повтором до подтверждения, сторож связи;
+  `PlayerModel` сверяет ход раз в секунду — `startPartySync`), `PartyViews` (уведомления и реакции поверх видео,
+  `PartySheet` — комната, чат; `FriendsView`), `NowPlaying` (экран блокировки и
   «Пункт управления»).
 - `UI/` — `Theme` (цвета, стекло iOS 26 с запасным материалом), `CachedImage` (`ImageLoader`: память → диск → сеть,
   уменьшение при декодировании), `Components` (`Route`, `PosterCard`, `RatingRing`, `RankedPoster`, `PosterShelf`,
@@ -65,8 +80,9 @@
   под «Продолжить» — «Вам понравится?» и «Потому что…»; `TitleArt`), `Details/` (содержимое скользит поверх неподвижного постера, под постером — его
   зеркало в размытии, под информацией — живое размытие `frost`; серии с зеркальным размытием кадра), `Releases/`
   (карточки, фильтр качества — страницы со свайпом; сортировка и качество запоминаются; удержание — «Скачать»),
-  `Browse/` (поиск с недавними и подсказками, «Смотреть всё», актёр с подпиской, медиатека; `DownloadsView` —
-  загрузки и их файлы), `Settings/`. На главной — ещё `UpcomingShelf`.
+  `Browse/` (поиск с недавними, подсказками и поиском по описанию (ИИ), «Смотреть всё», актёр с подпиской, медиатека;
+  `DownloadsView` — загрузки и их файлы; `UniversesView` — шары разделов и стена `WallView` с зумом), `Settings/`
+  (ИИ, субтитры, «Вместе», данные). `Details/DetailsExtras` — «Разбор», «Духовные родственники», отзывы, история создания. На главной — ещё `UpcomingShelf`.
 - `Resources/Assets.xcassets` — иконка, акцент, фон запуска.
 
 ## Прочее
@@ -74,15 +90,15 @@
 - `Packages/TorrServerKit` — готовая gomobile-сборка TorrServer (релиз MatriX.147.1, адрес и checksum в `Package.swift`)
   и обёртка `TorrServerEngine` (`start`, `stop`, `isRunning`).
 - MPVKit 1.0.0 (mpv 0.41, LGPL-сборка) — пакет из `project.yml`.
-- `AerialTests/` — разбор раздач, файлов серий, адресов, ответов TMDb, подбор (`RecommendationsTests`), подсказки, MDBList, имена загрузок (`FeaturesTests`) (Swift Testing); `AerialUITests/ScreensTests` —
+- `AerialTests/` — разбор раздач, файлов серий, адресов, ответов TMDb, подбор (`RecommendationsTests`), подсказки, MDBList, имена загрузок, ответы ИИ, Википедия, комната (`FeaturesTests`) (Swift Testing); `AerialUITests/ScreensTests` —
   снимки экранов и проверка воспроизведения на свободном Big Buck Bunny.
 - `.claude/skills/` — скиллы Apple (rshankras/claude-code-apple-skills, MIT; см. `SOURCE-apple-skills.txt`).
 
 ## Данные на устройстве
 
 - UserDefaults: настройки (`parser.*`, `torrserver.*`, `tmdbProxy`, `taste.history`, `player.autoplayNext`, `mdblist.key`,
-  `mdblist.blocked`, `releases.sort`, `releases.quality`, `search.recent`), медиатека (`library.saved`, `library.entries`,
-  `library.marks`, `library.followed`), подбор (`taste.related`, `taste.relatedKey`, `taste.forYou.<раздел>`).
-- Caches: `api-cache/` (TMDb, MDBList), `images/` (картинки). Application Support: `downloads.json` — список загрузок.
+  `mdblist.blocked`, `releases.sort`, `releases.quality`, `search.recent`, `ai.*`, `opensubs.*`, `reviews.sort`), медиатека (`library.saved`, `library.entries`,
+  `library.marks`, `library.followed`), друзья (`friends.*`), подбор (`taste.related`, `taste.relatedKey`, `taste.forYou.<раздел>`, `taste.ai*`), `feeds.fourK*`.
+- Caches: `api-cache/` (TMDb, MDBList, ИИ, Википедия, списки «Вселенных»), `images/` (картинки). Application Support: `downloads.json` — список загрузок.
 - Documents (видно в «Файлах» › На iPhone › Aerial): `logs/app.log`, `logs/mpv.log` (+ `.1` — прошлый запуск),
   `TorrServer/` (база и журнал встроенного сервера), `Downloads/` (скачанные фильмы и серии; без резервной копии iCloud).
