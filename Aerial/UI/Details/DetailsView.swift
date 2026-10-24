@@ -24,6 +24,8 @@ struct DetailsView: View {
     @State private var trailerOpen = false
     /// Насколько страницу оттянули вниз в самом начале — постер растягивается следом.
     @State private var pull: CGFloat = 0
+    /// Серия, чьё описание открыто целиком (из меню удержания).
+    @State private var fullEpisode: VodEpisode?
 
     private var shown: VodItem { details?.item ?? item }
     private var art: String { shown.backdrop.isEmpty ? shown.poster : shown.backdrop }
@@ -67,6 +69,17 @@ struct DetailsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { if details == nil { await load() } }
         .task(id: season) { await loadSeason() }
+        .sheet(item: $fullEpisode) { episode in
+            ScrollView {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("\(episode.code) · \(episode.title)").font(.aerial(.title3, .bold))
+                    Text(episode.overview).font(.aerial(.body)).foregroundStyle(.white.opacity(0.92))
+                }
+                .padding(24)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .presentationDetents([.medium, .large])
+        }
         .fullScreenCover(isPresented: $trailerOpen) {
             if let key = details?.trailerKey, !key.isEmpty { TrailerView(key: key) }
         }
@@ -283,6 +296,7 @@ struct DetailsView: View {
                     .buttonStyle(CircleGlassButtonStyle(tint: accent))
                     .accessibilityLabel("Трейлер")
             }
+            if let details { RecapButton(details: details, tint: accent) }
             // «Мой список», как на ТВ: одна кнопка — «Смотреть позже» и оценка. Значок — выставленная оценка, иначе
             // закладка; что-то выбрано — кнопка залита цветом постера, как «Смотреть».
             let rating = library.rating(item)
@@ -309,7 +323,6 @@ struct DetailsView: View {
             VStack(alignment: .leading, spacing: 28) {
                 // Порядок — как на странице фильма ТВ: актёры, серии, отзывы, интересные факты, франшиза, похожие,
                 // «Духовные родственники», «Ещё от студии»; в конце — сведения.
-                RecapCard(details: details)
                 if !details.cast.isEmpty || !details.directors.isEmpty { peopleSection(details) }
                 if item.kind == .series && !details.seasons.isEmpty { episodesSection(details) }
                 ReviewsSection(item: details.item)
@@ -365,6 +378,11 @@ struct DetailsView: View {
                             if let entry = library.entry(item, episode), entry.fraction > 0 {
                                 Button(role: .destructive) { library.forget(entry) } label: {
                                     Label("Убрать из «Продолжить»", systemImage: "eye.slash")
+                                }
+                            }
+                            if episode.overview.count > 300 {
+                                Button { fullEpisode = episode } label: {
+                                    Label("Описание целиком", systemImage: "text.alignleft")
                                 }
                             }
                             if library.entry(item, episode).map({ $0.fraction < 0.9 }) ?? true {

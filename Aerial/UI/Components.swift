@@ -164,17 +164,26 @@ struct RankedPoster: View {
     let item: VodItem
     let width: CGFloat
 
+    /// Цвет постера; пока не посчитан — белый, как на ТВ.
+    @State private var accent: Color?
+
     var body: some View {
-        HStack(alignment: .bottom, spacing: -width * 0.12) {
+        // Как `drawRanks` ТВ: цифра цветом постера — сверху сплошным, к низу тает (0.6 на середине, 0.1 у низа),
+        // без контура и тени; правым краем на 14 % под постером.
+        let color = accent ?? .white
+        HStack(alignment: .bottom, spacing: -width * 0.14) {
             Text("\(rank)")
                 .font(.aerial(size: width * 0.95, .black))
-                .foregroundStyle(LinearGradient(colors: [.white.opacity(0.95), .white.opacity(0.35)], startPoint: .top, endPoint: .bottom))
-                .shadow(color: .black.opacity(0.6), radius: 6)
+                .kerning(rank >= 10 ? -width * 0.06 : 0)
+                .foregroundStyle(LinearGradient(stops: [.init(color: color, location: 0), .init(color: color.opacity(0.6), location: 0.55),
+                                                        .init(color: color.opacity(0.1), location: 1)],
+                                                startPoint: .top, endPoint: .bottom))
                 .offset(y: width * 0.14)
                 .frame(minWidth: width * 0.5)
                 .zIndex(0)
             PosterCard(item: item, width: width).zIndex(1)
         }
+        .task(id: item.poster) { accent = await PosterPalette.accent(item.poster) }
     }
 }
 

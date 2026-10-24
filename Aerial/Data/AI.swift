@@ -200,7 +200,8 @@ enum AI {
         let av = avoid.map { String($0.prefix(80)) }.filter { !$0.isEmpty }.prefix(40)
         let franchise = details.collection.filter { $0.id != details.item.id }
             .map { "\(($0.originalTitle.isEmpty ? $0.title : $0.originalTitle).prefix(80)) (\($0.year))" }.prefix(15)
-        let text = try await cached("relatives6", ["ru", title, String(year), kind, about, av.joined(separator: "|"), franchise.joined(separator: "|")],
+        // Ключ кэша сменён: прежние ответы могли содержать спойлеры.
+        let text = try await cached("relatives7", ["ru", title, String(year), kind, about, av.joined(separator: "|"), franchise.joined(separator: "|")],
                                     ttl: 30 * day) {
             try await generate("\(kind) \"\(title)\"\(year > 0 ? " (\(year))" : "").\(about)\n" +
                 "Step 1: name the 3–4 central themes, emotional experiences or questions of THIS specific work (from its plot above, not from the title alone).\n" +
@@ -220,10 +221,22 @@ enum AI {
                     "Dig deeper: lesser-known but fitting works, other countries and decades.\n") +
                 "Return a JSON object {\"themes\": [short theme names in Russian], \"items\": [{\"title\": title in Russian if it exists, else original, " +
                 "\"original\": original title, \"year\": release year as number, \"type\": \"movie\" or \"tv\", " +
-                "\"why\": the shared theme in Russian, one short phrase (max 70 chars)}]}. Only real, existing titles.",
+                "\"why\": the shared theme in Russian, one short phrase (max 70 chars)}]}. Only real, existing titles.
+" +
+                SpoilerGuard.rules,
                 json: true, temperature: 0.6, strong: true)
         }
-        return titles(text, withWhy: true)
+        let picks = titles(text, withWhy: true)
+        // Проверка на спойлеры — отдельным запросом; сбой — все «чем связан» скрыты ([SpoilerGuard]).
+        let pairs = picks.map { (title: $0.original.isEmpty ? $0.title : $0.original, why: $0.why) }
+        let verdict = try? await cached("spoilers1", ["ru", title, String(year)] + pairs.map { "\($0.title)|\($0.why)" }, ttl: 30 * day) {
+            try await generate(SpoilerGuard.checkPrompt(seed: "\(title)\(year > 0 ? " (\(year))" : "")", items: pairs),
+                               json: true, temperature: 0, strong: true)
+        }
+        let safe = SpoilerGuard.apply(picks, verdict: verdict.flatMap(SpoilerGuard.parseVerdict))
+        let hidden = zip(picks, safe).filter { !$0.0.why.isEmpty && $0.1.why.isEmpty }.count
+        if hidden > 0 { Log.note("ИИ", "родственники «\(title)»: скрыто \(hidden) «чем связан» как спойлеры") }
+        return safe
     }
 
     /// Разбор после просмотра. Сериал — до сезона/серии включительно. [plot] — раздел «Сюжет» Википедии: модель разбирает

@@ -124,12 +124,14 @@ struct RelativesSection: View {
     }
 }
 
-/// «Разбор фильма» — открыт после просмотра: фильм досмотрен до 98 %, у сериала — хотя бы одна серия (разбор до неё).
-struct RecapCard: View {
+/// «Разбор» круглой кнопкой в ряду с «Смотреть», как на ТВ. Закрыт до просмотра — касание объясняет, когда откроется.
+struct RecapButton: View {
     let details: VodDetails
+    var tint: Color?
 
     @Environment(Library.self) private var library
     @State private var open = false
+    @State private var lockedNote = false
 
     private var latest: WatchEntry? { library.latest(for: details.item) }
 
@@ -140,36 +142,22 @@ struct RecapCard: View {
 
     var body: some View {
         if AI.enabled {
-            Button { open = true } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: unlocked ? "text.book.closed" : "lock")
-                        .font(.aerial(.title3))
-                        .frame(width: 40, height: 40)
-                        .background(Theme.accent.opacity(0.18), in: Circle())
-                        .foregroundStyle(Theme.accent)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(details.item.kind == .series ? "Разбор сериала" : "Разбор фильма").font(.aerial(.headline))
-                        Text(unlocked ? subtitle : "Откроется после просмотра — в нём спойлеры")
-                            .font(.aerial(.caption)).foregroundStyle(Theme.secondaryText)
-                    }
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.right").foregroundStyle(Theme.secondaryText)
-                }
-                .padding(14)
-                .background(Theme.card, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+            Button { if unlocked { open = true } else { lockedNote = true } } label: {
+                Image(systemName: unlocked ? "text.book.closed" : "lock")
             }
-            .buttonStyle(.plain)
-            .disabled(!unlocked)
-            .padding(.horizontal, 16)
+            .buttonStyle(CircleGlassButtonStyle(tint: tint))
+            .accessibilityLabel(details.item.kind == .series ? "Разбор сериала" : "Разбор фильма")
             .sheet(isPresented: $open) {
                 RecapSheet(details: details, season: latest?.episode?.season ?? 0, episode: latest?.episode?.number ?? 0)
             }
+            .alert(details.item.kind == .series ? "Разбор сериала" : "Разбор фильма", isPresented: $lockedNote) {
+                Button("Понятно", role: .cancel) {}
+            } message: {
+                Text(details.item.kind == .series
+                     ? "Откроется, когда вы посмотрите хотя бы одну серию, — разбор будет до неё: в нём спойлеры."
+                     : "Откроется после просмотра фильма — в нём спойлеры.")
+            }
         }
-    }
-
-    private var subtitle: String {
-        if let episode = latest?.episode { return "Сюжет, мотивы, скрытые детали — до \(episode.code) включительно" }
-        return "Сюжет, мотивы, отношения, скрытые детали и открытые вопросы"
     }
 }
 
@@ -206,7 +194,7 @@ private struct RecapSheet: View {
                 }
                 .padding(20)
             }
-            .background(Theme.background)
+            // Без своего фона — лист на системном жидком стекле.
             .navigationTitle(details.item.title)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Готово") { dismiss() } } }

@@ -154,7 +154,7 @@ struct SettingsView: View {
         }
     }
 
-    @AppStorage("ui.posterSize") private var posterSize = "small"
+    @AppStorage("ui.posterSize") private var posterSize = "large"
     @AppStorage("ui.actorPhoto") private var actorPhoto = "small"
     @AppStorage("ui.titleLogos") private var titleLogos = true
 

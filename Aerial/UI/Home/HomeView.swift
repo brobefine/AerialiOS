@@ -37,35 +37,56 @@ final class HomeModel {
     }
 }
 
-/// Главная: разделы капсулами сверху, под ними — ряды выбранного раздела.
+/// Главная: разделы капсулами сверху; между разделами — касанием капсулы или свайпом по странице.
 struct HomeView: View {
     @Environment(Library.self) private var library
     @Environment(Taste.self) private var taste
     @Environment(Feeds.self) private var feeds
     @Environment(AppSettings.self) private var settings
     @State private var shelf: VodShelf = .all
+    @State private var page: VodShelf? = .all
     @State private var models: [VodShelf: HomeModel] =
         Dictionary(uniqueKeysWithValues: VodShelf.allCases.map { ($0, HomeModel()) })
 
     var body: some View {
         NavigationStack {
-            // Один раздел за раз — без постраничного `TabView`: он обрезал страницы по безопасной зоне (чёрные полосы),
-            // а на iOS 27 касание капсулы не переключало страницу и сдвигало полосу капсул вниз. Прокрутка раздела —
-            // во весь экран, под полосой капсул и нижней пилюлей; капсулы — `safeAreaInset`, контент идёт под ними.
-            ShelfPage(shelf: shelf, model: models[shelf] ?? HomeModel())
-                .id(shelf)
-                .transition(.opacity)
-                .safeAreaInset(edge: .top, spacing: 0) {
+            // Разделы — постраничной горизонтальной прокруткой: свайп по странице листает разделы (ряды листаются своим
+            // жестом — вложенная прокрутка перехватывает его), касание капсулы переключает через `scrollPosition`.
+            // Не `TabView`: тот обрезал страницы по безопасной зоне (чёрные полосы), а на iOS 27 не переключался
+            // касанием. Капсулы — отдельным слоем строгой высоты вне страниц: не пересоздаются и не прыгают.
+            GeometryReader { geometry in
+                ZStack(alignment: .top) {
+                    ScrollView(.horizontal) {
+                        LazyHStack(spacing: 0) {
+                            ForEach(VodShelf.allCases) { item in
+                                ShelfPage(shelf: item, model: models[item] ?? HomeModel(),
+                                          top: geometry.safeAreaInsets.top + Self.pickerHeight,
+                                          bottom: geometry.safeAreaInsets.bottom)
+                                    .containerRelativeFrame(.horizontal)
+                                    .id(item)
+                            }
+                        }
+                        .scrollTargetLayout()
+                    }
+                    .scrollTargetBehavior(.paging)
+                    .scrollPosition(id: $page)
+                    .scrollIndicators(.hidden)
+                    .ignoresSafeArea()
+                    LinearGradient(colors: [Theme.background, Theme.background.opacity(0.85), .clear],
+                                   startPoint: .top, endPoint: .bottom)
+                        .frame(height: geometry.safeAreaInsets.top + Self.pickerHeight + 12)
+                        .offset(y: -geometry.safeAreaInsets.top)
+                        .allowsHitTesting(false)
                     ShelfPicker(selection: $shelf)
                         .padding(.vertical, 8)
-                        .background {
-                            LinearGradient(colors: [Theme.background, Theme.background.opacity(0.85), .clear],
-                                           startPoint: .top, endPoint: .bottom)
-                                .ignoresSafeArea(edges: .top)
-                                .allowsHitTesting(false)
-                        }
                 }
-                .animation(.easeOut(duration: 0.2), value: shelf)
+            }
+            .onChange(of: shelf) { _, value in
+                if page != value { withAnimation(.snappy) { page = value } }
+            }
+            .onChange(of: page) { _, value in
+                if let value, value != shelf { shelf = value }
+            }
             .background(Theme.background)
             .toolbar(.hidden, for: .navigationBar)
             .aerialDestinations()
@@ -79,11 +100,17 @@ struct HomeView: View {
         .task(id: library.tasteRevision) { await feeds.refreshUpcoming(library) }
         .task(id: library.followed.map(\.id)) { await feeds.refreshFollowed(library) }
     }
+
+    /// Высота полосы капсул с отступами.
+    static let pickerHeight: CGFloat = 52
 }
 
 private struct ShelfPage: View {
     let shelf: VodShelf
     let model: HomeModel
+    /// Поля прокрутки: страница во весь экран, содержимое — под капсулами и над нижней пилюлей.
+    let top: CGFloat
+    let bottom: CGFloat
 
     @Environment(Library.self) private var library
     @Environment(Taste.self) private var taste
@@ -137,6 +164,9 @@ private struct ShelfPage: View {
             }
             .padding(.vertical, 12)
         }
+        .contentMargins(.top, top, for: .scrollContent)
+        .contentMargins(.bottom, bottom + 12, for: .scrollContent)
+        .contentMargins(.top, top, for: .scrollIndicators)
         .refreshable { await model.load(shelf, force: true) }
         .task { await model.load(shelf) }
         .task(id: tasteKey) { updateTaste() }

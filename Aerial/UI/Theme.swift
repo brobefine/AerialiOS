@@ -12,7 +12,8 @@ enum Theme {
     /// Ширина постера в рядах: телефон — 116 pt, планшет — 150 pt; «Крупные» в настройках (`ui.posterSize`) — на треть больше.
     static func posterWidth(_ size: UserInterfaceSizeClass?) -> CGFloat {
         let base: CGFloat = size == .regular ? 150 : 116
-        return UserDefaults.standard.string(forKey: "ui.posterSize") == "large" ? base * 1.3 : base
+        // По умолчанию — крупные, как на ТВ.
+        return (UserDefaults.standard.string(forKey: "ui.posterSize") ?? "large") == "large" ? base * 1.3 : base
     }
 
     /// Фото актёров: «Крупные» (`ui.actorPhoto`) — 100 pt вместо 76.

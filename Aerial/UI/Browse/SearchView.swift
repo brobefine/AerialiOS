@@ -249,9 +249,15 @@ struct PersonView: View {
                         .onTapGesture { withAnimation(.easeOut) { expanded.toggle() } }
                         .padding(.horizontal, 16)
                 }
+                // Фильмография по видам, как разделы кинотеки: фильмы, сериалы, мультфильмы, мультсериалы.
                 if let works = info?.works, !works.isEmpty {
-                    ShelfHeader(title: "Фильмография")
-                    PosterGrid(items: works)
+                    ForEach(VodShelf.allCases.filter { $0 != .all }) { shelf in
+                        let part = works.filter(shelf.accepts)
+                        if !part.isEmpty {
+                            ShelfHeader(title: "\(shelf.title) · \(part.count)")
+                            PosterGrid(items: part)
+                        }
+                    }
                 }
             }
             .padding(.vertical, 12)

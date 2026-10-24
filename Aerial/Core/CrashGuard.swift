@@ -31,7 +31,10 @@ enum CrashGuard {
         }
         fd = open(crashFile.path, O_WRONLY | O_CREAT | O_TRUNC, 0o644)
         CrashGuardFD.value = fd
-        for signal in [SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT, SIGTRAP] {
+        // Только SIGABRT (abort, исключения) и SIGTRAP (падения Swift). SIGSEGV, SIGBUS, SIGFPE не трогаем: ими пользуется
+        // Go внутри TorrServer (ловит свои ошибки и превращает в panic) — чужой обработчик ломал бы ему это.
+        // Падения самого Go пишутся в журнал TorrServer (`torrserver.log`).
+        for signal in [SIGABRT, SIGTRAP] {
             Darwin.signal(signal, crashSignal)
         }
         NSSetUncaughtExceptionHandler { exception in
