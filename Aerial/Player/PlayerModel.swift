@@ -84,6 +84,8 @@ final class Playback {
     }
 
     func close() {
+        Log.note("ПЛЕЕР", "закрыть: \(controller == nil ? "контроллера нет" : "закрываю")"
+            + (controller?.presentedViewController != nil ? ", поверх него ещё экран" : ""))
         guard let controller else {
             // Контроллер потерян (повтор показа, сбой) — снимаем то, что показано поверх, чтобы плеер не залип.
             Self.topController()?.presentingViewController?.dismiss(animated: true)
