@@ -1,9 +1,9 @@
-# Сборка без Mac: GitHub Actions (macOS 26, Xcode 26.6). Четыре задачи параллельно — время прогона равно самой долгой:
-#   iphone — модульные тесты и снимки всех экранов на iPhone 17 Pro;
-#   player — встроенный TorrServer и mpv на свободном фильме, поворот плеера;
-#   ipad   — снимки ключевых экранов на iPad Pro 11";
-#   ipa    — неподписанный Aerial.ipa для установки через Sideloadly/AltStore.
-# Симулятор грузится в начале задачи, пока ставятся пакеты и идёт сборка.
+# Сборка без Mac: GitHub Actions (macOS 26, Xcode 26.6). Задачи параллельно — время прогона равно самой долгой:
+#   iphone — модульные тесты, снимки всех экранов и проверка воспроизведения (TorrServer + mpv) на iPhone 17 Pro;
+#   ipa    — неподписанный Aerial.ipa для установки через Sideloadly/AltStore;
+#   ipad   — снимки ключевых экранов на iPad Pro 11" — только по запросу (Run workflow → ipad).
+# Задач мало намеренно: каждая качает ~400 МБ библиотек плеера, и четыре задачи сразу качали их по 4 минуты.
+# Симулятор грузится в начале задачи, пока ставятся пакеты.
 # Артефакты: Aerial-ipa, Aerial-check-<задача> (снимки screens/, журналы logs/).
 name: build
 
@@ -11,6 +11,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      ipad:
+        description: Снимки экранов на iPad
+        type: boolean
+        default: false
 
 concurrency:
   group: build-${{ github.ref }}
@@ -24,19 +29,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - part: iphone
-            device: iPhone 17 Pro
-            only: -only-testing:AerialTests -only-testing:AerialUITests/ScreensTests/testScreens
-          - part: player
-            device: iPhone 17 Pro
-            only: -only-testing:AerialUITests/ScreensTests/testPlaybackSmoke
-          - part: ipad
-            device: iPad Pro 11-inch (M5)
-            only: -only-testing:AerialUITests/ScreensTests/testTabletScreens
-          - part: ipa
-            device: ""
-            only: ""
+        # В strategy недоступен env — состав задач строкой JSON; iPad — только при запуске вручную с галочкой.
+        include: >-
+          ${{ fromJSON(inputs.ipad
+            && '[{"part":"iphone","device":"iPhone 17 Pro","only":"-skip-testing:AerialUITests/ScreensTests/testTabletScreens"},{"part":"ipa","device":"","only":""},{"part":"ipad","device":"iPad Pro 11-inch (M5)","only":"-only-testing:AerialUITests/ScreensTests/testTabletScreens"}]'
+            || '[{"part":"iphone","device":"iPhone 17 Pro","only":"-skip-testing:AerialUITests/ScreensTests/testTabletScreens"},{"part":"ipa","device":"","only":""}]') }}
     env:
       PART: ${{ matrix.part }}
       DEVICE: ${{ matrix.device }}
