@@ -21,6 +21,16 @@ struct PlayerView: View {
         ZStack {
             Color.black.ignoresSafeArea()
             MPVVideoView(layer: model.layer).ignoresSafeArea()
+            if !model.started {
+                // Пока видео не пошло — кадр фильма в размытии, как у системного плеера при загрузке.
+                CachedImage(path: model.request.item.backdrop.isEmpty ? model.request.item.poster : model.request.item.backdrop,
+                            size: "w780", pixelWidth: 800)
+                    .blur(radius: 30, opaque: true)
+                    .overlay(Color.black.opacity(0.45))
+                    .ignoresSafeArea()
+                    .allowsHitTesting(false)
+                    .transition(.opacity)
+            }
             Color.clear
                 .contentShape(Rectangle())
                 .ignoresSafeArea()
@@ -69,17 +79,14 @@ struct PlayerView: View {
 
     // MARK: Панель
 
+    /// Панель как у системного плеера iOS 26: сверху — закрыть и звук/субтитры, по центру — перемотка и пауза
+    /// на стеклянных кругах, снизу — название над тонкой шкалой времени.
     private var overlay: some View {
         VStack(spacing: 0) {
-            HStack(alignment: .center, spacing: 14) {
+            HStack(spacing: 12) {
                 Button { dismiss() } label: { Image(systemName: "xmark") }
-                    .buttonStyle(CircleGlassButtonStyle(size: 42))
+                    .buttonStyle(CircleGlassButtonStyle(size: 44))
                     .accessibilityLabel("Закрыть")
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(model.request.title).font(.headline).lineLimit(1)
-                    Text(model.request.subtitle).font(.caption).foregroundStyle(Theme.secondaryText).lineLimit(1)
-                }
-                .foregroundStyle(.white)
                 Spacer()
                 if model.phase == .playing { tracksMenu }
             }
@@ -87,34 +94,46 @@ struct PlayerView: View {
             .padding(.top, 12)
             Spacer()
             if model.phase == .playing && model.started {
-                HStack(spacing: 56) {
-                    Button { model.skip(-10); scheduleHide() } label: { Image(systemName: "gobackward.10") }
-                        .font(.system(size: 30, weight: .medium))
-                    Button { model.togglePause(); scheduleHide() } label: {
-                        Image(systemName: model.paused ? "play.fill" : "pause.fill")
-                    }
-                    .font(.system(size: 44, weight: .semibold))
-                    .accessibilityIdentifier("player-pause")
-                    Button { model.skip(10); scheduleHide() } label: { Image(systemName: "goforward.10") }
-                        .font(.system(size: 30, weight: .medium))
+                HStack(spacing: 44) {
+                    transport("gobackward.10", size: 56) { model.skip(-10) }
+                    transport(model.paused ? "play.fill" : "pause.fill", size: 76) { model.togglePause() }
+                        .accessibilityIdentifier("player-pause")
+                    transport("goforward.10", size: 56) { model.skip(10) }
                 }
-                .foregroundStyle(.white)
-                .shadow(radius: 8)
                 Spacer()
-                timeline.padding(.horizontal, 24).padding(.bottom, 18)
+                VStack(alignment: .leading, spacing: 10) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(model.request.title).font(.headline).lineLimit(1)
+                        Text(model.request.subtitle).font(.caption).foregroundStyle(.white.opacity(0.7)).lineLimit(1)
+                    }
+                    .foregroundStyle(.white)
+                    timeline
+                }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 14)
             } else {
                 Spacer()
             }
         }
         .background {
             VStack {
-                LinearGradient(colors: [.black.opacity(0.7), .clear], startPoint: .top, endPoint: .bottom).frame(height: 140)
+                LinearGradient(colors: [.black.opacity(0.45), .clear], startPoint: .top, endPoint: .bottom).frame(height: 120)
                 Spacer()
-                LinearGradient(colors: [.clear, .black.opacity(0.75)], startPoint: .top, endPoint: .bottom).frame(height: 160)
+                LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .top, endPoint: .bottom).frame(height: 170)
             }
             .ignoresSafeArea()
             .allowsHitTesting(false)
         }
+    }
+
+    private func transport(_ symbol: String, size: CGFloat, action: @escaping () -> Void) -> some View {
+        Button {
+            action()
+            scheduleHide()
+        } label: {
+            Image(systemName: symbol)
+        }
+        .buttonStyle(CircleGlassButtonStyle(size: size))
     }
 
     private var timeline: some View {
@@ -195,7 +214,7 @@ private struct PreparingView: View {
         VStack(spacing: 14) {
             if let progress {
                 ProgressView(value: progress)
-                    .tint(Theme.accent)
+                    .tint(.white)
                     .frame(width: 220)
                 Text("\(text) · \(Int(progress * 100)) %")
             } else {
@@ -210,6 +229,9 @@ private struct PreparingView: View {
         }
         .font(.subheadline)
         .foregroundStyle(.white)
+        .padding(.horizontal, 26)
+        .padding(.vertical, 20)
+        .glass(in: RoundedRectangle(cornerRadius: 28, style: .continuous))
         .allowsHitTesting(false)
     }
 }

@@ -1,9 +1,8 @@
 import SwiftUI
 
-/// Настройки: поиск раздач, TorrServer (встроенный или внешний), TMDb, кэш, журналы.
+/// Вкладка «Настройки»: поиск раздач, TorrServer (встроенный или внешний), TMDb, кэш, журналы.
 struct SettingsView: View {
     @Environment(AppSettings.self) private var settings
-    @Environment(\.dismiss) private var dismiss
 
     @State private var probes: [String: Bool] = [:]
     @State private var externalCheck: String?
@@ -100,10 +99,6 @@ struct SettingsView: View {
                 }
             }
             .navigationTitle("Настройки")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("Готово") { dismiss() } }
-            }
             .task { await probe() }
             .task { cacheBytes = DiskCache.api.bytes }
         }

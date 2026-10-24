@@ -40,6 +40,24 @@ final class ScreensTests: XCTestCase {
         return true
     }
 
+    /// Первый элемент, до которого можно дотянуться: у страничных TabView соседние страницы тоже в дереве.
+    private func visible(_ identifier: String, wait: TimeInterval = 10) -> XCUIElement? {
+        let query = app.descendants(matching: .any).matching(identifier: identifier)
+        let deadline = Date().addingTimeInterval(wait)
+        repeat {
+            if let hit = query.allElementsBoundByIndex.first(where: { $0.exists && $0.isHittable }) { return hit }
+            usleep(300_000)
+        } while Date() < deadline
+        return nil
+    }
+
+    @discardableResult
+    private func tapVisible(_ identifier: String, wait: TimeInterval = 10) -> Bool {
+        guard let element = visible(identifier, wait: wait) else { return false }
+        element.tap()
+        return true
+    }
+
     private func back(_ times: Int = 1) {
         for _ in 0..<times {
             let button = app.navigationBars.buttons.element(boundBy: 0)
@@ -66,24 +84,30 @@ final class ScreensTests: XCTestCase {
     private func home() {
         app.launchArguments = ["-uiTest"]
         app.launch()
-        XCTAssertTrue(element("poster").waitForExistence(timeout: 60), "каталог не загрузился")
+        XCTAssertNotNil(visible("poster", wait: 60), "каталог не загрузился")
         shot("01-home", settle: 3)
         app.swipeUp()
         shot("02-home-rows")
         app.swipeDown()
         app.swipeDown()
+        // Свайп по заголовку ряда — следующий раздел, затем обратно.
+        if let header = visible("section-header", wait: 5) {
+            header.swipeLeft()
+            shot("02b-home-swipe")
+            visible("section-header", wait: 5)?.swipeRight()
+        }
     }
 
     /// Сериал: раздел, страница, сезоны и серии, раздачи серии.
     private func series() {
         if tap(element("shelf-series")) {
             shot("03-shelf-series", settle: 3)
-            if tap(element("poster")) {
+            if tapVisible("poster") {
                 _ = element("details-watch").waitForExistence(timeout: 30)
                 shot("04-series-details")
                 app.swipeUp()
-                if element("episode").waitForExistence(timeout: 10) { shot("05-series-episodes") }
-                if tap(element("episode"), wait: 2) {
+                if visible("episode") != nil { shot("05-series-episodes") }
+                if tapVisible("episode", wait: 2) {
                     _ = element("release").waitForExistence(timeout: 60)
                     shot("06-episode-releases", settle: 1)
                     back()
@@ -98,13 +122,13 @@ final class ScreensTests: XCTestCase {
 
     /// Фильм: страница, актёр, раздачи.
     private func movie(person: Bool) {
-        if tap(element("poster")) {
+        if tapVisible("poster") {
             let watch = element("details-watch")
             XCTAssertTrue(watch.waitForExistence(timeout: 30), "страница фильма не открылась")
             shot("07-details")
             app.swipeUp()
             shot("08-details-more")
-            if person, tap(element("person"), wait: 3) {
+            if person, tapVisible("person", wait: 3) {
                 shot("09-person", settle: 3)
                 back()
             }
@@ -113,6 +137,8 @@ final class ScreensTests: XCTestCase {
             if tap(watch) {
                 _ = element("release").waitForExistence(timeout: 60)
                 shot("10-releases", settle: 1)
+                app.swipeLeft()
+                shot("10b-releases-filter", settle: 1)
                 back()
             }
             back()
@@ -121,7 +147,7 @@ final class ScreensTests: XCTestCase {
 
     /// «Смотреть всё» первого ряда.
     private func section() {
-        if tap(element("section-header")) {
+        if tapVisible("section-header") {
             shot("11-section", settle: 3)
             back()
         }
@@ -132,16 +158,15 @@ final class ScreensTests: XCTestCase {
         if tap(app.buttons["Медиатека"].firstMatch, wait: 5) {
             shot("12-library", settle: 1)
         }
-        if tap(app.buttons["Главная"].firstMatch, wait: 5), tap(element("settings")) {
+        if tap(app.buttons["Настройки"].firstMatch, wait: 5) {
             shot("13-settings", settle: 4)
-            tap(app.buttons["Готово"].firstMatch, wait: 3)
         }
         if search, tap(app.buttons["Поиск"].firstMatch, wait: 5) {
             shot("14-search-empty")
             let field = app.searchFields.firstMatch
             if tap(field, wait: 5) {
                 field.typeText("Дюна")
-                if element("poster").waitForExistence(timeout: 10) { shot("15-search", settle: 3) }
+                if visible("poster") != nil { shot("15-search", settle: 3) }
             }
         }
     }

@@ -120,9 +120,9 @@ struct TorrServerClient: Sendable {
             .with(query: [("link", hash), ("index", String(file.index)), ("play", nil)])
     }
 
-    /// Подкачка начала файла перед просмотром, как у ТВ: `/stream?…&preload` держит соединение, пока сервер набирает буфер,
-    /// а `stat` отдаёт `preloaded_bytes` из `preload_size`. Адаптивный старт: не ждём весь буфер, если запаса хватает
-    /// на начало и раздача качает быстрее, чем фильм проигрывается. Срок — 90 с, затем просто играем.
+    /// Подкачка начала файла перед просмотром: `/stream?…&preload` держит соединение, пока сервер набирает буфер,
+    /// а `stat` отдаёт `preloaded_bytes` из `preload_size`. На телефоне стартуем, как только набрано начало (~15 с видео,
+    /// не меньше 8 МБ) — дальше докачивает mpv; через 20 с хватает и 4 МБ. Срок — 60 с, затем просто играем.
     func preload(hash: String, file: TorrentFile, duration: Double, progress: @escaping @Sendable (Double, [String: Any]?) -> Void) async {
         let bitrate = Self.estimatedBitrate(fileBytes: file.bytes, duration: duration)
         let url = base.appending(path: "stream").appending(path: file.name)
@@ -136,16 +136,16 @@ struct TorrServerClient: Sendable {
             finished.set()
         }
         defer { starter.cancel() }
-        let deadline = Date().addingTimeInterval(90)
+        let started = Date()
+        let deadline = started.addingTimeInterval(60)
         while Date() < deadline, !Task.isCancelled {
             let state = try? await stat(hash)
             let done = (state?["preloaded_bytes"] as? NSNumber)?.int64Value ?? 0
             let total = (state?["preload_size"] as? NSNumber)?.int64Value ?? 0
-            let speed = (state?["download_speed"] as? NSNumber)?.doubleValue ?? 0
-            let goal = total > 0 ? min(total, Self.earlyStartBytes(bitrate)) : 0
-            progress(goal > 0 ? min(1, Double(done) / Double(goal)) : 0, state)
-            if total > 0 && done >= total || finished.value { break }
-            if goal > 0 && done >= goal && speed >= Double(bitrate) * 1.3 { break }
+            let goal = total > 0 ? min(total, Self.earlyStartBytes(bitrate)) : Self.earlyStartBytes(bitrate)
+            progress(min(1, Double(done) / Double(goal)), state)
+            if done >= goal || finished.value { break }
+            if Date().timeIntervalSince(started) > 20 && done >= 4 << 20 { break }
             try? await Task.sleep(for: .milliseconds(400))
         }
         progress(1, nil)

@@ -1,6 +1,7 @@
 import Foundation
 import Observation
 import TorrServerEngine
+import UIKit
 
 /// TorrServer внутри приложения: TorrServerKit (gomobile-сборка MatriX из релизов TorrServer) на 127.0.0.1:[port].
 /// Работает, пока приложение на экране или играет звук (фоновый режим `audio`); после сна iOS сокет может
@@ -72,6 +73,21 @@ final class EmbeddedTorrServer {
         state = .running(version: version)
     }
 
+    /// Уход в фон без фильма: сервер останавливается (в фоновом задании, чтобы успел закрыть базу); при возврате
+    /// [ensureRunning] поднимет его заново.
+    func suspend() {
+        guard case .running = state else { return }
+        state = .stopped
+        let task = UIApplication.shared.beginBackgroundTask(withName: "torrserver-stop")
+        Task.detached(priority: .userInitiated) {
+            let error = TorrServerEngine.stop()
+            await MainActor.run {
+                if !error.isEmpty { Log.note("TORRSERVER", "остановка: \(error)") }
+                UIApplication.shared.endBackgroundTask(task)
+            }
+        }
+    }
+
     /// Журналы сервера растут без предела до 100 МБ (сам TorrServer чистит только их), а в `torrserver.log` уходит
     /// весь stderr процесса — сервер перенаправляет его к себе. Больше 4 МБ — прошлый уходит в `.1`.
     private static func trimLogs(in directory: URL) {
@@ -91,7 +107,8 @@ final class EmbeddedTorrServer {
         do {
             var sets = try await client.settings()
             sets["CacheSize"] = cacheMB << 20
-            sets["PreloadCache"] = 50
+            // Подкачка перед стартом — 6 % кэша (~15 МБ при 256): при 50 % (128 МБ) фильм ждал минутами.
+            sets["PreloadCache"] = 6
             sets["ReaderReadAHead"] = 95
             sets["UseDisk"] = false
             sets["EnableDLNA"] = false

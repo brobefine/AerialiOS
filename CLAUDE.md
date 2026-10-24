@@ -29,8 +29,10 @@
 
 ## Что где — `Aerial/`
 
-- `App/AerialApp.swift` — вход; `RootView` — вкладки «Главная», «Медиатека», «Поиск» и плеер поверх всего
-  (`Playback.request` → `PlayerView`); `UITestHooks` — запуск из UI-тестов (`-uiTest`, `-smokeLink`).
+- `App/AerialApp.swift` — вход (`SIGPIPE` выключен: после сна iOS сокеты мёртвые, запись в них убивала процесс;
+  в фоне без фильма встроенный TorrServer останавливается, при возврате поднимается); `RootView` — вкладки в нижней
+  пилюле: «Главная», «Медиатека», «Настройки», «Поиск»; плеер показывает `Playback` через UIKit (`PlayerHostingController`,
+  альбомная ориентация); `UITestHooks` — запуск из UI-тестов (`-uiTest`, `-smokeLink`).
 - `Core/` — `Log` (журналы `Documents/logs`), `HTTP`, `DiskCache` (ответы TMDb: срок по виду запроса, при сбое — старый
   ответ), `Text` (`Rx` — NSRegularExpression с просмотром назад; `SearchText`, `Format`).
 - `Data/` — `Models` (`VodItem`, `VodShelf.accepts`, `CinemaSection`), `TMDb` (прямой API → Worker-прокси, последний
@@ -46,8 +48,10 @@
   `NowPlaying` (экран блокировки и «Пункт управления»).
 - `UI/` — `Theme` (цвета, стекло iOS 26 с запасным материалом), `CachedImage` (`ImageLoader`: память → диск → сеть,
   уменьшение при декодировании), `Components` (`Route`, `PosterCard`, `RatingRing`, `RankedPoster`, `PosterShelf`,
-  `ContinueShelf`, `FlowLayout`), `Home/` (главная, карусель, разделы, `TitleArt`), `Details/`, `Releases/`,
-  `Browse/` (поиск, «Смотреть всё», актёр, медиатека), `Settings/`.
+  `ContinueShelf`, `FlowLayout`), `Home/` (главная без баннера: разделы — страницы `TabView`, листаются свайпом и капсулами
+  `ShelfPicker`/`Chip`; `TitleArt`), `Details/` (содержимое скользит поверх неподвижного постера, под постером — его
+  зеркало в размытии, под информацией — живое размытие `frost`; серии с зеркальным размытием кадра), `Releases/`
+  (карточки, фильтр качества — страницы со свайпом), `Browse/` (поиск, «Смотреть всё», актёр, медиатека), `Settings/`.
 - `Resources/Assets.xcassets` — иконка, акцент, фон запуска.
 
 ## Прочее

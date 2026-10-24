@@ -137,7 +137,7 @@ struct PosterShelf: View {
                 .scrollTargetLayout()
             }
             .contentMargins(.horizontal, 16, for: .scrollContent)
-            .scrollTargetBehavior(.viewAligned)
+            .scrollTargetBehavior(.viewAligned(limitBehavior: .never))
             .scrollIndicators(.hidden)
         }
     }
@@ -201,8 +201,10 @@ struct ContinueCard: View {
                 .background(Theme.card)
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
             Text(entry.item.title).font(.subheadline.weight(.semibold)).lineLimit(1)
-            Text([entry.episode?.code, entry.remaining].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
-                .font(.caption).foregroundStyle(Theme.secondaryText).lineLimit(1)
+            if let episode = entry.episode {
+                Text("\(episode.code) · \(episode.title)").font(.caption).foregroundStyle(.white.opacity(0.8)).lineLimit(1)
+            }
+            Text(entry.remaining).font(.caption2).foregroundStyle(Theme.secondaryText).lineLimit(1)
         }
         .frame(width: width)
     }
@@ -237,7 +239,7 @@ struct ContinueShelf: View {
                 .scrollTargetLayout()
             }
             .contentMargins(.horizontal, 16, for: .scrollContent)
-            .scrollTargetBehavior(.viewAligned)
+            .scrollTargetBehavior(.viewAligned(limitBehavior: .never))
             .scrollIndicators(.hidden)
         }
     }

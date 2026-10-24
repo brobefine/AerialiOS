@@ -78,7 +78,7 @@ struct VodEpisode: Codable, Hashable, Identifiable, Sendable {
     var runtimeMinutes: Int = 0
 
     var id: String { "\(season):\(number)" }
-    var code: String { "С\(season) Э\(number)" }
+    var code: String { "\(season)x\(number)" }
 }
 
 struct VodPerson: Codable, Hashable, Identifiable, Sendable {

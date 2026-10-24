@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// Раздачи фильма или серии: поиск, фильтр по качеству, сортировка; касание — раздача в TorrServer, затем файл и плеер.
+/// Раздачи фильма или серии в стиле iOS 26: карточки на тёмном фоне, фильтр качества капсулами сверху и свайпом по
+/// странице, сортировка в стеклянной кнопке. Касание — раздача в TorrServer, затем файл и плеер.
 struct ReleasesView: View {
     let item: VodItem
     let episode: VodEpisode?
@@ -14,7 +15,7 @@ struct ReleasesView: View {
     /// Разбор названий — регулярными выражениями, поэтому один раз на раздачу и не в потоке интерфейса.
     @State private var infos: [String: ReleaseInfo] = [:]
     @State private var loading = true
-    @State private var quality: String?
+    @State private var filter = ReleasesView.all
     @State private var sort: Sort = .seeds
     @State private var opening: Release?
     @State private var picking: Picking?
@@ -33,10 +34,16 @@ struct ReleasesView: View {
         var id: String { release.id }
     }
 
+    private static let all = "Все"
     private static let qualities = ["4K", "1080p", "720p", "SD"]
 
-    private var shown: [Release] {
-        let filtered = quality.map { wanted in releases.filter { infos[$0.id]?.quality == wanted } } ?? releases
+    /// Страницы фильтра: «Все» и те качества, что есть в выдаче.
+    private var filters: [String] {
+        [Self.all] + Self.qualities.filter { wanted in infos.values.contains { $0.quality == wanted } }
+    }
+
+    private func shown(_ filter: String) -> [Release] {
+        let filtered = filter == Self.all ? releases : releases.filter { infos[$0.id]?.quality == filter }
         let sorted: [Release] = switch sort {
         case .seeds: filtered.sorted { $0.seeds > $1.seeds }
         case .size: filtered.sorted { $0.bytes > $1.bytes }
@@ -54,37 +61,28 @@ struct ReleasesView: View {
     }
 
     var body: some View {
-        List {
-            if let entry = library.entry(item, episode), entry.resumable, let source = entry.source {
-                Section {
-                    Button { playback.resume(entry) } label: {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Label("Продолжить с \(Format.clock(entry.position))", systemImage: "play.fill").font(.headline)
-                            Text(source.releaseTitle).font(.caption).foregroundStyle(Theme.secondaryText).lineLimit(2)
-                        }
-                    }
-                }
-            }
-            if !releases.isEmpty {
-                Section {
-                    qualityPicker.listRowInsets(EdgeInsets()).listRowBackground(Color.clear)
-                }
-                Section {
-                    ForEach(shown) { release in
-                        Button { open(release) } label: {
-                            ReleaseRow(release: release, info: infos[release.id] ?? release.info, busy: opening?.id == release.id)
-                        }
-                        .buttonStyle(.plain)
-                        .disabled(opening != nil)
-                        .accessibilityIdentifier("release")
-                    }
-                } header: {
-                    Text("\(shown.count) \(Format.plural(shown.count, "раздача", "раздачи", "раздач"))")
-                }
+        TabView(selection: $filter) {
+            ForEach(filters, id: \.self) { value in
+                page(value).tag(value)
             }
         }
-        .scrollContentBackground(.hidden)
+        .tabViewStyle(.page(indexDisplayMode: .never))
         .background(Theme.background)
+        .safeAreaInset(edge: .top, spacing: 0) {
+            if !releases.isEmpty {
+                ScrollView(.horizontal) {
+                    HStack(spacing: 8) {
+                        ForEach(filters, id: \.self) { value in
+                            Chip(title: value, selected: filter == value) { withAnimation(.snappy) { filter = value } }
+                                .accessibilityIdentifier("quality-\(value)")
+                        }
+                    }
+                }
+                .contentMargins(.horizontal, 16, for: .scrollContent)
+                .scrollIndicators(.hidden)
+                .padding(.vertical, 8)
+            }
+        }
         .navigationTitle(episode.map { "\(item.title) · \($0.code)" } ?? item.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -107,7 +105,6 @@ struct ReleasesView: View {
             }
         }
         .task { await search() }
-        .refreshable { await search() }
         .sheet(item: $picking) { picking in
             FilesSheet(info: picking.info, episode: episode) { file in
                 self.picking = nil
@@ -121,30 +118,47 @@ struct ReleasesView: View {
         }
     }
 
-    private var qualityPicker: some View {
-        let present = Self.qualities.filter { wanted in infos.values.contains { $0.quality == wanted } }
-        return ScrollView(.horizontal) {
-            HStack(spacing: 8) {
-                chip("Все", selected: quality == nil) { quality = nil }
-                ForEach(present, id: \.self) { value in
-                    chip(value, selected: quality == value) { quality = value }
+    private func page(_ filter: String) -> some View {
+        let list = shown(filter)
+        return ScrollView {
+            LazyVStack(alignment: .leading, spacing: 12) {
+                if let entry = library.entry(item, episode), entry.resumable, let source = entry.source {
+                    Button { playback.resume(entry) } label: {
+                        HStack(spacing: 14) {
+                            Image(systemName: "play.fill").font(.title3)
+                                .frame(width: 44, height: 44)
+                                .background(.white, in: Circle())
+                                .foregroundStyle(.black)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Продолжить с \(Format.clock(entry.position))").font(.headline)
+                                Text(source.releaseTitle).font(.caption).foregroundStyle(Theme.secondaryText).lineLimit(2)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(14)
+                        .glass(in: RoundedRectangle(cornerRadius: 24, style: .continuous), interactive: true)
+                    }
+                    .buttonStyle(.plain)
+                }
+                if !list.isEmpty {
+                    Text("\(list.count) \(Format.plural(list.count, "раздача", "раздачи", "раздач"))")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Theme.secondaryText)
+                        .padding(.horizontal, 4)
+                }
+                ForEach(list) { release in
+                    Button { open(release) } label: {
+                        ReleaseCard(release: release, info: infos[release.id] ?? release.info, busy: opening?.id == release.id)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(opening != nil)
+                    .accessibilityIdentifier("release")
                 }
             }
-            .padding(.vertical, 4)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
         }
-        .scrollIndicators(.hidden)
-    }
-
-    private func chip(_ title: String, selected: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(selected ? .black : .white)
-                .padding(.horizontal, 14)
-                .frame(height: 32)
-                .background(selected ? AnyShapeStyle(.white) : AnyShapeStyle(.white.opacity(0.12)), in: Capsule())
-        }
-        .buttonStyle(.plain)
+        .refreshable { await search() }
     }
 
     private func search() async {
@@ -192,41 +206,62 @@ struct ReleasesView: View {
     }
 }
 
-/// Карточка раздачи: название, плашки качества, размер, сиды, трекер, озвучки.
-private struct ReleaseRow: View {
+/// Карточка раздачи: название, плашки качества, затем размер, сиды и трекер, озвучки.
+private struct ReleaseCard: View {
     let release: Release
     let info: ReleaseInfo
     let busy: Bool
 
+    private var seedColor: Color {
+        release.seeds >= 10 ? Color(hex: 0x3DDC84) : release.seeds > 0 ? Color(hex: 0xFFC83D) : Color(hex: 0xFF5A4E)
+    }
+
     var body: some View {
-        HStack(alignment: .top, spacing: 10) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(release.title).font(.subheadline).foregroundStyle(.white).lineLimit(3)
-                let tags = info.tags + [info.season].compactMap { $0 }
-                if !tags.isEmpty {
-                    FlowLayout(spacing: 5) {
-                        ForEach(Array(tags.enumerated()), id: \.offset) { index, tag in
-                            TagLabel(text: tag, highlighted: index == 0 && tag == info.quality)
-                        }
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                Text(release.title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(3)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                if busy { ProgressView().tint(.white) }
+            }
+            let tags = info.tags + [info.season].compactMap { $0 }
+            if !tags.isEmpty {
+                FlowLayout(spacing: 6) {
+                    ForEach(Array(tags.enumerated()), id: \.offset) { index, tag in
+                        TagLabel(text: tag, highlighted: index == 0 && tag == info.quality)
                     }
                 }
-                HStack(spacing: 12) {
-                    Label(Format.bytes(release.bytes), systemImage: "internaldrive")
-                    Label("\(release.seeds)", systemImage: "arrow.up.circle")
-                        .foregroundStyle(release.seeds >= 10 ? Color(hex: 0x3DDC84) : release.seeds > 0 ? Theme.secondaryText : Color(hex: 0xFF5A4E))
-                    Text(release.tracker).lineLimit(1)
-                }
-                .font(.caption)
-                .foregroundStyle(Theme.secondaryText)
-                if !info.audio.isEmpty {
-                    Text(info.audio.joined(separator: ", ")).font(.caption2).foregroundStyle(Theme.secondaryText).lineLimit(2)
-                }
             }
-            Spacer(minLength: 0)
-            if busy { ProgressView().tint(.white) }
+            HStack(spacing: 14) {
+                Label(Format.bytes(release.bytes), systemImage: "internaldrive")
+                Label("\(release.seeds)", systemImage: "arrow.up").foregroundStyle(seedColor)
+                Text(release.tracker).lineLimit(1)
+            }
+            .font(.caption.weight(.medium))
+            .foregroundStyle(Theme.secondaryText)
+            .labelStyle(TightLabel())
+            if !info.audio.isEmpty {
+                Label(info.audio.joined(separator: ", "), systemImage: "waveform")
+                    .font(.caption2)
+                    .foregroundStyle(Theme.secondaryText)
+                    .lineLimit(2)
+                    .labelStyle(TightLabel())
+            }
         }
-        .padding(.vertical, 4)
-        .contentShape(Rectangle())
+        .padding(16)
+        .background(Theme.card, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
+    }
+}
+
+private struct TightLabel: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 4) {
+            configuration.icon
+            configuration.title
+        }
     }
 }
 
@@ -247,7 +282,7 @@ private struct FilesSheet: View {
                         HStack(spacing: 8) {
                             Text(Format.bytes(file.bytes))
                             if let found = EpisodeMatch.coordinates(file.path) {
-                                Text("С\(found.season) Э\(found.episode)")
+                                Text("\(found.season)x\(found.episode)")
                             }
                         }
                         .font(.caption)
