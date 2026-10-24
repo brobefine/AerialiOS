@@ -174,6 +174,8 @@ struct PlayerView: View {
 
     private func scheduleHide() {
         hideTask?.cancel()
+        // В UI-тестах панель не прячется: по её часам тест видит, что видео пошло.
+        guard !UITestHooks.active else { return }
         hideTask = Task {
             try? await Task.sleep(for: .seconds(4))
             guard !Task.isCancelled, model.phase == .playing, !model.paused, scrub == nil else { return }

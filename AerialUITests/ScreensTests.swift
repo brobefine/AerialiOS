@@ -2,6 +2,7 @@ import XCTest
 
 /// Снимки экранов на CI (Mac нет — так видно, что собралось и как выглядит): главная, разделы, сериал с сезонами
 /// и раздачами серии, фильм, актёр, «Смотреть всё», медиатека, настройки, поиск; отдельно — воспроизведение.
+/// Ждём появления элементов, а не фиксированное время; короткая пауза перед снимком — чтобы догрузились картинки.
 /// Шаг, для которого не нашлось элемента, пропускается (снимка нет), а не роняет весь прогон.
 /// Снимки — в `SCREENS_DIR` (CI передаёт через `TEST_RUNNER_SCREENS_DIR`) и вложениями результата.
 final class ScreensTests: XCTestCase {
@@ -16,7 +17,9 @@ final class ScreensTests: XCTestCase {
         app = XCUIApplication()
     }
 
-    private func shot(_ name: String) {
+    /// Снимок после короткой паузы — догружаются картинки.
+    private func shot(_ name: String, settle: UInt32 = 2) {
+        sleep(settle)
         let screenshot = XCUIScreen.main.screenshot()
         try? screenshot.pngRepresentation.write(to: directory.appendingPathComponent("\(name).png"))
         let attachment = XCTAttachment(screenshot: screenshot)
@@ -40,10 +43,7 @@ final class ScreensTests: XCTestCase {
     private func back(_ times: Int = 1) {
         for _ in 0..<times {
             let button = app.navigationBars.buttons.element(boundBy: 0)
-            if button.exists && button.isHittable {
-                button.tap()
-                sleep(2)
-            }
+            if button.waitForExistence(timeout: 2), button.isHittable { button.tap() }
         }
     }
 
@@ -51,30 +51,24 @@ final class ScreensTests: XCTestCase {
         app.launchArguments = ["-uiTest"]
         app.launch()
 
-        XCTAssertTrue(element("poster").waitForExistence(timeout: 90), "каталог не загрузился")
-        sleep(5)
-        shot("01-home")
+        XCTAssertTrue(element("poster").waitForExistence(timeout: 60), "каталог не загрузился")
+        shot("01-home", settle: 3)
         app.swipeUp()
-        sleep(3)
         shot("02-home-rows")
         app.swipeDown()
         app.swipeDown()
 
         // Сериал: раздел, страница, сезоны и серии, раздачи серии.
         if tap(element("shelf-series")) {
-            sleep(6)
-            shot("03-shelf-series")
+            shot("03-shelf-series", settle: 3)
             if tap(element("poster")) {
-                _ = element("details-watch").waitForExistence(timeout: 40)
-                sleep(4)
+                _ = element("details-watch").waitForExistence(timeout: 30)
                 shot("04-series-details")
                 app.swipeUp()
-                sleep(3)
-                shot("05-series-episodes")
-                if tap(element("episode")) {
-                    _ = element("release").waitForExistence(timeout: 90)
-                    sleep(2)
-                    shot("06-episode-releases")
+                if element("episode").waitForExistence(timeout: 10) { shot("05-series-episodes") }
+                if tap(element("episode"), wait: 2) {
+                    _ = element("release").waitForExistence(timeout: 60)
+                    shot("06-episode-releases", settle: 1)
                     back()
                 }
                 back()
@@ -82,29 +76,24 @@ final class ScreensTests: XCTestCase {
             app.swipeDown()
             app.swipeDown()
             tap(element("shelf-all"))
-            sleep(5)
         }
 
         // Фильм: страница, актёр, раздачи.
         if tap(element("poster")) {
             let watch = element("details-watch")
-            XCTAssertTrue(watch.waitForExistence(timeout: 40), "страница фильма не открылась")
-            sleep(4)
+            XCTAssertTrue(watch.waitForExistence(timeout: 30), "страница фильма не открылась")
             shot("07-details")
             app.swipeUp()
-            sleep(2)
             shot("08-details-more")
-            if tap(element("person"), wait: 5) {
-                sleep(5)
-                shot("09-person")
+            if tap(element("person"), wait: 3) {
+                shot("09-person", settle: 3)
                 back()
             }
             app.swipeDown()
             app.swipeDown()
             if tap(watch) {
-                _ = element("release").waitForExistence(timeout: 90)
-                sleep(2)
-                shot("10-releases")
+                _ = element("release").waitForExistence(timeout: 60)
+                shot("10-releases", settle: 1)
                 back()
             }
             back()
@@ -112,49 +101,48 @@ final class ScreensTests: XCTestCase {
 
         // «Смотреть всё» первого ряда.
         if tap(element("section-header")) {
-            sleep(6)
-            shot("11-section")
+            shot("11-section", settle: 3)
             back()
         }
 
         // Поиск — последним: на iOS 26 поле поиска с клавиатурой закрывает панель вкладок.
         if tap(app.buttons["Медиатека"].firstMatch, wait: 5) {
-            sleep(2)
-            shot("12-library")
+            shot("12-library", settle: 1)
         }
         if tap(app.buttons["Главная"].firstMatch, wait: 5), tap(element("settings")) {
-            sleep(6)
-            shot("13-settings")
+            shot("13-settings", settle: 4)
             tap(app.buttons["Готово"].firstMatch, wait: 3)
-            sleep(1)
         }
         if tap(app.buttons["Поиск"].firstMatch, wait: 5) {
-            sleep(3)
             shot("14-search-empty")
             let field = app.searchFields.firstMatch
             if tap(field, wait: 5) {
                 field.typeText("Дюна")
-                sleep(5)
-                shot("15-search")
+                if element("poster").waitForExistence(timeout: 10) { shot("15-search", settle: 3) }
             }
         }
     }
 
     /// Встроенный TorrServer и mpv на свободном фильме (Big Buck Bunny, CC BY): раздача → подкачка → кадр;
-    /// плеер в альбомной ориентации, по закрытии — снова книжная.
+    /// плеер в альбомной ориентации, по закрытии — снова книжная. Ждём, пока часы плеера уйдут с 0:00.
     func testPlaybackSmoke() {
         app.launchArguments = ["-uiTest", "-smokeLink", "https://webtorrent.io/torrents/big-buck-bunny.torrent"]
         app.launch()
-        sleep(20)
-        shot("20-player-preparing")
-        sleep(70)
-        shot("21-player")
-        app.tap()
-        sleep(1)
-        shot("22-player-controls")
+        shot("20-player-preparing", settle: 8)
+        let time = element("player-time")
+        let deadline = Date().addingTimeInterval(120)
+        var playing = false
+        while Date() < deadline {
+            if time.exists, !time.label.isEmpty, time.label != "0:00", time.label != "0:01" {
+                playing = true
+                break
+            }
+            sleep(2)
+        }
+        XCTAssertTrue(playing, "видео не пошло за 2 минуты")
+        shot("21-player", settle: 3)
         if tap(app.buttons["Закрыть"].firstMatch, wait: 3) {
-            sleep(4)
-            shot("23-after-player")
+            shot("23-after-player", settle: 3)
         }
     }
 }
