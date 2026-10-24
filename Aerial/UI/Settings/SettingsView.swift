@@ -311,9 +311,28 @@ struct SettingsView: View {
         Section {
             LabeledContent("Версия", value: version)
             LabeledContent("Журналы", value: "Файлы › На iPhone › Aerial › logs")
+            // Где бы ни стояло приложение (и в LiveContainer, чья папка в «Файлах» может быть скрыта), журналы
+            // отправляются отсюда: app, mpv, perf, отчёты MetricKit и журнал TorrServer.
+            ShareLink(items: Self.logFiles()) {
+                Label("Поделиться журналами", systemImage: "square.and.arrow.up")
+            }
         } header: {
             Text("О приложении")
         }
+    }
+
+    /// Все файлы журналов: `logs/` с прошлыми запусками и `metrics/`, плюс журнал встроенного TorrServer.
+    private static func logFiles() -> [URL] {
+        let manager = FileManager.default
+        var files: [URL] = []
+        if let walker = manager.enumerator(at: Log.directory, includingPropertiesForKeys: [.isRegularFileKey]) {
+            for case let url as URL in walker where (try? url.resourceValues(forKeys: [.isRegularFileKey]))?.isRegularFile == true {
+                files.append(url)
+            }
+        }
+        let server = URL.documentsDirectory.appending(path: "TorrServer/torrserver.log")
+        if manager.fileExists(atPath: server.path) { files.append(server) }
+        return files.sorted { $0.path < $1.path }
     }
 
     /// Строка раздела: значок в цветном квадрате, как в «Настройках» iOS; внутри — свои секции.
