@@ -76,7 +76,10 @@ struct CircleGlassButtonStyle: ButtonStyle {
             .font(.system(size: size * 0.4, weight: .semibold))
             .foregroundStyle(.white)
             .frame(width: size, height: size)
-            .glass(in: Circle(), interactive: true)
+            // Интерактивное стекло внутри стиля кнопки на iOS 26 перехватывало касание — кнопка не срабатывала.
+            .glass(in: Circle())
+            .contentShape(Circle())
+            .scaleEffect(configuration.isPressed ? 0.92 : 1)
             .opacity(configuration.isPressed ? 0.7 : 1)
     }
 }

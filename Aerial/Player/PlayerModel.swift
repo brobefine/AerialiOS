@@ -69,7 +69,13 @@ final class Playback {
     }
 
     func close() {
-        guard let controller else { return }
+        guard let controller else {
+            // Контроллер потерян (повтор показа, сбой) — снимаем то, что показано поверх, чтобы плеер не залип.
+            Self.topController()?.presentingViewController?.dismiss(animated: true)
+            Orientation.allowLandscape(false)
+            request = nil
+            return
+        }
         self.controller = nil
         controller.dismiss(animated: true) { [weak self] in
             Orientation.allowLandscape(false)
@@ -126,12 +132,12 @@ private struct PlayerScreen: View {
     }
 }
 
-/// Контроллер плеера: на iPhone — только альбомная ориентация (открывается повёрнутым), без строки состояния
-/// и полоски «домой»; на iPad — как держат.
+/// Контроллер плеера: на iPhone открывается повёрнутым в альбомную, но можно смотреть и в книжной; без строки
+/// состояния и полоски «домой»; на iPad — как держат.
 final class PlayerHostingController: UIHostingController<AnyView> {
     private var phone: Bool { UIDevice.current.userInterfaceIdiom == .phone }
 
-    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { phone ? .landscape : .all }
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { phone ? .allButUpsideDown : .all }
     override var preferredInterfaceOrientationForPresentation: UIInterfaceOrientation {
         phone ? .landscapeRight : super.preferredInterfaceOrientationForPresentation
     }

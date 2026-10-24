@@ -182,6 +182,10 @@ final class ScreensTests: XCTestCase {
         }
         if tap(app.buttons["Настройки"].firstMatch, wait: 5) {
             shot("13-settings", settle: 4)
+            if tap(app.staticTexts["Поиск раздач"].firstMatch, wait: 3) {
+                shot("13b-settings-parser", settle: 2)
+                back()
+            }
         }
         if search, tap(app.buttons["Поиск"].firstMatch, wait: 5) {
             shot("14-search-empty")
@@ -211,8 +215,8 @@ final class ScreensTests: XCTestCase {
         }
         XCTAssertTrue(playing, "видео не пошло за 2 минуты")
         shot("21-player", settle: 3)
-        if tap(app.buttons["Закрыть"].firstMatch, wait: 3) {
-            shot("23-after-player", settle: 3)
-        }
+        XCTAssertTrue(tap(app.buttons["player-close"].firstMatch, wait: 3), "нет кнопки закрытия плеера")
+        XCTAssertTrue(time.waitForNonExistence(timeout: 10), "плеер не закрылся")
+        shot("23-after-player", settle: 3)
     }
 }

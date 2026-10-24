@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Страница фильма или сериала. Как в Apple TV, содержимое скользит поверх постера: постер стоит на месте, под ним —
 /// его зеркальное продолжение в размытии (вместо затемнения к низу — как у Aerial на ТВ). Под логотипом, кнопками
-/// и описанием — живое размытие того, что позади, с плавным началом у логотипа и плавным концом после описания.
+/// и описанием — живое размытие того, что позади, с плавным началом у логотипа; ниже — чёрный с резкой границей.
 struct DetailsView: View {
     let item: VodItem
 
@@ -42,13 +42,8 @@ struct DetailsView: View {
                         sections
                             .padding(.top, 8)
                             .padding(.bottom, 32)
-                            .background(alignment: .top) {
-                                VStack(spacing: 0) {
-                                    LinearGradient(colors: [.clear, Theme.background], startPoint: .top, endPoint: .bottom)
-                                        .frame(height: 36)
-                                    Theme.background
-                                }
-                            }
+                            // Чёрный начинается резкой границей сразу под размытием.
+                            .background(Theme.background)
                     }
                 }
                 .scrollIndicators(.hidden)
@@ -106,15 +101,15 @@ struct DetailsView: View {
         .allowsHitTesting(false)
     }
 
-    /// Размытие под информацией: начинается плавно у логотипа, кончается плавно после описания.
+    /// Размытие под информацией: начинается плавно у логотипа и идёт до самого низа блока.
     private var frost: some View {
         Rectangle()
             .fill(.ultraThinMaterial)
             .mask {
                 VStack(spacing: 0) {
                     LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom).frame(height: 150)
+                    // До самого низа без растворения: иначе при прокрутке под краем проступал резкий постер.
                     Color.black
-                    LinearGradient(colors: [.black, .clear], startPoint: .top, endPoint: .bottom).frame(height: 56)
                 }
             }
     }
@@ -128,35 +123,7 @@ struct DetailsView: View {
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(.white.opacity(0.75))
                 .multilineTextAlignment(.center)
-            let rated = shown.rating > 0 && shown.votes >= 10
-            let trailer = (details?.trailerKey).flatMap { $0.isEmpty ? nil : URL(string: "https://www.youtube.com/watch?v=\($0)") }
-            if rated || trailer != nil {
-                HStack(spacing: 8) {
-                    if rated {
-                        RatingRing(value: shown.rating, size: 34)
-                        Text("TMDb · \(shown.votes) \(Format.plural(shown.votes, "голос", "голоса", "голосов"))")
-                            .font(.caption).foregroundStyle(.white.opacity(0.75))
-                    }
-                    if let trailer {
-                        Button { openURL(trailer) } label: {
-                            Label("Трейлер", systemImage: "play.rectangle")
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 12)
-                                .frame(height: 30)
-                                .glass(in: Capsule(), interactive: true)
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.leading, rated ? 6 : 0)
-                    }
-                }
-            }
-            if !external.isEmpty {
-                Text(external)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.white.opacity(0.8))
-                    .multilineTextAlignment(.center)
-            }
+            ratingsLine
             actions.frame(maxWidth: 440)
             if let tagline = details?.tagline, !tagline.isEmpty {
                 // TMDb часто присылает слоган уже в кавычках.
@@ -174,6 +141,49 @@ struct DetailsView: View {
         }
         .padding(.horizontal, 20)
         .frame(maxWidth: 720)
+    }
+
+    /// Оценки одной строкой, как в приложении для ТВ: кольцо TMDb, затем IMDb/RT/Metacritic из MDBList. Есть внешние
+    /// оценки — число голосов TMDb не показываем, а трейлер — круглой кнопкой, чтобы всё поместилось.
+    @ViewBuilder private var ratingsLine: some View {
+        let rated = shown.rating > 0 && shown.votes >= 10
+        let trailer = (details?.trailerKey).flatMap { $0.isEmpty ? nil : URL(string: "https://www.youtube.com/watch?v=\($0)") }
+        if rated || trailer != nil || !external.isEmpty {
+            HStack(spacing: 8) {
+                if rated { RatingRing(value: shown.rating, size: 34) }
+                if !external.isEmpty {
+                    Text(external)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white.opacity(0.85))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                } else if rated {
+                    Text("TMDb · \(shown.votes) \(Format.plural(shown.votes, "голос", "голоса", "голосов"))")
+                        .font(.caption).foregroundStyle(.white.opacity(0.75))
+                        .lineLimit(1)
+                }
+                if let trailer {
+                    Button { openURL(trailer) } label: {
+                        if external.isEmpty {
+                            Label("Трейлер", systemImage: "play.rectangle")
+                                .font(.caption.weight(.semibold))
+                                .padding(.horizontal, 12)
+                                .frame(height: 30)
+                                .glass(in: Capsule())
+                        } else {
+                            Image(systemName: "play.rectangle")
+                                .font(.system(size: 13, weight: .semibold))
+                                .frame(width: 32, height: 32)
+                                .glass(in: Circle())
+                        }
+                    }
+                    .foregroundStyle(.white)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Трейлер")
+                    .padding(.leading, rated ? 4 : 0)
+                }
+            }
+        }
     }
 
     private var metaLine: String {
@@ -307,6 +317,15 @@ struct DetailsView: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("episode")
+                        .contextMenu {
+                            if let entry = library.entry(item, episode) {
+                                Button(role: .destructive) { library.forget(entry) } label: {
+                                    Label("Убрать из «Продолжить»", systemImage: "eye.slash")
+                                }
+                            }
+                        } preview: {
+                            EpisodePreview(episode: episode, entry: library.entry(item, episode))
+                        }
                     }
                 }
                 .scrollTargetLayout()
@@ -425,6 +444,34 @@ private struct EpisodeCard: View {
         .background(Theme.card)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .frame(width: width)
+    }
+}
+
+/// Долгое нажатие на серию: кадр крупно и описание целиком.
+private struct EpisodePreview: View {
+    let episode: VodEpisode
+    let entry: WatchEntry?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            CachedImage(path: episode.still, size: "w780", pixelWidth: 1000)
+                .frame(width: 340, height: 340 * 9 / 16)
+                .clipped()
+            VStack(alignment: .leading, spacing: 6) {
+                Text("\(episode.code) · \(episode.title)").font(.headline)
+                Text([Format.runtime(minutes: episode.runtimeMinutes), episode.airDate.isEmpty ? "" : Format.date(episode.airDate),
+                      entry.map { $0.resumable ? $0.remaining : "" } ?? ""]
+                    .filter { !$0.isEmpty }.joined(separator: " · "))
+                    .font(.caption).foregroundStyle(Theme.secondaryText)
+                if !episode.overview.isEmpty {
+                    Text(episode.overview).font(.subheadline).fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .padding(16)
+        }
+        .frame(width: 340)
+        .background(Theme.card)
+        .foregroundStyle(.white)
     }
 }
 

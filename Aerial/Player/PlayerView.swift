@@ -41,6 +41,10 @@ struct PlayerView: View {
                 .contentShape(Rectangle())
                 .ignoresSafeArea()
                 .onTapGesture { toggleControls() }
+                // Смахнуть вниз — закрыть, как системный плеер.
+                .gesture(DragGesture(minimumDistance: 40).onEnded { value in
+                    if value.translation.height > 120 && abs(value.translation.width) < value.translation.height { dismiss() }
+                })
             status
             if controls || model.phase != .playing || model.paused {
                 overlay.transition(.opacity)
@@ -221,41 +225,40 @@ struct PlayerView: View {
 
     // MARK: Панель
 
-    /// Панель как у системного плеера iOS 26: сверху — закрыть и звук/субтитры, по центру — перемотка и пауза
-    /// на стеклянных кругах, снизу — название над тонкой шкалой времени.
+    /// Панель как у системного плеера iOS 26: слева сверху — закрыть, справа — кнопки одной стеклянной капсулой,
+    /// по центру — перемотка и пауза крупными знаками без подложки, снизу — название и шкала на стекле.
     private var overlay: some View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 Button { dismiss() } label: { Image(systemName: "xmark") }
                     .buttonStyle(CircleGlassButtonStyle(size: 44))
                     .accessibilityLabel("Закрыть")
+                    .accessibilityIdentifier("player-close")
                 Spacer()
-                if WatchParty.shared.enabled && model.partyMedia != nil {
-                    Button { partyOpen = true } label: {
-                        Image(systemName: WatchParty.shared.active ? "person.2.fill" : "person.2")
+                HStack(spacing: 4) {
+                    if WatchParty.shared.enabled && model.partyMedia != nil {
+                        barButton(WatchParty.shared.active ? "person.2.fill" : "person.2", label: "Смотреть вместе") { partyOpen = true }
                     }
-                    .buttonStyle(CircleGlassButtonStyle(size: 42))
-                    .accessibilityLabel("Смотреть вместе")
+                    if model.next != nil {
+                        barButton("forward.end.fill", label: "Следующая серия") { playNext() }
+                    }
+                    if model.phase == .playing { tracksMenu }
                 }
-                if model.next != nil {
-                    Button { playNext() } label: { Image(systemName: "forward.end.fill") }
-                        .buttonStyle(CircleGlassButtonStyle(size: 42))
-                        .accessibilityLabel("Следующая серия")
-                }
-                if model.phase == .playing { tracksMenu }
+                .padding(.horizontal, 4)
+                .glass(in: Capsule())
             }
             .padding(.horizontal, 20)
             .padding(.top, 12)
             Spacer()
             if model.phase == .playing && model.started {
-                HStack(spacing: 44) {
-                    transport("gobackward.10", size: 56) { model.skip(-10) }
-                    transport(model.paused ? "play.fill" : "pause.fill", size: 76) { model.togglePause() }
+                HStack(spacing: 56) {
+                    transport("gobackward.10", size: 34) { model.skip(-10) }
+                    transport(model.paused ? "play.fill" : "pause.fill", size: 52) { model.togglePause() }
                         .accessibilityIdentifier("player-pause")
-                    transport("goforward.10", size: 56) { model.skip(10) }
+                    transport("goforward.10", size: 34) { model.skip(10) }
                 }
                 Spacer()
-                VStack(alignment: .leading, spacing: 10) {
+                VStack(alignment: .leading, spacing: 8) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(model.request.title).font(.headline).lineLimit(1)
                         Text(model.request.subtitle).font(.caption).foregroundStyle(.white.opacity(0.7)).lineLimit(1)
@@ -263,8 +266,12 @@ struct PlayerView: View {
                     .foregroundStyle(.white)
                     timeline
                 }
-                .padding(.horizontal, 24)
-                .padding(.bottom, 14)
+                .padding(.horizontal, 18)
+                .padding(.top, 12)
+                .padding(.bottom, 6)
+                .glass(in: RoundedRectangle(cornerRadius: 26, style: .continuous))
+                .padding(.horizontal, 16)
+                .padding(.bottom, 10)
             } else {
                 Spacer()
             }
@@ -273,21 +280,42 @@ struct PlayerView: View {
             VStack {
                 LinearGradient(colors: [.black.opacity(0.45), .clear], startPoint: .top, endPoint: .bottom).frame(height: 120)
                 Spacer()
-                LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .top, endPoint: .bottom).frame(height: 170)
+                LinearGradient(colors: [.clear, .black.opacity(0.45)], startPoint: .top, endPoint: .bottom).frame(height: 170)
             }
             .ignoresSafeArea()
             .allowsHitTesting(false)
         }
     }
 
+    private func barButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
+        Button {
+            action()
+            scheduleHide()
+        } label: {
+            Image(systemName: symbol)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundStyle(.white)
+                .frame(width: 42, height: 42)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+
+    /// Знаки перемотки и паузы — без кругов, с тенью, как у системного плеера.
     private func transport(_ symbol: String, size: CGFloat, action: @escaping () -> Void) -> some View {
         Button {
             action()
             scheduleHide()
         } label: {
             Image(systemName: symbol)
+                .font(.system(size: size, weight: .semibold))
+                .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.35), radius: 8)
+                .frame(width: size * 1.8, height: size * 1.8)
+                .contentShape(Circle())
         }
-        .buttonStyle(CircleGlassButtonStyle(size: size))
+        .buttonStyle(.plain)
     }
 
     private var timeline: some View {
@@ -337,7 +365,7 @@ struct PlayerView: View {
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 42, height: 42)
-                .glass(in: Circle(), interactive: true)
+                .contentShape(Rectangle())
         }
         .accessibilityLabel("Звук, субтитры и скорость")
     }
@@ -443,7 +471,8 @@ struct MPVVideoView: UIViewControllerRepresentable {
     func updateUIViewController(_ controller: MPVViewController, context: Context) {}
 }
 
-/// Ориентация на iPhone, как у Apple TV: каталог — книжная, плеер — альбомная ([PlayerHostingController]).
+/// Ориентация на iPhone, как у Apple TV: каталог — книжная, плеер открывается альбомным, но поворачивается
+/// и в книжную ([PlayerHostingController]).
 /// На iPad — как держат. Разрешённые приложению ориентации отдаёт [AppDelegate].
 @MainActor
 enum Orientation {

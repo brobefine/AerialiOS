@@ -50,16 +50,32 @@ struct HomeView: View {
 
     var body: some View {
         NavigationStack {
-            TabView(selection: $shelf) {
-                ForEach(VodShelf.allCases) { item in
-                    ShelfPage(shelf: item, model: models[item] ?? HomeModel()).tag(item)
+            // Страницы `TabView` обрезаются по безопасной зоне — сверху и снизу оставались чёрные полосы. Поэтому
+            // страницы во весь экран, а отступы под капсулы разделов и нижнюю пилюлю — полями прокрутки.
+            GeometryReader { geometry in
+                let top = geometry.safeAreaInsets.top
+                TabView(selection: $shelf) {
+                    ForEach(VodShelf.allCases) { item in
+                        ShelfPage(shelf: item, model: models[item] ?? HomeModel(),
+                                  insets: EdgeInsets(top: top + Self.pickerHeight, leading: 0,
+                                                     bottom: geometry.safeAreaInsets.bottom, trailing: 0))
+                            .tag(item)
+                    }
+                }
+                .tabViewStyle(.page(indexDisplayMode: .never))
+                .ignoresSafeArea()
+                .overlay(alignment: .top) {
+                    ShelfPicker(selection: $shelf)
+                        .padding(.vertical, 8)
+                        .background {
+                            LinearGradient(colors: [Theme.background, Theme.background.opacity(0.85), .clear],
+                                           startPoint: .top, endPoint: .bottom)
+                                .padding(.top, -top)
+                                .allowsHitTesting(false)
+                        }
                 }
             }
-            .tabViewStyle(.page(indexDisplayMode: .never))
             .background(Theme.background)
-            .safeAreaInset(edge: .top, spacing: 0) {
-                ShelfPicker(selection: $shelf).padding(.vertical, 8)
-            }
             .toolbar(.hidden, for: .navigationBar)
             .aerialDestinations()
         }
@@ -72,11 +88,15 @@ struct HomeView: View {
         .task(id: library.tasteRevision) { await feeds.refreshUpcoming(library) }
         .task(id: library.followed.map(\.id)) { await feeds.refreshFollowed(library) }
     }
+
+    /// Высота полосы капсул разделов с отступами.
+    static let pickerHeight: CGFloat = 52
 }
 
 private struct ShelfPage: View {
     let shelf: VodShelf
     let model: HomeModel
+    let insets: EdgeInsets
 
     @Environment(Library.self) private var library
     @Environment(Taste.self) private var taste
@@ -130,6 +150,9 @@ private struct ShelfPage: View {
             }
             .padding(.vertical, 12)
         }
+        .contentMargins(.top, insets.top, for: .scrollContent)
+        .contentMargins(.bottom, insets.bottom + 12, for: .scrollContent)
+        .contentMargins(.top, insets.top, for: .scrollIndicators)
         .refreshable { await model.load(shelf, force: true) }
         .task { await model.load(shelf) }
         .task(id: tasteKey) { updateTaste() }
