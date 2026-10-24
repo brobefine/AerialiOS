@@ -126,6 +126,7 @@ struct DetailsView: View {
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(.white.opacity(0.75))
                 .multilineTextAlignment(.center)
+            genreChips
             ratingsLine
             actions.frame(maxWidth: 480)
             if let tagline = details?.tagline, !tagline.isEmpty {
@@ -149,13 +150,48 @@ struct DetailsView: View {
     /// Оценки строкой, как на ТВ: знак источника и кольцо — TMDb, IMDb, Rotten Tomatoes, Metacritic, Letterboxd.
     @ViewBuilder private var ratingsLine: some View {
         let tmdb = shown.rating > 0 && shown.votes >= 10 ? shown.rating : 0
-        if tmdb > 0 || !external.isEmpty {
-            RatingsRow(tmdb: tmdb, external: external)
+        if tmdb > 0 || (settings.mdblistShown && !external.isEmpty) {
+            RatingsRow(tmdb: tmdb, external: settings.mdblistShown ? external : "", sources: settings.ratingSources)
         }
     }
 
     private var trailer: URL? {
         (details?.trailerKey).flatMap { $0.isEmpty ? nil : URL(string: "https://www.youtube.com/watch?v=\($0)") }
+    }
+
+    /// Жанры и студии капсулами, как `GenreChips` ТВ: жанр — его работы того же вида, студия — её работы.
+    @ViewBuilder private var genreChips: some View {
+        let genres = Array(zip(shown.genreIds, shown.genres).prefix(3))
+        let studios = details?.studios ?? []
+        if !genres.isEmpty || !studios.isEmpty {
+            FlowLayout(spacing: 6) {
+                ForEach(genres, id: \.0) { id, name in
+                    NavigationLink(value: Route.section(genreSection(id, name), .all)) { chip(name, strong: true) }
+                        .buttonStyle(.plain)
+                }
+                ForEach(studios, id: \.id) { studio in
+                    NavigationLink(value: Route.section(studio.section(item.kind), .all)) { chip(studio.name, strong: false) }
+                        .buttonStyle(.plain)
+                }
+            }
+            .frame(maxWidth: 440)
+        }
+    }
+
+    private func chip(_ title: String, strong: Bool) -> some View {
+        Text(title)
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(.white.opacity(strong ? 0.95 : 0.75))
+            .lineLimit(1)
+            .padding(.horizontal, 10)
+            .frame(height: 26)
+            .background(.white.opacity(strong ? 0.2 : 0.08), in: Capsule())
+    }
+
+    private func genreSection(_ id: Int, _ name: String) -> CinemaSection {
+        CinemaSection(id: "genre-\(id)-\(item.kind)", title: name.prefix(1).uppercased() + name.dropFirst(),
+                      path: item.kind == .series ? "discover/tv" : "discover/movie", kind: item.kind,
+                      params: ["with_genres": String(id), "sort_by": "popularity.desc", "vote_count.gte": "50"])
     }
 
     private var metaLine: String {
@@ -250,14 +286,20 @@ struct DetailsView: View {
     @ViewBuilder private var sections: some View {
         if let details {
             VStack(alignment: .leading, spacing: 28) {
-                if item.kind == .series && !details.seasons.isEmpty { episodesSection(details) }
+                // Порядок — как на странице фильма ТВ: актёры, серии, отзывы, интересные факты, франшиза, похожие,
+                // «Духовные родственники», «Ещё от студии»; в конце — сведения.
                 RecapCard(details: details)
                 if !details.cast.isEmpty || !details.directors.isEmpty { peopleSection(details) }
-                if !details.collection.isEmpty { PosterShelf(title: details.collectionTitle, items: details.collection) }
-                RelativesSection(details: details)
-                if !details.related.isEmpty { PosterShelf(title: "Похожие", items: details.related) }
+                if item.kind == .series && !details.seasons.isEmpty { episodesSection(details) }
                 ReviewsSection(item: details.item)
                 WikiStorySection(item: details.item)
+                if !details.collection.isEmpty { PosterShelf(title: details.collectionTitle, items: details.collection) }
+                if !details.related.isEmpty { PosterShelf(title: "Похожие", items: details.related) }
+                RelativesSection(details: details)
+                if let studio = details.studios.first, !details.studioFilms.isEmpty {
+                    PosterShelf(title: "Ещё от студии \(studio.name)", items: details.studioFilms,
+                                seeAll: .section(studio.section(item.kind), .all))
+                }
                 if !details.facts.isEmpty { factsSection(details) }
             }
         } else {
@@ -291,7 +333,8 @@ struct DetailsView: View {
                     ForEach(episodes) { episode in
                         NavigationLink(value: Route.releases(item, episode, runtime: episode.runtimeMinutes)) {
                             EpisodeCard(episode: episode, entry: library.entry(item, episode),
-                                        width: Theme.landscapeWidth(sizeClass))
+                                        width: Theme.landscapeWidth(sizeClass), overviews: settings.episodeOverviews,
+                                        hideSpoilers: settings.hideSpoilers)
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("episode")
@@ -379,12 +422,18 @@ private struct EpisodeCard: View {
     let episode: VodEpisode
     let entry: WatchEntry?
     let width: CGFloat
+    /// «Описания серий» и «Скрывать спойлеры серий» из настроек, как на ТВ.
+    var overviews = true
+    var hideSpoilers = false
 
     var body: some View {
         let still = width * 9 / 16
+        // Спойлер — серия, которую ещё не досмотрели: кадр размыт, описания нет.
+        let spoiler = hideSpoilers && (entry?.fraction ?? 0) < 0.9
         VStack(alignment: .leading, spacing: 0) {
             CachedImage(path: episode.still, size: "w780", pixelWidth: Int(width * 3))
                 .frame(width: width, height: still)
+                .blur(radius: spoiler ? 18 : 0, opaque: true)
                 .clipped()
                 .overlay(alignment: .bottom) {
                     if let entry, entry.fraction > 0 {
@@ -403,9 +452,11 @@ private struct EpisodeCard: View {
                 Text([Format.runtime(minutes: episode.runtimeMinutes), episode.airDate.isEmpty ? "" : Format.date(episode.airDate)]
                     .filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(.caption2).foregroundStyle(.white.opacity(0.7))
-                Text(episode.overview.isEmpty ? " " : episode.overview)
-                    .font(.caption).foregroundStyle(.white.opacity(0.85))
-                    .lineLimit(3, reservesSpace: true)
+                if overviews {
+                    Text(spoiler ? "Описание скрыто, чтобы не было спойлеров" : episode.overview.isEmpty ? " " : episode.overview)
+                        .font(.caption).foregroundStyle(.white.opacity(spoiler ? 0.5 : 0.85))
+                        .lineLimit(3, reservesSpace: true)
+                }
             }
             .padding(12)
             .frame(width: width, alignment: .leading)

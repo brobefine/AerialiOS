@@ -295,6 +295,11 @@ struct LibraryView: View {
                             PosterGrid(items: liked)
                         }
                     }
+                    // «История», как на ТВ: всё открытое и досмотренное, свежее первым.
+                    let history = library.progressByItem.values.sorted { $0.updated > $1.updated }.map(\.item)
+                    if !history.isEmpty {
+                        PosterShelf(title: "История", items: history)
+                    }
                 }
                 .padding(.vertical, 12)
             }
@@ -307,6 +312,10 @@ struct LibraryView: View {
             }
             .navigationTitle("Медиатека")
             .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink(value: Route.torrents) { Image(systemName: "arrow.down.doc") }
+                        .accessibilityLabel("Торренты")
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink(value: Route.universes) { Image(systemName: "circle.grid.2x2") }
                         .accessibilityLabel("Вселенные")

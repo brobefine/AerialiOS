@@ -86,8 +86,9 @@
   (страницы во весь экран; касание раздачи — окно `WatchSheet`: озвучка, сезон и серия из файлов раздачи (у фильма — файл),
   озвучка уходит в плеер `PlaybackRequest.voice`; карточки, фильтр качества — страницы со свайпом; сортировка и качество запоминаются; удержание — «Скачать»),
   `Browse/` (поиск с недавними, подсказками и поиском по описанию (ИИ), «Смотреть всё», актёр с подпиской, медиатека;
-  `DownloadsView` — загрузки и их файлы; `UniversesView` — шары разделов и стена `WallView` с зумом), `Settings/`
-  (список разделов со значками, как в «Настройках» iOS; у каждого своя страница: раздачи, TorrServer, плеер и субтитры, подбор, каталог, ИИ, «Вместе», данные). `Details/DetailsExtras` — «Разбор», «Духовные родственники», отзывы, история создания. На главной — ещё `UpcomingShelf`.
+  `DownloadsView` — загрузки и их файлы; `TorrentsView` — «Торренты»: раздачи TorrServer, «Добавить торрент»; в Медиатеке — ряд «История»; `UniversesView` — шары разделов и стена `WallView` с зумом), `Settings/`
+  (список разделов со значками, как в «Настройках» iOS; у каждого своя страница: раздачи, TorrServer, плеер и субтитры, подбор, каталог, ИИ, «Вместе», данные). `Details/DetailsExtras` — «Разбор», «Духовные родственники», отзывы, «Интересные факты» (видны всегда). Разделы страницы — в порядке ТВ;
+  капсулы жанров и студий, «Ещё от студии» (`VodDetails.studios/studioFilms`). На главной — ещё `UpcomingShelf`.
 - `Resources/Assets.xcassets` — иконка, акцент, фон запуска.
 
 ## Прочее
@@ -97,12 +98,13 @@
 - MPVKit 1.0.0 (mpv 0.41, LGPL-сборка) — пакет из `project.yml`.
 - `AerialTests/` — разбор раздач, файлов серий, адресов, ответов TMDb, подбор (`RecommendationsTests`), подсказки, MDBList, имена загрузок, ответы ИИ, Википедия, комната (`FeaturesTests`) (Swift Testing); `AerialUITests/ScreensTests` —
   снимки экранов и проверка воспроизведения на свободном Big Buck Bunny.
+- `docs/port-gaps.md` — сверка с приложением для ТВ: что перенесено и чего нет (с причинами).
 - `.claude/skills/` — скиллы Apple (rshankras/claude-code-apple-skills, MIT; см. `SOURCE-apple-skills.txt`).
 
 ## Данные на устройстве
 
 - UserDefaults: настройки (`parser.*`, `torrserver.*`, `tmdbProxy`, `taste.history`, `player.autoplayNext`, `mdblist.key`,
-  `mdblist.blocked`, `releases.sort`, `releases.quality`, `search.recent`, `ai.*`, `opensubs.*`, `reviews.sort`), медиатека (`library.saved`, `library.entries`,
+  `mdblist.blocked`, `mdblist.shown`, `mdblist.sources`, `episodes.overviews`, `episodes.hideSpoilers`, `releases.sort`, `releases.quality`, `search.recent`, `ai.*`, `opensubs.*`, `reviews.sort`), медиатека (`library.saved`, `library.entries`,
   `library.marks`, `library.followed`), друзья (`friends.*`), подбор (`taste.related`, `taste.relatedKey`, `taste.forYou.<раздел>`, `taste.ai*`), `feeds.fourK*`.
 - Caches: `api-cache/` (TMDb, MDBList, ИИ, Википедия, списки «Вселенных»), `images/` (картинки). Application Support: `downloads.json` — список загрузок.
 - Documents (видно в «Файлах» › На iPhone › Aerial): `logs/app.log`, `logs/mpv.log` (+ `.1` — прошлый запуск),

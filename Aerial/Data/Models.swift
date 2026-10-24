@@ -112,6 +112,20 @@ struct VodDetails: Sendable {
     var collectionTitle: String = ""
     var collection: [VodItem] = []
     var facts: [VodFact] = []
+    /// Студии TMDb (до четырёх) — капсулами рядом с жанрами; работы первой — ряд «Ещё от студии».
+    var studios: [VodStudio] = []
+    var studioFilms: [VodItem] = []
+}
+
+/// Студия TMDb: капсула открывает её работы того же вида.
+struct VodStudio: Hashable, Sendable {
+    var id: Int
+    var name: String
+
+    func section(_ kind: VodKind) -> CinemaSection {
+        CinemaSection(id: "studio-\(id)-\(kind)", title: name, path: kind == .series ? "discover/tv" : "discover/movie", kind: kind,
+                      params: ["with_companies": String(id), "sort_by": "popularity.desc", "vote_count.gte": "20"])
+    }
 }
 
 /// Отзыв зрителя TMDb.

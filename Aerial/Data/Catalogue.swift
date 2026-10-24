@@ -136,6 +136,16 @@ final class Catalogue: Sendable {
             }
         }
         details.facts = Self.facts(body, kind: item.kind, countries: details.countries)
+        details.studios = (body.productionCompanies ?? []).compactMap { company -> VodStudio? in
+            guard let id = company.id, id > 0, let name = company.name, !name.isEmpty else { return nil }
+            return VodStudio(id: id, name: name)
+        }
+        .prefix(4).map { $0 }
+        // «Ещё от студии», как на ТВ: работы первой студии того же вида; сбой ряда не мешает странице.
+        if let studio = details.studios.first {
+            let films = (try? await section(studio.section(item.kind)).items) ?? []
+            details.studioFilms = films.filter { $0.id != item.id }
+        }
         return details
     }
 

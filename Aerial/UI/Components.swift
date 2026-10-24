@@ -9,6 +9,7 @@ enum Route: Hashable {
     case download(String)
     case friends
     case universes
+    case torrents
 }
 
 extension View {
@@ -18,6 +19,7 @@ extension View {
             case .details(let item): DetailsView(item: item)
             case .section(let section, let shelf): SectionView(section: section, shelf: shelf)
             case .person(let person): PersonView(person: person)
+            case .torrents: TorrentsView()
             case .releases(let item, let episode, let runtime): ReleasesView(item: item, episode: episode, runtime: runtime)
             case .download(let hash): DownloadView(hash: hash)
             case .friends: FriendsView()

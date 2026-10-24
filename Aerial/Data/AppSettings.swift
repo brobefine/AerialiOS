@@ -45,6 +45,27 @@ final class AppSettings {
     var tasteHistory: Bool { didSet { defaults.set(tasteHistory, forKey: "taste.history") } }
     /// Следующая серия — сама через 10 с после конца серии.
     var autoplayNext: Bool { didSet { defaults.set(autoplayNext, forKey: "player.autoplayNext") } }
+    /// Оценки MDBList на странице фильма (как «Показывать оценки MDBList» ТВ) и какие источники показывать.
+    var mdblistShown: Bool { didSet { defaults.set(mdblistShown, forKey: "mdblist.shown") } }
+    var ratingSources: Set<String> { didSet { defaults.set(ratingSources.sorted(), forKey: "mdblist.sources") } }
+    /// Описания серий под названием в карточках серий.
+    var episodeOverviews: Bool { didSet { defaults.set(episodeOverviews, forKey: "episodes.overviews") } }
+    /// Скрывать спойлеры: у непросмотренных серий кадр размыт, описания нет.
+    var hideSpoilers: Bool { didSet { defaults.set(hideSpoilers, forKey: "episodes.hideSpoilers") } }
+
+    /// Источники MDBList: ключ настройки, название, пояснение — как на ТВ.
+    struct RatingSource: Sendable {
+        var key: String
+        var title: String
+        var about: String
+    }
+
+    static let ratingCatalog: [RatingSource] = [
+        RatingSource(key: "imdb", title: "IMDb", about: "Народный выбор. Взвешенная оценка зрителей со всего мира по 10-балльной шкале."),
+        RatingSource(key: "tomatoes", title: "Rotten Tomatoes", about: "Процент положительных оценок: 🍅 — кинокритики, 🍿 — обычные зрители."),
+        RatingSource(key: "metacritic", title: "Metacritic", about: "Оценка критиков: средневзвешенное рецензий ведущих изданий из 100."),
+        RatingSource(key: "letterboxd", title: "Letterboxd", about: "Выбор синефилов. Оценка сообщества любителей кино по 5-балльной шкале."),
+    ]
 
     // MARK: ИИ и сервисы
 
@@ -83,5 +104,9 @@ final class AppSettings {
         mdblistKey = defaults.string(forKey: "mdblist.key") ?? ""
         tasteHistory = defaults.object(forKey: "taste.history") as? Bool ?? true
         autoplayNext = defaults.object(forKey: "player.autoplayNext") as? Bool ?? true
+        mdblistShown = defaults.object(forKey: "mdblist.shown") as? Bool ?? true
+        ratingSources = Set(defaults.stringArray(forKey: "mdblist.sources") ?? ["imdb", "tomatoes", "metacritic", "letterboxd"])
+        episodeOverviews = defaults.object(forKey: "episodes.overviews") as? Bool ?? true
+        hideSpoilers = defaults.object(forKey: "episodes.hideSpoilers") as? Bool ?? false
     }
 }

@@ -49,6 +49,8 @@ enum PosterPalette {
 struct RatingsRow: View {
     let tmdb: Double
     let external: String
+    /// Включённые источники MDBList (`AppSettings.ratingSources`); TMDb — всегда первым.
+    var sources: Set<String> = ["imdb", "tomatoes", "metacritic", "letterboxd"]
 
     enum Kind: Int { case tmdb, imdb, tomato, popcorn, metacritic, letterboxd }
 
@@ -92,7 +94,15 @@ struct RatingsRow: View {
     }
 
     var body: some View {
-        let entries = Self.entries(tmdb: tmdb, external: external)
+        let entries = Self.entries(tmdb: tmdb, external: external).filter { entry in
+            switch entry.kind {
+            case .tmdb: true
+            case .imdb: sources.contains("imdb")
+            case .tomato, .popcorn: sources.contains("tomatoes")
+            case .metacritic: sources.contains("metacritic")
+            case .letterboxd: sources.contains("letterboxd")
+            }
+        }
         let tomatoes = entries.filter { $0.kind == .tomato || $0.kind == .popcorn }
         ViewThatFits(in: .horizontal) {
             row(entries, tomatoes, ringSize: 34, badge: 22, gap: 14)

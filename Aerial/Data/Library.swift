@@ -165,6 +165,20 @@ final class Library {
         persist(entries, "library.entries")
     }
 
+    /// «Очистить «Продолжить»»: недосмотренное уходит из ряда, досмотренное остаётся в истории.
+    func clearContinue() {
+        entries = entries.filter { !$0.value.resumable }
+        tasteRevision += 1
+        persist(entries, "library.entries")
+    }
+
+    /// «Очистить историю просмотра»: весь прогресс; оценки и «Мой список» остаются.
+    func clearHistory() {
+        entries = [:]
+        tasteRevision += 1
+        persist(entries, "library.entries")
+    }
+
     func forget(_ entry: WatchEntry) {
         entries[entry.key] = nil
         tasteRevision += 1

@@ -130,6 +130,21 @@ struct SettingsView: View {
     @ViewBuilder private var playerSection: some View {
         @Bindable var settings = settings
         Section {
+            Toggle("Описания серий", isOn: $settings.episodeOverviews)
+            Toggle("Скрывать спойлеры серий", isOn: $settings.hideSpoilers)
+        } header: {
+            Text("Серии")
+        } footer: {
+            Text("Спойлеры: у непросмотренных серий кадр размыт, а описание скрыто.")
+        }
+        Section {
+            Button("Сбросить фильтры и сортировку раздач") {
+                UserDefaults.standard.removeObject(forKey: "releases.sort")
+                UserDefaults.standard.removeObject(forKey: "releases.quality")
+            }
+            Button("Очистить историю поиска") { UserDefaults.standard.removeObject(forKey: "search.recent") }
+        }
+        Section {
             Toggle("Следующая серия автоматически", isOn: $settings.autoplayNext)
         } header: {
             Text("Плеер")
@@ -143,6 +158,15 @@ struct SettingsView: View {
         Section {
             Toggle("Учитывать историю просмотра", isOn: $settings.tasteHistory)
             LabeledContent("Оценок", value: String(library.marks.count))
+            Button("Очистить «Продолжить»", role: .destructive) { library.clearContinue() }
+                .disabled(library.continueWatching.isEmpty)
+            Button("Очистить историю просмотра", role: .destructive) { library.clearHistory() }
+                .disabled(library.entries.isEmpty)
+            Button("Начать рекомендации с нуля", role: .destructive) {
+                library.clearHistory()
+                library.clearMarks()
+                taste.clearAI()
+            }
             Button("Сбросить оценки", role: .destructive) {
                 library.clearMarks()
                 taste.clearAI()
@@ -172,6 +196,25 @@ struct SettingsView: View {
             Text("Каталог")
         } footer: {
             Text("Если TMDb недоступен напрямую, запросы идут через этот Worker. Бесплатный ключ MDBList — на mdblist.com, в разделе Preferences: с ним на странице фильма видны оценки IMDb, Rotten Tomatoes и Metacritic.")
+        }
+        Section {
+            Toggle("Показывать оценки MDBList", isOn: $settings.mdblistShown)
+            if settings.mdblistShown {
+                ForEach(AppSettings.ratingCatalog, id: \.key) { source in
+                    Toggle(isOn: Binding(get: { settings.ratingSources.contains(source.key) }, set: { on in
+                        if on { settings.ratingSources.insert(source.key) } else { settings.ratingSources.remove(source.key) }
+                    })) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(source.title)
+                            Text(source.about).font(.caption).foregroundStyle(Theme.secondaryText)
+                        }
+                    }
+                }
+            }
+        } header: {
+            Text("Оценки")
+        } footer: {
+            Text("TMDb всегда первым: оценка пользователей кинобазы из 10.")
         }
     }
 

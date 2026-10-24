@@ -92,6 +92,17 @@ struct TorrServerClient: Sendable {
         return try Self.parse(HTTP.json(data))
     }
 
+    /// Раздачи в базе сервера — страница «Торренты».
+    func list() async throws -> [TorrentInfo] {
+        let data = try await HTTP.postJSON(base.appending(path: "torrents"), body: ["action": "list"], timeout: 10, headers: headers)
+        let rows = (try JSONSerialization.jsonObject(with: data) as? [[String: Any]]) ?? []
+        return rows.compactMap { try? Self.parse($0) }
+    }
+
+    func remove(_ hash: String) async throws {
+        _ = try await HTTP.postJSON(base.appending(path: "torrents"), body: ["action": "rem", "hash": hash], timeout: 10, headers: headers)
+    }
+
     /// `/stream?stat` будит раздачи, сохранённые в базе сервера; `/torrents get` вернул бы только текущее состояние.
     func get(_ hash: String, timeout: TimeInterval = 15) async throws -> TorrentInfo {
         try await Self.parse(stat(hash, timeout: timeout))

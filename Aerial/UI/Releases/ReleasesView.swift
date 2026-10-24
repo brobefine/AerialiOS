@@ -23,6 +23,12 @@ struct ReleasesView: View {
     @State private var opening: Release?
     @State private var picking: Picking?
     @State private var failure: String?
+    /// Фильтры раздач, как на ТВ (`ReleaseFilter`): перевод, HDR, Dolby Vision, субтитры, трекер; пусто — любое.
+    @State private var voiceFilter = ""
+    @State private var trackerFilter = ""
+    @State private var hdrOnly = false
+    @State private var dvOnly = false
+    @State private var subsOnly = false
 
     enum Sort: String, CaseIterable, Identifiable {
         case seeds = "По сидам"
@@ -48,7 +54,12 @@ struct ReleasesView: View {
     }
 
     private func shown(_ filter: String) -> [Release] {
-        let filtered = filter == Self.all ? releases : releases.filter { infos[$0.id]?.quality == filter }
+        let filtered = (filter == Self.all ? releases : releases.filter { infos[$0.id]?.quality == filter }).filter { release in
+            let info = infos[release.id] ?? release.info
+            return (voiceFilter.isEmpty || info.audio.contains(voiceFilter))
+                && (trackerFilter.isEmpty || release.tracker == trackerFilter)
+                && (!hdrOnly || info.range != nil) && (!dvOnly || info.dolbyVision) && (!subsOnly || info.subtitles)
+        }
         let sorted: [Release] = switch sort {
         case .seeds: filtered.sorted { $0.seeds > $1.seeds }
         case .size: filtered.sorted { $0.bytes > $1.bytes }
@@ -104,6 +115,39 @@ struct ReleasesView: View {
         .navigationTitle(episode.map { "\(item.title) · \($0.code)" } ?? item.title)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    let voices = Dictionary(grouping: infos.values.flatMap(\.audio), by: { $0 })
+                        .sorted { $0.value.count > $1.value.count }.map(\.key)
+                    if !voices.isEmpty {
+                        Picker("Перевод", selection: $voiceFilter) {
+                            Text("Любой").tag("")
+                            ForEach(voices, id: \.self) { Text($0).tag($0) }
+                        }
+                        .pickerStyle(.menu)
+                    }
+                    let trackers = Array(Set(releases.map(\.tracker))).filter { !$0.isEmpty }.sorted()
+                    if trackers.count > 1 {
+                        Picker("Трекер", selection: $trackerFilter) {
+                            Text("Любой").tag("")
+                            ForEach(trackers, id: \.self) { Text($0).tag($0) }
+                        }
+                        .pickerStyle(.menu)
+                    }
+                    Toggle("HDR", isOn: $hdrOnly)
+                    Toggle("Dolby Vision", isOn: $dvOnly)
+                    Toggle("С субтитрами", isOn: $subsOnly)
+                    if !voiceFilter.isEmpty || !trackerFilter.isEmpty || hdrOnly || dvOnly || subsOnly {
+                        Button("Сбросить фильтры", role: .destructive) {
+                            voiceFilter = ""; trackerFilter = ""; hdrOnly = false; dvOnly = false; subsOnly = false
+                        }
+                    }
+                } label: {
+                    Image(systemName: voiceFilter.isEmpty && trackerFilter.isEmpty && !hdrOnly && !dvOnly && !subsOnly
+                          ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+                }
+                .accessibilityLabel("Фильтры")
+            }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Picker("Сортировка", selection: $sort) {
@@ -358,7 +402,7 @@ private struct TightLabel: LabelStyle {
 
 /// Окно «Смотреть» перед плеером, как на ТВ: озвучка из названия раздачи, сезон и серия — из файлов раздачи
 /// (серии подписаны по TMDb); у фильма из нескольких файлов — выбор файла. Лист на стекле снизу.
-private struct WatchSheet: View {
+struct WatchSheet: View {
     let item: VodItem
     let info: TorrentInfo
     let voices: [String]
