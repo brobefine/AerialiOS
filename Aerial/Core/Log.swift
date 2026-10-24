@@ -1,7 +1,8 @@
 import Foundation
 import OSLog
 
-/// Журнал в файлы, как у ТВ: `Documents/logs/app.log` (прошлый запуск — `app.log.1`), `mpv.log` — журнал плеера.
+/// Журнал в файлы, как у ТВ: `Documents/logs/app.log` (прошлый запуск — `app.log.1`), `mpv.log` — журнал плеера,
+/// `perf.log` — замеры [PerfMonitor], `metrics/` — отчёты MetricKit (энергия, зависания, падения).
 /// Папка видна в «Файлах» (На iPhone › Aerial › logs) — оттуда журнал можно прислать.
 enum Log {
     static let directory: URL = {
@@ -14,6 +15,7 @@ enum Log {
     private static let logger = Logger(subsystem: "com.aerial.ios", category: "app")
     private static let app = LogFile(name: "app.log", limit: 4 << 20)
     private static let mpv = LogFile(name: "mpv.log", limit: 8 << 20)
+    private static let perfFile = LogFile(name: "perf.log", limit: 4 << 20)
     private static let stamp: DateFormatter = {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
@@ -26,6 +28,7 @@ enum Log {
         queue.sync {
             app.rotate()
             mpv.rotate()
+            perfFile.rotate()
         }
         let info = Bundle.main.infoDictionary
         note("ЗАПУСК", "Aerial \(info?["CFBundleShortVersionString"] ?? "?") (\(info?["CFBundleVersion"] ?? "?")), iOS \(ProcessInfo.processInfo.operatingSystemVersionString)")
@@ -35,6 +38,12 @@ enum Log {
         logger.info("\(tag, privacy: .public): \(message, privacy: .public)")
         let line = "\(stamp.string(from: .now)) \(tag): \(message)\n"
         queue.async { app.append(line) }
+    }
+
+    /// Замеры производительности и энергии ([PerfMonitor]) — `perf.log`.
+    static func perf(_ line: String) {
+        let text = "\(stamp.string(from: .now)) \(line)\n"
+        queue.async { perfFile.append(text) }
     }
 
     static func player(_ line: String) {

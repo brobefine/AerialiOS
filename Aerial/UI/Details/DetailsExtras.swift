@@ -24,7 +24,9 @@ struct RelativesSection: View {
     private static let logKey = "ai.relativeLog"
 
     var body: some View {
-        Group {
+        // Не `Group`: у пустого `Group` модификаторы не срабатывают — `.task` не запускался, и раздел
+        // (отзывы, «Духовные родственники») не загружался никогда.
+        VStack(alignment: .leading, spacing: 0) {
             if !items.isEmpty || loading || failure != nil {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 6) {
@@ -234,7 +236,9 @@ struct ReviewsSection: View {
     }
 
     var body: some View {
-        Group {
+        // Не `Group`: у пустого `Group` модификаторы не срабатывают — `.task` не запускался, и раздел
+        // (отзывы, «Духовные родственники») не загружался никогда.
+        VStack(alignment: .leading, spacing: 0) {
             if !reviews.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {

@@ -170,7 +170,8 @@ private struct ShelfPage: View {
     }
 }
 
-/// Разделы кинотеки капсулами: «Всё», «Фильмы», «Сериалы», «Мультфильмы», «Мультсериалы»; выбранный — всегда на виду.
+/// Разделы кинотеки капсулами: «Всё», «Фильмы», «Сериалы», «Мультфильмы», «Мультсериалы», «Вселенные»; выбранный —
+/// всегда на виду.
 struct ShelfPicker: View {
     @Binding var selection: VodShelf
 
@@ -185,10 +186,24 @@ struct ShelfPicker: View {
                         .id(shelf)
                         .accessibilityIdentifier("shelf-\(shelf.rawValue)")
                     }
+                    // «Вселенные» — тоже раздел главной, как пункт «Кинотека › Вселенные» на ТВ.
+                    NavigationLink(value: Route.universes) {
+                        Label("Вселенные", systemImage: "circle.hexagongrid")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 16)
+                            .frame(height: 36)
+                            .glass(in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("shelf-universes")
                 }
             }
             .contentMargins(.horizontal, 16, for: .scrollContent)
             .scrollIndicators(.hidden)
+            // Высота строго по капсулам: горизонтальная прокрутка без неё растягивалась на весь экран поверх страниц —
+            // перехватывала касания, а `scrollTo(.center)` при выборе опускал капсулы вниз.
+            .frame(height: 36)
             .onChange(of: selection) { _, value in
                 withAnimation(.snappy) { proxy.scrollTo(value, anchor: .center) }
             }
@@ -212,7 +227,7 @@ struct Chip: View {
             if selected {
                 label.background(.white, in: Capsule())
             } else {
-                label.glass(in: Capsule(), interactive: true)
+                label.glass(in: Capsule())
             }
         }
         .buttonStyle(.plain)

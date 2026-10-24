@@ -225,12 +225,13 @@ struct PersonView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
-                HStack(alignment: .top, spacing: 16) {
+                HStack(alignment: .center, spacing: 16) {
+                    // Фото круглое, как у актёров на странице фильма и в приложении для ТВ.
                     Color.clear
-                        .frame(width: 110, height: 160)
+                        .frame(width: 120, height: 120)
                         .overlay { CachedImage(path: info?.photo ?? person.photo, size: "w342", pixelWidth: 360) }
                         .background(Theme.card)
-                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .clipShape(Circle())
                     VStack(alignment: .leading, spacing: 6) {
                         Text(info?.name ?? person.name).font(.title2.weight(.bold))
                         if let info {
@@ -284,7 +285,7 @@ struct LibraryView: View {
                     if !Downloads.shared.jobs.isEmpty { DownloadsShelf() }
                     if !library.saved.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {
-                            ShelfHeader(title: "Мой список")
+                            ShelfHeader(title: "Смотреть позже")
                             PosterGrid(items: library.saved)
                         }
                     }

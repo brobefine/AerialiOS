@@ -133,7 +133,7 @@ struct TasteMenuItems: View {
     }
 }
 
-/// Меню постера по долгому нажатию: «Мой список» и оценка.
+/// «Мой список», как на ТВ: «Смотреть позже» и оценка («Не моё», «Нравится», «Обожаю»); меню постера и кнопка страницы.
 struct PosterMenu: View {
     let item: VodItem
 
@@ -141,7 +141,14 @@ struct PosterMenu: View {
 
     var body: some View {
         Button { library.toggleSaved(item) } label: {
-            library.isSaved(item) ? Label("Убрать из списка", systemImage: "checkmark") : Label("В мой список", systemImage: "plus")
+            Label(library.isSaved(item) ? "Убрать из «Смотреть позже»" : "Смотреть позже",
+                  systemImage: library.isSaved(item) ? "bookmark.fill" : "bookmark")
+        }
+        // Как на ТВ: сразу после «Смотреть позже» — убрать из «Продолжить».
+        if let entry = library.latest(for: item), entry.resumable {
+            Button(role: .destructive) { library.forget(entry) } label: {
+                Label("Убрать из «Продолжить»", systemImage: "xmark")
+            }
         }
         Section("Оценка") { TasteMenuItems(item: item) }
     }
@@ -327,7 +334,8 @@ struct FlowLayout: Layout {
         for row in arrange(bounds.width, subviews) {
             var x = bounds.minX
             for index in row.indices {
-                let size = subviews[index].sizeThatFits(.unspecified)
+                // Не шире строки: длинная капсула иначе вылезала за экран и раздвигала всю страницу.
+                let size = clamped(subviews[index], bounds.width)
                 subviews[index].place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
                 x += size.width + spacing
             }
@@ -335,11 +343,17 @@ struct FlowLayout: Layout {
         }
     }
 
+    private func clamped(_ subview: LayoutSubview, _ width: CGFloat) -> CGSize {
+        let ideal = subview.sizeThatFits(.unspecified)
+        guard width.isFinite, ideal.width > width else { return ideal }
+        return subview.sizeThatFits(ProposedViewSize(width: width, height: nil))
+    }
+
     private func arrange(_ width: CGFloat, _ subviews: Subviews) -> [(indices: [Int], width: CGFloat, height: CGFloat)] {
         var rows: [(indices: [Int], width: CGFloat, height: CGFloat)] = []
         var current: (indices: [Int], width: CGFloat, height: CGFloat) = ([], 0, 0)
         for index in subviews.indices {
-            let size = subviews[index].sizeThatFits(.unspecified)
+            let size = clamped(subviews[index], width)
             let needed = current.indices.isEmpty ? size.width : current.width + spacing + size.width
             if needed > width, !current.indices.isEmpty {
                 rows.append(current)

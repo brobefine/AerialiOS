@@ -44,7 +44,8 @@ struct DetailsView: View {
                             .background { frost }
                         sections
                             .padding(.top, 8)
-                            .padding(.bottom, 32)
+                            // Под нижней пилюлей вкладок: без запаса последние разделы не долистывались.
+                            .padding(.bottom, geometry.safeAreaInsets.bottom + 96)
                             // Чёрный начинается резкой границей сразу под размытием.
                             .background(Theme.background)
                     }
@@ -187,8 +188,12 @@ struct DetailsView: View {
             .font(.caption.weight(.semibold))
             .foregroundStyle(.white.opacity(strong ? 0.95 : 0.75))
             .lineLimit(1)
+            .truncationMode(.tail)
             .padding(.horizontal, 10)
             .frame(height: 26)
+            // Длинные названия студий («Tianjin Maoyan Weiying Culture Media …») растягивали всю страницу шире экрана —
+            // съезжали название и кнопки.
+            .frame(maxWidth: 200)
             .background(.white.opacity(strong ? 0.2 : 0.08), in: Capsule())
     }
 
@@ -203,7 +208,8 @@ struct DetailsView: View {
         if let details, !details.endYear.isEmpty, details.endYear != year { year += "–\(details.endYear)" }
         let parts: [String] = [
             shown.kindLabel, year, Format.runtime(minutes: details?.runtimeMinutes ?? 0), details?.certification ?? "",
-            shown.genres.prefix(3).joined(separator: ", "), details?.status ?? "",
+            // Жанры — только капсулами ниже (их можно открыть), как на ТВ; в строке они повторялись.
+            details?.status ?? "",
         ]
         return parts.filter { !$0.isEmpty }.joined(separator: " · ")
     }
@@ -268,19 +274,21 @@ struct DetailsView: View {
                     .buttonStyle(CircleGlassButtonStyle(tint: accent))
                     .accessibilityLabel("Трейлер")
             }
-            Button { library.toggleSaved(shown) } label: {
-                Image(systemName: library.isSaved(item) ? "checkmark" : "plus")
-            }
-            .buttonStyle(CircleGlassButtonStyle(tint: accent))
-            .accessibilityLabel(library.isSaved(item) ? "Убрать из списка" : "В мой список")
-            Menu { TasteMenuItems(item: shown) } label: {
-                Image(systemName: TasteLevel.symbol(library.rating(item)))
+            // «Мой список», как на ТВ: одна кнопка — «Смотреть позже» и оценка. Значок — выставленная оценка, иначе
+            // закладка; что-то выбрано — кнопка залита цветом постера, как «Смотреть».
+            let rating = library.rating(item)
+            let marked = rating != 0 || library.isSaved(item)
+            Menu { PosterMenu(item: shown) } label: {
+                Image(systemName: rating != 0 ? TasteLevel.symbol(rating) : marked ? "bookmark.fill" : "bookmark")
                     .font(.system(size: 19, weight: .semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(marked && accent == nil ? .black : .white)
                     .frame(width: 48, height: 48)
-                    .glass(in: Circle(), tint: accent)
+                    .background {
+                        if marked { Circle().fill(accent ?? .white) }
+                    }
+                    .glass(in: Circle(), tint: marked ? nil : accent?.opacity(0.55))
             }
-            .accessibilityLabel("Оценка")
+            .accessibilityLabel("Мой список")
             .accessibilityIdentifier("details-rate")
         }
     }
@@ -342,10 +350,19 @@ struct DetailsView: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("episode")
+                        // Меню должно быть всегда: без пунктов iOS не показывает и окно с описанием — так оно
+                        // открывалось только у начатых серий.
                         .contextMenu {
-                            if let entry = library.entry(item, episode) {
+                            if let entry = library.entry(item, episode), entry.fraction > 0 {
                                 Button(role: .destructive) { library.forget(entry) } label: {
                                     Label("Убрать из «Продолжить»", systemImage: "eye.slash")
+                                }
+                            }
+                            if library.entry(item, episode).map({ $0.fraction < 0.9 }) ?? true {
+                                Button {
+                                    library.record(item: item, episode: episode, position: 1, duration: 1, source: nil)
+                                } label: {
+                                    Label("Отметить просмотренной", systemImage: "checkmark.circle")
                                 }
                             }
                         } preview: {
@@ -373,6 +390,16 @@ struct DetailsView: View {
                         NavigationLink(value: Route.person(person)) { PersonBadge(person: person) }
                             .buttonStyle(.plain)
                             .accessibilityIdentifier("person")
+                            // Удержание — карточка человека, как на ТВ: фото, сведения, биография; подписка в меню,
+                            // фильмография — касанием.
+                            .contextMenu {
+                                Button { library.toggleFollow(person) } label: {
+                                    Label(library.isFollowed(person) ? "Вы подписаны" : "Подписаться",
+                                          systemImage: library.isFollowed(person) ? "checkmark.circle.fill" : "person.badge.plus")
+                                }
+                            } preview: {
+                                PersonPreview(person: person)
+                            }
                     }
                 }
             }
@@ -511,6 +538,41 @@ private struct EpisodePreview: View {
         .glass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .foregroundStyle(.white)
+    }
+}
+
+/// Удержание на актёре: фото, сведения и биография, как карточка человека на ТВ.
+private struct PersonPreview: View {
+    let person: VodPerson
+
+    @State private var info: VodPersonInfo?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 14) {
+                Color.clear
+                    .frame(width: 72, height: 72)
+                    .overlay { CachedImage(path: info?.photo ?? person.photo, size: "w185", pixelWidth: 240) }
+                    .background(Theme.card)
+                    .clipShape(Circle())
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(info?.name ?? person.name).font(.headline)
+                    let facts = [info.map { $0.birthday.isEmpty ? "" : Format.date($0.birthday) } ?? "", info?.place ?? ""]
+                        .filter { !$0.isEmpty }.joined(separator: " · ")
+                    if !facts.isEmpty { Text(facts).font(.caption).foregroundStyle(Theme.secondaryText) }
+                    if !person.role.isEmpty { Text(person.role).font(.caption).foregroundStyle(Theme.secondaryText) }
+                }
+            }
+            Text(info.map { $0.biography.isEmpty ? "Биографии на TMDb нет." : $0.biography } ?? "Загружаем…")
+                .font(.subheadline)
+                .lineLimit(12)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(18)
+        .frame(width: 340, alignment: .leading)
+        .glass(in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .foregroundStyle(.white)
+        .task { if info == nil { info = try? await Catalogue.shared.person(person) } }
     }
 }
 

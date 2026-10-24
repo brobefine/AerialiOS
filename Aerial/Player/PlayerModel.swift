@@ -69,6 +69,7 @@ final class Playback {
         PictureInPicture.shared.stop()
         guard controller == nil, let settings, let library, let presenter = Self.topController() else { return }
         self.request = Self.resolved(request)
+        PerfMonitor.activity = "плеер: \(request.title)\(self.request?.localFile == nil ? "" : " (с диска)")"
         Orientation.allowLandscape(true)
         let view = PlayerScreen { [weak self] in self?.close() }
             .environment(settings)
@@ -89,6 +90,7 @@ final class Playback {
             return
         }
         self.controller = nil
+        PerfMonitor.activity = ""
         controller.dismiss(animated: true) { [weak self] in
             Orientation.allowLandscape(false)
             self?.request = nil

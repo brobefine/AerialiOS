@@ -22,6 +22,8 @@ struct ReleasesView: View {
     @State private var notice: String?
     @State private var opening: Release?
     @State private var picking: Picking?
+    /// Плеер после закрытия окна «Смотреть»: показ поверх ещё закрывающегося листа iOS молча отклоняла.
+    @State private var afterSheet: (() -> Void)?
     @State private var failure: String?
     /// Фильтры раздач, как на ТВ (`ReleaseFilter`): перевод, HDR, Dolby Vision, субтитры, трекер; пусто — любое.
     @State private var voiceFilter = ""
@@ -121,6 +123,7 @@ struct ReleasesView: View {
                     }
                     .contentMargins(.horizontal, 16, for: .scrollContent)
                     .scrollIndicators(.hidden)
+                    .frame(height: 36)
                     .padding(.vertical, 8)
                 }
             }
@@ -210,11 +213,14 @@ struct ReleasesView: View {
             // Свайп и капсула — выбор зрителя: в следующий раз страница откроется на этом качестве.
             if !releases.isEmpty { preferredQuality = value == Self.all ? "" : value }
         }
-        .sheet(item: $picking) { picking in
+        .sheet(item: $picking, onDismiss: {
+            afterSheet?()
+            afterSheet = nil
+        }) { picking in
             WatchSheet(item: item, info: picking.info, voices: (infos[picking.release.id] ?? picking.release.info).audio,
                        episode: episode) { file, chosen, voice in
+                afterSheet = { play(picking.release, file, episode: chosen, voice: voice) }
                 self.picking = nil
-                play(picking.release, file, episode: chosen, voice: voice)
             }
         }
         .alert("Не удалось открыть раздачу", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
@@ -540,7 +546,6 @@ struct WatchSheet: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .presentationDetents([.medium, .large])
-        .presentationBackground(.ultraThinMaterial)
         .onAppear(perform: preselect)
         .onChange(of: season) { _, value in
             if placed.first(where: { $0.file.index == fileIndex })?.season != value {

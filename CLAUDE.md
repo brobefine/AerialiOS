@@ -42,7 +42,8 @@
   встроенный TorrServer в фоне не останавливается, загрузки при возврате продолжаются); `RootView` — вкладки в нижней
   пилюле: «Главная», «Медиатека», «Настройки», «Поиск»; плеер показывает `Playback` через UIKit (`PlayerHostingController`,
   открывается альбомным, поворачивается и в книжную; закрыть — крестик или смахнуть вниз); `UITestHooks` — запуск из UI-тестов (`-uiTest`, `-smokeLink`).
-- `Core/` — `BuildKeys` (ключи сборки из Info.plist), `Log` (журналы `Documents/logs`), `HTTP`, `DiskCache` (ответы TMDb: срок по виду запроса, при сбое — старый
+- `Core/` — `BuildKeys` (ключи сборки из Info.plist), `Log` (журналы `Documents/logs`), `PerfMonitor` (`perf.log`: раз в 15 с
+  ЦП, память, нагрев, заряд и что идёт; «ЗАТОР» — главный поток молчал > 250 мс; `logs/metrics/` — отчёты и диагностика MetricKit), `HTTP`, `DiskCache` (ответы TMDb: срок по виду запроса, при сбое — старый
   ответ), `Text` (`Rx` — NSRegularExpression с просмотром назад; `SearchText`, `Suggestions` — подсказки поиска с раскладкой и опечатками,
   `Format`).
 - `Data/` — `Models` (`VodItem`, `VodShelf.accepts`, `CinemaSection`), `TMDb` (прямой API → Worker-прокси, последний
@@ -78,8 +79,8 @@
   `Palette` (`PosterPalette` — цвет постера, перенос `VodPalette`: им окрашены кнопки страницы фильма и плеер; `RatingsRow` —
   оценки знаками источников и кольцами, как `RatingsRow` ТВ), `CachedImage` (`ImageLoader`: память → диск → сеть,
   уменьшение при декодировании), `Components` (`Route`, `PosterCard`, `RatingRing`, `RankedPoster`, `PosterShelf`,
-  `ContinueShelf`, `FlowLayout`, `TasteLevel`/`TasteMenuItems` — оценка, `PosterMenu` — меню постера по долгому нажатию),
-  `Home/` (главная без баннера: разделы — страницы `TabView` во весь экран (отступы под капсулы и пилюлю — полями прокрутки), листаются свайпом и капсулами `ShelfPicker`/`Chip`;
+  `ContinueShelf`, `FlowLayout`, `TasteLevel`/`TasteMenuItems` — оценка, `PosterMenu` — «Мой список» как на ТВ: «Смотреть позже», убрать из «Продолжить», оценка; им же кнопка страницы фильма),
+  `Home/` (главная без баннера: разделы — страницы `TabView` во весь экран (отступы под капсулы и пилюлю — полями прокрутки), листаются свайпом и капсулами `ShelfPicker`/`Chip` (последняя — «Вселенные»);
   под «Продолжить» — «Вам понравится?» и «Потому что…»; `TitleArt`), `Details/` (содержимое скользит поверх неподвижного постера, под постером — его
   зеркало в размытии, под информацией — живое размытие `frost` до самого низа, дальше чёрный с резкой границей; оценки одной строкой (есть MDBList — без числа голосов TMDb);
   долгое нажатие на серию — описание целиком; серии с зеркальным размытием кадра), `Releases/`
@@ -110,5 +111,5 @@
   `mdblist.blocked`, `mdblist.shown`, `mdblist.sources`, `episodes.overviews`, `episodes.hideSpoilers`, `ui.posterSize`, `ui.actorPhoto`, `ui.titleLogos`, `releases.sort`, `releases.quality`, `search.recent`, `ai.*`, `opensubs.*`, `reviews.sort`), медиатека (`library.saved`, `library.entries`,
   `library.marks`, `library.followed`), друзья (`friends.*`), подбор (`taste.related`, `taste.relatedKey`, `taste.forYou.<раздел>`, `taste.ai*`), `feeds.fourK*`.
 - Caches: `api-cache/` (TMDb, MDBList, ИИ, Википедия, списки «Вселенных»), `images/` (картинки). Application Support: `downloads.json` — список загрузок.
-- Documents (видно в «Файлах» › На iPhone › Aerial): `logs/app.log`, `logs/mpv.log` (+ `.1` — прошлый запуск),
+- Documents (видно в «Файлах» › На iPhone › Aerial): `logs/app.log`, `logs/mpv.log`, `logs/perf.log` (+ `.1` — прошлый запуск), `logs/metrics/` (MetricKit),
   `TorrServer/` (база и журнал встроенного сервера), `Downloads/` (скачанные фильмы и серии; без резервной копии iCloud).

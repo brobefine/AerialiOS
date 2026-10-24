@@ -37,6 +37,7 @@ struct AerialApp: App {
         .onChange(of: scenePhase) { _, phase in
             switch phase {
             case .background:
+                PerfMonitor.shared.pause()
                 Friends.shared.setForeground(false)
                 Log.note("ЖИЗНЬ", "в фоне\(playback.request == nil ? "" : ", идёт фильм")")
                 // Сервер не останавливаем: повторный запуск движка Go в том же процессе обрывал приложение при
@@ -44,6 +45,7 @@ struct AerialApp: App {
                 if Downloads.shared.busy { Downloads.shared.enterBackground() }
             case .active:
                 Log.note("ЖИЗНЬ", "на экране")
+                PerfMonitor.shared.resume()
                 Friends.shared.setForeground(true)
                 Task {
                     await Torrents.warmUp(settings)
@@ -87,6 +89,7 @@ struct RootView: View {
             Downloads.shared.attach(settings)
             Friends.shared.setForeground(true)
             UITestHooks.start(playback)
+            PerfMonitor.shared.start()
         }
     }
 }

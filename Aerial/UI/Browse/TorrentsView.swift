@@ -13,6 +13,7 @@ struct TorrentsView: View {
     @State private var opening: String?
     @State private var picking: Picking?
     @State private var failure: String?
+    @State private var afterSheet: (() -> Void)?
 
     struct Picking: Identifiable {
         let item: VodItem
@@ -76,13 +77,16 @@ struct TorrentsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }
         .task { await load() }
-        .sheet(item: $picking) { picking in
+        .sheet(item: $picking, onDismiss: {
+            afterSheet?()
+            afterSheet = nil
+        }) { picking in
             WatchSheet(item: picking.item, info: picking.info, voices: [], episode: nil) { file, episode, voice in
-                self.picking = nil
                 var request = PlaybackRequest(item: picking.item, episode: episode, link: "magnet:?xt=urn:btih:\(picking.info.hash)",
                                               fileIndex: file.index, releaseTitle: picking.info.title)
                 request.voice = voice
-                playback.play(request)
+                afterSheet = { playback.play(request) }
+                self.picking = nil
             }
         }
         .alert("Не удалось", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {

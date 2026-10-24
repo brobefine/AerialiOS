@@ -221,6 +221,7 @@ final class Downloads {
         while !Task.isCancelled, let settings {
             guard let job = jobs.first(where: { !$0.paused && $0.failure == nil && !complete($0) }) else { break }
             active = job.hash
+            PerfMonitor.activity = "загрузка: \(job.item.title)"
             do {
                 let client = try await Torrents.client(settings)
                 // Раздача могла уйти из сервера после перезапуска — добавляем снова (по хэшу быстро).
@@ -252,6 +253,7 @@ final class Downloads {
         }
         active = nil
         rate = 0
+        PerfMonitor.activity = ""
         DownloadLive.shared.end()
         endBackground()
     }
