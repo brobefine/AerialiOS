@@ -236,7 +236,7 @@ final class Downloads {
                         guard let self else { return }
                         done[job.hash] = before + written
                         DownloadLive.shared.show(job, done: before + written, rate: rate,
-                                                 left: jobs.filter { !$0.paused && $0.failure == nil && !complete($0) }.count)
+                                                 left: jobs.filter { !$0.paused && $0.failure == nil && !self.complete($0) }.count)
                     }
                     done[job.hash] = onDisk(job)
                 }
