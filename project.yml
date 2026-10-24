@@ -27,7 +27,10 @@ targets:
     platform: iOS
     sources:
       - path: Aerial
+      - path: Shared
     dependencies:
+      # Виджет Live Activity загрузок (Dynamic Island) — вложен в приложение.
+      - target: AerialWidgets
       - package: MPVKit
         product: MPVKit
       - package: TorrServerKit
@@ -57,6 +60,8 @@ targets:
           - audio
         # Журналы (logs/) и данные TorrServer видны в «Файлах»: На iPhone › Aerial.
         UIFileSharingEnabled: true
+        # Загрузки в Dynamic Island и на экране блокировки.
+        NSSupportsLiveActivities: true
         LSSupportsOpeningDocumentsInPlace: true
         NSAppTransportSecurity:
           NSAllowsArbitraryLoads: true
@@ -76,6 +81,27 @@ targets:
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
         CODE_SIGN_STYLE: Automatic
         ENABLE_PREVIEWS: YES
+  AerialWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: AerialWidgets
+      - path: Shared
+    info:
+      path: Config/Widgets-Info.plist
+      properties:
+        CFBundleDisplayName: Aerial
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.aerial.ios.widgets
+        PRODUCT_NAME: AerialWidgets
+        TARGETED_DEVICE_FAMILY: "1,2"
+        CODE_SIGN_STYLE: Automatic
+        SKIP_INSTALL: YES
   AerialTests:
     type: bundle.unit-test
     platform: iOS

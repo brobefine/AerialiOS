@@ -62,7 +62,7 @@
   `Torrents` (`EmbeddedTorrServer` — 127.0.0.1:18090, запускается один раз за жизнь процесса — остановка и повторный
   запуск движка Go обрывали приложение при возврате из фона; настройки кэша; выбор встроенный/внешний),
   `Release` (`Release`, `ReleaseInfo` — разбор названия, `EpisodeMatch` — файл серии), `ReleaseSearch` (JacRed exact →
-  Jackett, плюс `Torrentio`), `Downloads` (очередь загрузок: файл раздачи с TorrServer → `.part` с докачкой Range
+  Jackett, плюс `Torrentio`), `DownloadLive` (загрузка в Dynamic Island — Live Activity), `ReleaseFacts` (трекеры, год, 3D, языки раздачи для фильтров), `Downloads` (очередь загрузок: файл раздачи с TorrServer → `.part` с докачкой Range
   (`FileFetcher`) → `Documents/Downloads/<работа>`; `localURL` — скачанный файл, `Playback` играет его с диска;
   в фоне iOS даёт полминуты, при возврате очередь продолжается).
 - `Player/` — `MPVCore` (libmpv: опции, события в главный поток, команды; `MPVViewController` — слой Metal),
@@ -73,7 +73,7 @@
   `WatchParty` (комната: WebSocket к `party/<код>`, действия ещё и POST с повтором до подтверждения, сторож связи;
   `PlayerModel` сверяет ход раз в секунду — `startPartySync`), `PartyViews` (уведомления и реакции поверх видео,
   `PartySheet` — комната, чат; `FriendsView`), `NowPlaying` (экран блокировки и
-  «Пункт управления»).
+  «Пункт управления»), `PictureInPicture` (окно PiP через AVPlayer тем же потоком — только MP4/MOV/M4V; развернули — плеер Aerial с той же позиции).
 - `UI/` — `Theme` (цвета, стекло iOS 26 с запасным материалом и окраской; интерактивное стекло не используется — съедало касания),
   `Palette` (`PosterPalette` — цвет постера, перенос `VodPalette`: им окрашены кнопки страницы фильма и плеер; `RatingsRow` —
   оценки знаками источников и кольцами, как `RatingsRow` ТВ), `CachedImage` (`ImageLoader`: память → диск → сеть,
@@ -87,11 +87,14 @@
   озвучка уходит в плеер `PlaybackRequest.voice`; карточки, фильтр качества — страницы со свайпом; сортировка и качество запоминаются; удержание — «Скачать»),
   `Browse/` (поиск с недавними, подсказками и поиском по описанию (ИИ), «Смотреть всё», актёр с подпиской, медиатека;
   `DownloadsView` — загрузки и их файлы; `TorrentsView` — «Торренты»: раздачи TorrServer, «Добавить торрент»; в Медиатеке — ряд «История»; `UniversesView` — шары разделов и стена `WallView` с зумом), `Settings/`
-  (список разделов со значками, как в «Настройках» iOS; у каждого своя страница: раздачи, TorrServer, плеер и субтитры, подбор, каталог, ИИ, «Вместе», данные). `Details/DetailsExtras` — «Разбор», «Духовные родственники», отзывы, «Интересные факты» (видны всегда). Разделы страницы — в порядке ТВ;
+  (список разделов со значками, как в «Настройках» iOS; у каждого своя страница: раздачи, TorrServer, плеер и субтитры, подбор, каталог, ИИ, «Вместе», данные). `Details/TrailerView` — трейлер YouTube внутри приложения. `Details/DetailsExtras` — «Разбор», «Духовные родственники», отзывы, «Интересные факты» (видны всегда). Разделы страницы — в порядке ТВ;
   капсулы жанров и студий, «Ещё от студии» (`VodDetails.studios/studioFilms`). На главной — ещё `UpcomingShelf`.
 - `Resources/Assets.xcassets` — иконка, акцент, фон запуска.
 
 ## Прочее
+
+- `AerialWidgets/` — расширение виджетов: Live Activity загрузки (Dynamic Island, экран блокировки); `Shared/DownloadActivity.swift` —
+  атрибуты, общие с приложением. Info.plist расширения — `Config/Widgets-Info.plist` (генерирует XcodeGen).
 
 - `Packages/TorrServerKit` — готовая gomobile-сборка TorrServer (релиз MatriX.147.1, адрес и checksum в `Package.swift`)
   и обёртка `TorrServerEngine` (`start`, `stop`, `isRunning`).
@@ -104,7 +107,7 @@
 ## Данные на устройстве
 
 - UserDefaults: настройки (`parser.*`, `torrserver.*`, `tmdbProxy`, `taste.history`, `player.autoplayNext`, `mdblist.key`,
-  `mdblist.blocked`, `mdblist.shown`, `mdblist.sources`, `episodes.overviews`, `episodes.hideSpoilers`, `releases.sort`, `releases.quality`, `search.recent`, `ai.*`, `opensubs.*`, `reviews.sort`), медиатека (`library.saved`, `library.entries`,
+  `mdblist.blocked`, `mdblist.shown`, `mdblist.sources`, `episodes.overviews`, `episodes.hideSpoilers`, `ui.posterSize`, `ui.actorPhoto`, `ui.titleLogos`, `releases.sort`, `releases.quality`, `search.recent`, `ai.*`, `opensubs.*`, `reviews.sort`), медиатека (`library.saved`, `library.entries`,
   `library.marks`, `library.followed`), друзья (`friends.*`), подбор (`taste.related`, `taste.relatedKey`, `taste.forYou.<раздел>`, `taste.ai*`), `feeds.fourK*`.
 - Caches: `api-cache/` (TMDb, MDBList, ИИ, Википедия, списки «Вселенных»), `images/` (картинки). Application Support: `downloads.json` — список загрузок.
 - Documents (видно в «Файлах» › На iPhone › Aerial): `logs/app.log`, `logs/mpv.log` (+ `.1` — прошлый запуск),

@@ -54,9 +54,19 @@ final class Playback {
     func attach(settings: AppSettings, library: Library) {
         self.settings = settings
         self.library = library
+        // Окно PiP развернули — плеер Aerial с того же места; закрыли — прогресс в медиатеку.
+        PictureInPicture.shared.onRestore = { [weak self] request in
+            self?.request = nil
+            self?.play(request)
+        }
+        PictureInPicture.shared.onClose = { [weak library] request, position, duration in
+            guard request.record, position > 0 else { return }
+            library?.record(item: request.item, episode: request.episode, position: position, duration: duration, source: nil)
+        }
     }
 
     func play(_ request: PlaybackRequest) {
+        PictureInPicture.shared.stop()
         guard controller == nil, let settings, let library, let presenter = Self.topController() else { return }
         self.request = Self.resolved(request)
         Orientation.allowLandscape(true)
@@ -176,6 +186,8 @@ final class PlayerModel {
     private(set) var next: PlaybackRequest?
     /// Скорость воспроизведения.
     private(set) var rate: Double = 1
+    /// Поток для «Картинки в картинке»: только контейнеры, которые понимает AVPlayer ([PictureInPicture]).
+    private(set) var pipURL: URL?
 
     /// Идёт заставка или «ранее в сериале» — кнопка пропуска (до конца отрезка больше 1,5 с).
     var skipNow: SkipSegment? {
@@ -251,6 +263,9 @@ final class PlayerModel {
                 guard !Task.isCancelled else { return }
                 url = client.streamURL(hash: info.hash, file: file)
                 statsHash = info.hash
+            }
+            if PictureInPicture.supported, PictureInPicture.containers.contains((source?.fileName as NSString?)?.pathExtension.lowercased() ?? "") {
+                pipURL = url
             }
             let core = MPVCore(layer: layer)
             core.onEvent = { [weak self] event in self?.handle(event) }

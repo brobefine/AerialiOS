@@ -2,6 +2,7 @@
 *.xcodeproj/
 *.xcworkspace/
 Config/Info.plist
+Config/Widgets-Info.plist
 
 # Ключи TMDb — только локально и в секретах GitHub
 Config/Secrets.xcconfig

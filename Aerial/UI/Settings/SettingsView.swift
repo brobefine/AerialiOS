@@ -26,6 +26,7 @@ struct SettingsView: View {
                     category("Плеер", "play.rectangle.fill", .orange) { playerSection; subtitlesSection }
                 }
                 Section {
+                    category("Вид", "paintbrush.fill", .cyan) { appearanceSection }
                     category("Рекомендации", "hand.thumbsup.fill", .pink) { tasteSection }
                     category("Каталог и оценки", "film.stack", .indigo) { catalogueSection }
                     category("ИИ", "sparkles", .purple) { aiSection }
@@ -150,6 +151,26 @@ struct SettingsView: View {
             Text("Плеер")
         } footer: {
             Text("Серия кончилась — через 10 с начнётся следующая из той же раздачи. Заставку можно пропустить кнопкой, если её отметили зрители IntroDB или AniSkip. Скачанное (удерживайте раздачу — «Скачать») играет с телефона без сети и лежит в «Файлах» › Aerial › Downloads.")
+        }
+    }
+
+    @AppStorage("ui.posterSize") private var posterSize = "small"
+    @AppStorage("ui.actorPhoto") private var actorPhoto = "small"
+    @AppStorage("ui.titleLogos") private var titleLogos = true
+
+    @ViewBuilder private var appearanceSection: some View {
+        Section {
+            Picker("Размер постеров", selection: $posterSize) {
+                Text("Обычные").tag("small")
+                Text("Крупные").tag("large")
+            }
+            Picker("Размер фото актёров", selection: $actorPhoto) {
+                Text("Обычные").tag("small")
+                Text("Крупные").tag("large")
+            }
+            Toggle("Логотипы названий", isOn: $titleLogos)
+        } footer: {
+            Text("Логотипы — название фильма надписью из TMDb вместо текста. Размеры применяются к открытым заново экранам.")
         }
     }
 

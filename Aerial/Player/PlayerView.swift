@@ -242,6 +242,15 @@ struct PlayerView: View {
                     if WatchParty.shared.enabled && model.partyMedia != nil {
                         barButton(WatchParty.shared.active ? "person.2.fill" : "person.2", label: "Смотреть вместе") { partyOpen = true }
                     }
+                    if let pip = model.pipURL {
+                        barButton("pip.enter", label: "Картинка в картинке") {
+                            let position = model.position
+                            let request = model.request
+                            model.stop()
+                            PictureInPicture.shared.start(url: pip, at: position, request: request)
+                            dismiss()
+                        }
+                    }
                     if model.next != nil {
                         barButton("forward.end.fill", label: "Следующая серия") { playNext() }
                     }

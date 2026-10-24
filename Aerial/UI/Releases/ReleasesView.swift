@@ -29,6 +29,11 @@ struct ReleasesView: View {
     @State private var hdrOnly = false
     @State private var dvOnly = false
     @State private var subsOnly = false
+    @State private var languageFilter = ""
+    @State private var seasonFilter = ""
+    @State private var yearFilter = ""
+    @State private var threeDOnly = false
+    @State private var facts: [String: ReleaseFacts] = [:]
 
     enum Sort: String, CaseIterable, Identifiable {
         case seeds = "По сидам"
@@ -36,6 +41,7 @@ struct ReleasesView: View {
         case date = "По дате"
         case name = "По названию"
         case tracker = "По источнику"
+        case viewed = "Просмотренные"
         var id: String { rawValue }
     }
 
@@ -56,8 +62,13 @@ struct ReleasesView: View {
     private func shown(_ filter: String) -> [Release] {
         let filtered = (filter == Self.all ? releases : releases.filter { infos[$0.id]?.quality == filter }).filter { release in
             let info = infos[release.id] ?? release.info
+            let fact = facts[release.id]
             return (voiceFilter.isEmpty || info.audio.contains(voiceFilter))
-                && (trackerFilter.isEmpty || release.tracker == trackerFilter)
+                && (trackerFilter.isEmpty || (fact?.trackers.contains(trackerFilter) ?? (release.tracker == trackerFilter)))
+                && (languageFilter.isEmpty || fact?.languages.contains(languageFilter) == true)
+                && (seasonFilter.isEmpty || info.season == seasonFilter)
+                && (yearFilter.isEmpty || fact?.year == yearFilter)
+                && (!threeDOnly || fact?.threeD == true)
                 && (!hdrOnly || info.range != nil) && (!dvOnly || info.dolbyVision) && (!subsOnly || info.subtitles)
         }
         let sorted: [Release] = switch sort {
@@ -66,6 +77,9 @@ struct ReleasesView: View {
         case .date: filtered.sorted { $0.published > $1.published }
         case .name: filtered.sorted { $0.title.localizedCaseInsensitiveCompare($1.title) == .orderedAscending }
         case .tracker: filtered.sorted { ($0.tracker.lowercased(), -$0.seeds) < ($1.tracker.lowercased(), -$1.seeds) }
+        case .viewed:
+            // Сначала раздачи, которые уже смотрели (их ссылка в прогрессе медиатеки), затем по сидам.
+            filtered.sorted { (viewed.contains($0.link) ? 0 : 1, -$0.seeds) < (viewed.contains($1.link) ? 0 : 1, -$1.seeds) }
         }
         // Для серии — сначала раздачи с её сезоном, затем без указания сезона, в конце — другие сезоны.
         guard let episode else { return sorted }
@@ -126,7 +140,31 @@ struct ReleasesView: View {
                         }
                         .pickerStyle(.menu)
                     }
-                    let trackers = Array(Set(releases.map(\.tracker))).filter { !$0.isEmpty }.sorted()
+                    let languages = [ReleaseFacts.ru, ReleaseFacts.uk, ReleaseFacts.en].filter { code in facts.values.contains { $0.languages.contains(code) } }
+                    if !languages.isEmpty {
+                        Picker("Язык", selection: $languageFilter) {
+                            Text("Любой").tag("")
+                            ForEach(languages, id: \.self) { Text(ReleaseFacts.languageTitle($0)).tag($0) }
+                        }
+                        .pickerStyle(.menu)
+                    }
+                    let seasons = Array(Set(infos.values.compactMap(\.season))).sorted()
+                    if !seasons.isEmpty {
+                        Picker("Сезон", selection: $seasonFilter) {
+                            Text("Любой").tag("")
+                            ForEach(seasons, id: \.self) { Text($0).tag($0) }
+                        }
+                        .pickerStyle(.menu)
+                    }
+                    let years = Array(Set(facts.values.map(\.year).filter { !$0.isEmpty })).sorted(by: >)
+                    if years.count > 1 {
+                        Picker("Год", selection: $yearFilter) {
+                            Text("Любой").tag("")
+                            ForEach(years, id: \.self) { Text($0).tag($0) }
+                        }
+                        .pickerStyle(.menu)
+                    }
+                    let trackers = Array(Set(facts.values.flatMap(\.trackers))).sorted()
                     if trackers.count > 1 {
                         Picker("Трекер", selection: $trackerFilter) {
                             Text("Любой").tag("")
@@ -137,14 +175,15 @@ struct ReleasesView: View {
                     Toggle("HDR", isOn: $hdrOnly)
                     Toggle("Dolby Vision", isOn: $dvOnly)
                     Toggle("С субтитрами", isOn: $subsOnly)
-                    if !voiceFilter.isEmpty || !trackerFilter.isEmpty || hdrOnly || dvOnly || subsOnly {
+                    if facts.values.contains(where: \.threeD) { Toggle("3D", isOn: $threeDOnly) }
+                    if filtersActive {
                         Button("Сбросить фильтры", role: .destructive) {
                             voiceFilter = ""; trackerFilter = ""; hdrOnly = false; dvOnly = false; subsOnly = false
+                            languageFilter = ""; seasonFilter = ""; yearFilter = ""; threeDOnly = false
                         }
                     }
                 } label: {
-                    Image(systemName: voiceFilter.isEmpty && trackerFilter.isEmpty && !hdrOnly && !dvOnly && !subsOnly
-                          ? "line.3.horizontal.decrease.circle" : "line.3.horizontal.decrease.circle.fill")
+                    Image(systemName: filtersActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
                 }
                 .accessibilityLabel("Фильтры")
             }
@@ -243,16 +282,26 @@ struct ReleasesView: View {
         .refreshable { await search() }
     }
 
+    private var filtersActive: Bool {
+        !voiceFilter.isEmpty || !trackerFilter.isEmpty || hdrOnly || dvOnly || subsOnly
+            || !languageFilter.isEmpty || !seasonFilter.isEmpty || !yearFilter.isEmpty || threeDOnly
+    }
+
+    /// Ссылки раздач, которые уже смотрели, — для сортировки «Просмотренные».
+    private var viewed: Set<String> { Set(library.entries.values.compactMap { $0.source?.link }) }
+
     private func search() async {
         loading = releases.isEmpty
         let imdb = await Catalogue.shared.imdbId(item)
         let parser = ReleaseSearch.Parser(address: settings.parserAddress, key: settings.parserKey, torrentio: settings.torrentio)
         let found = await ReleaseSearch.search(item: item, episode: episode, imdbId: imdb, parser: parser)
-        let parsed = await Task.detached(priority: .userInitiated) {
-            Dictionary(found.map { ($0.id, $0.info) }, uniquingKeysWith: { first, _ in first })
+        let (parsed, extra) = await Task.detached(priority: .userInitiated) {
+            (Dictionary(found.map { ($0.id, $0.info) }, uniquingKeysWith: { first, _ in first }),
+             Dictionary(found.map { ($0.id, ReleaseFacts($0)) }, uniquingKeysWith: { first, _ in first }))
         }.value
         guard !Task.isCancelled else { return }
         infos = parsed
+        facts = extra
         releases = found
         loading = false
         if !preferredQuality.isEmpty, parsed.values.contains(where: { $0.quality == preferredQuality }) {

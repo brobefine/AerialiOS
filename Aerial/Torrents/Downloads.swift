@@ -233,7 +233,10 @@ final class Downloads {
                     try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
                     let before = onDisk(job) - Self.size(url.deletingLastPathComponent().appending(path: url.lastPathComponent + ".part"))
                     try await fetch(client.streamURL(hash: job.hash, file: file.torrentFile), to: url, size: file.bytes) { [weak self] written in
-                        self?.done[job.hash] = before + written
+                        guard let self else { return }
+                        done[job.hash] = before + written
+                        DownloadLive.shared.show(job, done: before + written, rate: rate,
+                                                 left: jobs.filter { !$0.paused && $0.failure == nil && !complete($0) }.count)
                     }
                     done[job.hash] = onDisk(job)
                 }
@@ -249,6 +252,7 @@ final class Downloads {
         }
         active = nil
         rate = 0
+        DownloadLive.shared.end()
         endBackground()
     }
 

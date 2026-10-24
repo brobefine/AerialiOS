@@ -21,6 +21,7 @@ struct DetailsView: View {
     @State private var external = ""
     /// Цвет постера — им окрашены кнопки ([PosterPalette]).
     @State private var accent: Color?
+    @State private var trailerOpen = false
 
     private var shown: VodItem { details?.item ?? item }
     private var art: String { shown.backdrop.isEmpty ? shown.poster : shown.backdrop }
@@ -56,6 +57,9 @@ struct DetailsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { if details == nil { await load() } }
         .task(id: season) { await loadSeason() }
+        .fullScreenCover(isPresented: $trailerOpen) {
+            if let key = details?.trailerKey, !key.isEmpty { TrailerView(key: key) }
+        }
         .task(id: shown.poster) { accent = await PosterPalette.accent(shown.poster.isEmpty ? art : shown.poster) }
         .task(id: settings.mdblistKey) { external = await MdbList.ratings(item, key: settings.mdblistKey) }
     }
@@ -260,7 +264,7 @@ struct DetailsView: View {
                     .frame(maxWidth: .infinity).frame(height: 52).background(.white.opacity(0.3), in: Capsule())
             }
             if let trailer {
-                Button { openURL(trailer) } label: { Image(systemName: "play.rectangle") }
+                Button { trailerOpen = true } label: { Image(systemName: "play.rectangle") }
                     .buttonStyle(CircleGlassButtonStyle(tint: accent))
                     .accessibilityLabel("Трейлер")
             }
@@ -522,7 +526,7 @@ private struct PersonBadge: View {
     var body: some View {
         VStack(spacing: 6) {
             Color.clear
-                .frame(width: 76, height: 76)
+                .frame(width: Theme.actorPhoto, height: Theme.actorPhoto)
                 .overlay {
                     if person.photo.isEmpty {
                         Image(systemName: "person.fill").font(.title).foregroundStyle(Theme.secondaryText)
@@ -538,6 +542,6 @@ private struct PersonBadge: View {
                 .multilineTextAlignment(.center)
             Text(person.role).font(.caption2).foregroundStyle(Theme.secondaryText).lineLimit(1)
         }
-        .frame(width: 92)
+        .frame(width: Theme.actorPhoto + 16)
     }
 }

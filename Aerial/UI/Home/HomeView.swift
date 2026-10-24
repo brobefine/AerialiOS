@@ -227,7 +227,7 @@ struct TitleArt: View {
     var maxHeight: CGFloat = 100
 
     var body: some View {
-        if logo.isEmpty {
+        if logo.isEmpty || !Theme.titleLogos {
             Text(title)
                 .font(.system(size: 32, weight: .heavy))
                 .multilineTextAlignment(.center)

@@ -9,8 +9,17 @@ enum Theme {
     static let card = Color(hex: 0x1A1C21)
     static let secondaryText = Color.white.opacity(0.62)
 
-    /// Ширина постера в рядах: телефон — 116 pt, планшет — 150 pt.
-    static func posterWidth(_ size: UserInterfaceSizeClass?) -> CGFloat { size == .regular ? 150 : 116 }
+    /// Ширина постера в рядах: телефон — 116 pt, планшет — 150 pt; «Крупные» в настройках (`ui.posterSize`) — на треть больше.
+    static func posterWidth(_ size: UserInterfaceSizeClass?) -> CGFloat {
+        let base: CGFloat = size == .regular ? 150 : 116
+        return UserDefaults.standard.string(forKey: "ui.posterSize") == "large" ? base * 1.3 : base
+    }
+
+    /// Фото актёров: «Крупные» (`ui.actorPhoto`) — 100 pt вместо 76.
+    static var actorPhoto: CGFloat { UserDefaults.standard.string(forKey: "ui.actorPhoto") == "large" ? 100 : 76 }
+
+    /// Логотип-название TMDb вместо текста (`ui.titleLogos`), как «Логотипы названий» ТВ.
+    static var titleLogos: Bool { UserDefaults.standard.object(forKey: "ui.titleLogos") as? Bool ?? true }
     static func landscapeWidth(_ size: UserInterfaceSizeClass?) -> CGFloat { size == .regular ? 340 : 260 }
 
     /// Цвет кольца оценки, как `ratingColor` ТВ: от 70 % — зелёный, от 50 % — жёлтый, ниже — красный.
