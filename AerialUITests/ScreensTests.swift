@@ -47,18 +47,35 @@ final class ScreensTests: XCTestCase {
         }
     }
 
+    /// iPhone: все экраны.
     func testScreens() {
+        home()
+        series()
+        movie(person: true)
+        section()
+        tabs(search: true)
+    }
+
+    /// iPad: ключевые экраны — главная, фильм, раздачи, настройки.
+    func testTabletScreens() {
+        home()
+        movie(person: false)
+        tabs(search: false)
+    }
+
+    private func home() {
         app.launchArguments = ["-uiTest"]
         app.launch()
-
         XCTAssertTrue(element("poster").waitForExistence(timeout: 60), "каталог не загрузился")
         shot("01-home", settle: 3)
         app.swipeUp()
         shot("02-home-rows")
         app.swipeDown()
         app.swipeDown()
+    }
 
-        // Сериал: раздел, страница, сезоны и серии, раздачи серии.
+    /// Сериал: раздел, страница, сезоны и серии, раздачи серии.
+    private func series() {
         if tap(element("shelf-series")) {
             shot("03-shelf-series", settle: 3)
             if tap(element("poster")) {
@@ -77,15 +94,17 @@ final class ScreensTests: XCTestCase {
             app.swipeDown()
             tap(element("shelf-all"))
         }
+    }
 
-        // Фильм: страница, актёр, раздачи.
+    /// Фильм: страница, актёр, раздачи.
+    private func movie(person: Bool) {
         if tap(element("poster")) {
             let watch = element("details-watch")
             XCTAssertTrue(watch.waitForExistence(timeout: 30), "страница фильма не открылась")
             shot("07-details")
             app.swipeUp()
             shot("08-details-more")
-            if tap(element("person"), wait: 3) {
+            if person, tap(element("person"), wait: 3) {
                 shot("09-person", settle: 3)
                 back()
             }
@@ -98,14 +117,18 @@ final class ScreensTests: XCTestCase {
             }
             back()
         }
+    }
 
-        // «Смотреть всё» первого ряда.
+    /// «Смотреть всё» первого ряда.
+    private func section() {
         if tap(element("section-header")) {
             shot("11-section", settle: 3)
             back()
         }
+    }
 
-        // Поиск — последним: на iOS 26 поле поиска с клавиатурой закрывает панель вкладок.
+    /// Медиатека, настройки и поиск — последним: на iOS 26 поле поиска с клавиатурой закрывает панель вкладок.
+    private func tabs(search: Bool) {
         if tap(app.buttons["Медиатека"].firstMatch, wait: 5) {
             shot("12-library", settle: 1)
         }
@@ -113,7 +136,7 @@ final class ScreensTests: XCTestCase {
             shot("13-settings", settle: 4)
             tap(app.buttons["Готово"].firstMatch, wait: 3)
         }
-        if tap(app.buttons["Поиск"].firstMatch, wait: 5) {
+        if search, tap(app.buttons["Поиск"].firstMatch, wait: 5) {
             shot("14-search-empty")
             let field = app.searchFields.firstMatch
             if tap(field, wait: 5) {

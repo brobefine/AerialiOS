@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 @main
 struct AerialApp: App {
@@ -9,6 +10,8 @@ struct AerialApp: App {
 
     init() {
         Log.startSession()
+        // UI-тесты ждут конца каждой анимации — без них прогон на CI заметно короче.
+        if UITestHooks.active { UIView.setAnimationsEnabled(false) }
     }
 
     var body: some Scene {
@@ -42,6 +45,7 @@ struct RootView: View {
             Tab("Поиск", systemImage: "magnifyingglass", value: AppTab.search, role: .search) { SearchView() }
         }
         .tabViewStyle(.sidebarAdaptable)
+        .transaction { if UITestHooks.active { $0.disablesAnimations = true } }
         .onAppear {
             playback.attach(settings: settings, library: library)
             UITestHooks.start(playback)

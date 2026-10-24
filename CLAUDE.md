@@ -11,12 +11,13 @@
 ## Сборка (Mac нет)
 
 - Проект Xcode генерирует XcodeGen из `project.yml`; `*.xcodeproj` и `Config/Info.plist` в git не хранятся.
-- CI — `.github/workflows/build.yml` (`macos-26`, Xcode 26.6): три задачи параллельно — `iphone` (модульные тесты,
-  снимки, проверка воспроизведения на iPhone 17 Pro, iOS 26.5), `ipad` (снимки на iPad Pro 11"), `ipa` (неподписанный
-  `Aerial.ipa`); симулятор грузится в начале задачи. Пользователь просил прогон за несколько минут: все проверки — в
-  одном прогоне, новые шаги — в `ScreensTests`, ждать элементы, а не секунды. Артефакты: `Aerial-ipa`,
-  `Aerial-check-iphone`, `Aerial-check-ipad` — снимки `screens/`, журналы `logs/` (`build.log`, `test.log`,
-  `test-results.json`, `archive.log`; с симулятора — `app/app.log`, `app/mpv.log`, журналы TorrServer).
+- CI — `.github/workflows/build.yml` (`macos-26`, Xcode 26.6): четыре задачи параллельно — `iphone` (модульные тесты и
+  `testScreens` на iPhone 17 Pro, iOS 26.5), `player` (`testPlaybackSmoke`), `ipad` (`testTabletScreens` на iPad Pro 11"),
+  `ipa` (неподписанный `Aerial.ipa`); симулятор грузится в начале задачи, XcodeGen — готовый из релиза, в UI-тестах
+  анимации выключены (`UITestHooks`). Пользователь просил прогон за несколько минут: все проверки — в одном прогоне,
+  новые шаги — в `ScreensTests`, ждать элементы, а не секунды. Артефакты: `Aerial-ipa`, `Aerial-check-<задача>` —
+  снимки `screens/`, журналы `logs/` (`build.log`, `test.log`, `test-results.json`, `archive.log`; с симулятора —
+  `app/app.log`, `app/mpv.log`, журналы TorrServer).
   Скачать: `gh run download <id> -R brobefine/AerialiOS`. Репозиторий открытый — минуты macOS не считаются.
 - Ключи TMDb — секреты репозитория `TMDB_API_KEY`, `TMDB_READ_TOKEN` → `Config/Secrets.xcconfig` (не в git) → Info.plist
   (`TMDBApiKey`, `TMDBReadToken`). Значения — из `tmdb.apiKey`/`tmdb.readToken` в `F:\Aerial\local.properties`.

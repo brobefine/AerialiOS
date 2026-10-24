@@ -1,9 +1,10 @@
-# Сборка без Mac: GitHub Actions (macOS 26, Xcode 26.6). Три задачи параллельно — время прогона равно самой долгой:
-#   iphone — модульные тесты, снимки экранов и проверка воспроизведения на iPhone 17 Pro;
-#   ipad   — снимки экранов на iPad Pro 11";
+# Сборка без Mac: GitHub Actions (macOS 26, Xcode 26.6). Четыре задачи параллельно — время прогона равно самой долгой:
+#   iphone — модульные тесты и снимки всех экранов на iPhone 17 Pro;
+#   player — встроенный TorrServer и mpv на свободном фильме, поворот плеера;
+#   ipad   — снимки ключевых экранов на iPad Pro 11";
 #   ipa    — неподписанный Aerial.ipa для установки через Sideloadly/AltStore.
 # Симулятор грузится в начале задачи, пока ставятся пакеты и идёт сборка.
-# Артефакты: Aerial-ipa, Aerial-check-iphone, Aerial-check-ipad (снимки screens/, журналы logs/).
+# Артефакты: Aerial-ipa, Aerial-check-<задача> (снимки screens/, журналы logs/).
 name: build
 
 on:
@@ -26,13 +27,20 @@ jobs:
         include:
           - part: iphone
             device: iPhone 17 Pro
+            only: -only-testing:AerialTests -only-testing:AerialUITests/ScreensTests/testScreens
+          - part: player
+            device: iPhone 17 Pro
+            only: -only-testing:AerialUITests/ScreensTests/testPlaybackSmoke
           - part: ipad
             device: iPad Pro 11-inch (M5)
+            only: -only-testing:AerialUITests/ScreensTests/testTabletScreens
           - part: ipa
             device: ""
+            only: ""
     env:
       PART: ${{ matrix.part }}
       DEVICE: ${{ matrix.device }}
+      ONLY: ${{ matrix.only }}
       SIM_OS: "26.5"
       PACKAGES: ${{ github.workspace }}/.build/SourcePackages
     steps:
@@ -54,8 +62,10 @@ jobs:
           TMDB_READ_TOKEN: ${{ secrets.TMDB_READ_TOKEN }}
         run: |
           printf 'TMDB_API_KEY = %s\nTMDB_READ_TOKEN = %s\n' "$TMDB_API_KEY" "$TMDB_READ_TOKEN" > Config/Secrets.xcconfig
-          command -v xcodegen >/dev/null || brew install xcodegen
-          xcodegen generate
+          # Готовая сборка XcodeGen из релиза — секунды; brew install шёл 2–3 минуты.
+          curl -sSL -o "$RUNNER_TEMP/xcodegen.zip" https://github.com/yonaskolb/XcodeGen/releases/download/2.46.0/xcodegen.zip
+          unzip -q -o "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP/xcodegen"
+          "$RUNNER_TEMP/xcodegen/xcodegen/bin/xcodegen" generate
 
       - name: Кэш пакетов
         uses: actions/cache@v4
@@ -90,10 +100,8 @@ jobs:
         run: |
           set +e
           xcrun simctl bootstatus "$UDID" -b > /dev/null
-          only=""
-          [ "$PART" = ipad ] && only="-only-testing:AerialUITests/ScreensTests/testScreens"
           TEST_RUNNER_SCREENS_DIR="$PWD/out/screens" xcodebuild test-without-building -project Aerial.xcodeproj -scheme Aerial \
-            -destination "platform=iOS Simulator,id=$UDID" $only \
+            -destination "platform=iOS Simulator,id=$UDID" $ONLY \
             -clonedSourcePackagesDirPath "$PACKAGES" -derivedDataPath .build/DerivedData -parallel-testing-enabled NO \
             -resultBundlePath out/tests.xcresult > out/logs/test.log 2>&1
           status=$?
