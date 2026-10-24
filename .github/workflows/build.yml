@@ -1,9 +1,9 @@
 # Сборка без Mac: GitHub Actions (macOS 26, Xcode 26.6). Задачи параллельно — время прогона равно самой долгой:
-#   iphone — модульные тесты, снимки всех экранов и проверка воспроизведения (TorrServer + mpv) на iPhone 17 Pro;
-#   ipa    — неподписанный Aerial.ipa для установки через Sideloadly/AltStore;
-#   ipad   — снимки ключевых экранов на iPad Pro 11" — только по запросу (Run workflow → ipad).
-# Задач мало намеренно: каждая качает ~400 МБ библиотек плеера, и четыре задачи сразу качали их по 4 минуты.
-# Симулятор грузится в начале задачи, пока ставятся пакеты.
+#   screens — модульные тесты и снимки всех экранов на iPhone 17 Pro;
+#   player  — встроенный TorrServer и mpv на свободном фильме, поворот плеера;
+#   ipa     — неподписанный Aerial.ipa для установки через Sideloadly/AltStore;
+#   ipad    — снимки ключевых экранов на iPad Pro 11" — только по запросу (Run workflow → ipad).
+# Симулятор грузится только после сборки: в фоне он отнимал процессор и диск, и пакеты со сборкой шли в 5–10 раз дольше.
 # Артефакты: Aerial-ipa, Aerial-check-<задача> (снимки screens/, журналы logs/).
 name: build
 
@@ -32,8 +32,8 @@ jobs:
         # В strategy недоступен env — состав задач строкой JSON; iPad — только при запуске вручную с галочкой.
         include: >-
           ${{ fromJSON(inputs.ipad
-            && '[{"part":"iphone","device":"iPhone 17 Pro","only":"-skip-testing:AerialUITests/ScreensTests/testTabletScreens"},{"part":"ipa","device":"","only":""},{"part":"ipad","device":"iPad Pro 11-inch (M5)","only":"-only-testing:AerialUITests/ScreensTests/testTabletScreens"}]'
-            || '[{"part":"iphone","device":"iPhone 17 Pro","only":"-skip-testing:AerialUITests/ScreensTests/testTabletScreens"},{"part":"ipa","device":"","only":""}]') }}
+            && '[{"part":"screens","device":"iPhone 17 Pro","only":"-only-testing:AerialTests -only-testing:AerialUITests/ScreensTests/testScreens"},{"part":"player","device":"iPhone 17 Pro","only":"-only-testing:AerialUITests/ScreensTests/testPlaybackSmoke"},{"part":"ipa","device":"","only":""},{"part":"ipad","device":"iPad Pro 11-inch (M5)","only":"-only-testing:AerialUITests/ScreensTests/testTabletScreens"}]'
+            || '[{"part":"screens","device":"iPhone 17 Pro","only":"-only-testing:AerialTests -only-testing:AerialUITests/ScreensTests/testScreens"},{"part":"player","device":"iPhone 17 Pro","only":"-only-testing:AerialUITests/ScreensTests/testPlaybackSmoke"},{"part":"ipa","device":"","only":""}]') }}
     env:
       PART: ${{ matrix.part }}
       DEVICE: ${{ matrix.device }}
@@ -43,14 +43,13 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Xcode и симулятор
+      - name: Xcode
         run: |
           sudo xcode-select -s /Applications/Xcode_26.6.app
           mkdir -p out/screens out/logs
           if [ -n "$DEVICE" ]; then
             udid=$(xcrun simctl list devices available -j | python3 -c "import json,sys,os; d=json.load(sys.stdin)['devices']; print(next((x['udid'] for k,v in d.items() if k.endswith('iOS-' + os.environ['SIM_OS'].replace('.','-')) for x in v if x['name']==os.environ['DEVICE']), ''))")
             echo "UDID=$udid" >> "$GITHUB_ENV"
-            xcrun simctl boot "$udid" > out/logs/boot.log 2>&1 &
           fi
 
       - name: Проект
@@ -76,8 +75,6 @@ jobs:
         if: matrix.part != 'ipa'
         run: |
           set +e
-          # Сначала дождаться симулятора: загрузка параллельно со сборкой отнимала процессор и замедляла сборку в 2–4 раза.
-          xcrun simctl bootstatus "$UDID" -b > /dev/null
           xcodebuild build-for-testing -project Aerial.xcodeproj -scheme Aerial \
             -destination "platform=iOS Simulator,id=$UDID" \
             -clonedSourcePackagesDirPath "$PACKAGES" -derivedDataPath .build/DerivedData > out/logs/build.log 2>&1
@@ -92,7 +89,11 @@ jobs:
         continue-on-error: true
         run: |
           set +e
-          xcrun simctl bootstatus "$UDID" -b > /dev/null
+          # Симулятор — только после сборки: загрузка в фоне отнимала процессор и диск, пакеты и сборка шли в 5–10 раз дольше.
+          started=$(date +%s)
+          xcrun simctl boot "$UDID" > out/logs/boot.log 2>&1
+          xcrun simctl bootstatus "$UDID" -b >> out/logs/boot.log 2>&1
+          echo "Симулятор загрузился за $(( $(date +%s) - started )) с" | tee -a out/logs/boot.log
           TEST_RUNNER_SCREENS_DIR="$PWD/out/screens" xcodebuild test-without-building -project Aerial.xcodeproj -scheme Aerial \
             -destination "platform=iOS Simulator,id=$UDID" $ONLY \
             -clonedSourcePackagesDirPath "$PACKAGES" -derivedDataPath .build/DerivedData -parallel-testing-enabled NO \

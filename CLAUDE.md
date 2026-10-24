@@ -11,11 +11,11 @@
 ## Сборка (Mac нет)
 
 - Проект Xcode генерирует XcodeGen из `project.yml`; `*.xcodeproj` и `Config/Info.plist` в git не хранятся.
-- CI — `.github/workflows/build.yml` (`macos-26`, Xcode 26.6): две задачи параллельно — `iphone` (модульные тесты,
-  `testScreens` и `testPlaybackSmoke` на iPhone 17 Pro, iOS 26.5) и `ipa` (неподписанный `Aerial.ipa`); `ipad`
-  (`testTabletScreens` на iPad Pro 11") — только при ручном запуске с галочкой. Задач мало намеренно: каждая качает
-  ~400 МБ библиотек плеера, четыре сразу качали по 4 минуты; кэш пакетов не ускорял. Симулятор грузится в начале
-  задачи, сборка ждёт его загрузки; XcodeGen — готовый из релиза; в UI-тестах анимации выключены (`UITestHooks`).
+- CI — `.github/workflows/build.yml` (`macos-26`, Xcode 26.6): задачи параллельно — `screens` (модульные тесты и
+  `testScreens` на iPhone 17 Pro, iOS 26.5), `player` (`testPlaybackSmoke`), `ipa` (неподписанный `Aerial.ipa`); `ipad`
+  (`testTabletScreens` на iPad Pro 11") — только при ручном запуске с галочкой. Симулятор грузится **после** сборки:
+  загрузка в фоне отнимала процессор и диск — пакеты шли 330 с вместо 33, сборка 178 с вместо 42. Кэша пакетов нет —
+  не ускорял. XcodeGen — готовый из релиза; в UI-тестах анимации выключены (`UITestHooks`).
   Пользователь просил прогон за несколько минут: все проверки — в одном прогоне, новые шаги — в `ScreensTests`,
   ждать элементы, а не секунды. Артефакты: `Aerial-ipa`, `Aerial-check-<задача>` — снимки `screens/`, журналы `logs/`
   (`build.log`, `test.log`, `test-results.json`, `archive.log`; с симулятора — `app/app.log`, `app/mpv.log`,
