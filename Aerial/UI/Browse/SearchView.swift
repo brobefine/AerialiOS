@@ -13,8 +13,10 @@ struct SearchView: View {
     private var trimmed: String { query.trimmingCharacters(in: .whitespacesAndNewlines) }
     private var recent: [String] { recentRaw.split(separator: "\n").map(String.init) }
 
+    /// Подсказки — только когда поиск ничего не нашёл (опечатка, не та раскладка): iOS показывает их вместо
+    /// содержимого, и найденное иначе было бы не видно, пока открыта клавиатура.
     private var suggestions: [String] {
-        guard !trimmed.isEmpty else { return [] }
+        guard !trimmed.isEmpty, results.isEmpty, !searching else { return [] }
         var seen = Set<String>()
         let titles = (results + popular + library.saved + library.likedItems + library.continueWatching.map(\.item))
             .filter { seen.insert($0.id).inserted }
@@ -79,6 +81,7 @@ struct SearchView: View {
             .task(id: trimmed) {
                 guard trimmed.count >= 2 else {
                     results = []
+                    searching = false
                     return
                 }
                 try? await Task.sleep(for: .milliseconds(350))
