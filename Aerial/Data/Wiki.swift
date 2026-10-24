@@ -122,7 +122,8 @@ enum WikiPolicy {
         }
         text = text.replacingOccurrences(of: "(?i)</p>|<br\\s*/?>|</li>|</dd>", with: "\n\n", options: .regularExpression)
         text = stripTags(text)
-        text = decodeEntities(text)
+        // Неразрывный пробел (&#160;) — обычным: иначе текст рвётся и сравнивается не так.
+        text = decodeEntities(text).replacingOccurrences(of: "\u{00A0}", with: " ")
         text = text.replacingOccurrences(of: "[ \\t]+", with: " ", options: .regularExpression)
             .replacingOccurrences(of: " *\\n *", with: "\n", options: .regularExpression)
             .replacingOccurrences(of: "\\n{3,}", with: "\n\n", options: .regularExpression)

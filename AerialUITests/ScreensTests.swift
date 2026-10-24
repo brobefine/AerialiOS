@@ -170,6 +170,15 @@ final class ScreensTests: XCTestCase {
     private func tabs(search: Bool) {
         if tap(app.buttons["Медиатека"].firstMatch, wait: 5) {
             shot("12-library", settle: 1)
+            // «Вселенные»: шары разделов, затем стена фильмов.
+            if tap(app.buttons["Вселенные"].firstMatch, wait: 3) {
+                shot("12b-universes", settle: 4)
+                if tap(app.staticTexts["Фильмы"].firstMatch, wait: 3) {
+                    shot("12c-wall", settle: 8)
+                    back()
+                }
+                back()
+            }
         }
         if tap(app.buttons["Настройки"].firstMatch, wait: 5) {
             shot("13-settings", settle: 4)
