@@ -12,6 +12,8 @@ struct HomeRow: Identifiable {
 final class HomeModel {
     private(set) var rows: [HomeRow] = []
     private(set) var failed = false
+    /// Растёт с каждой загрузкой рядов — по нему пересчитывается «Вам понравится?».
+    private(set) var version = 0
     private var loaded = false
 
     func load(_ shelf: VodShelf, force: Bool = false) async {
@@ -31,12 +33,16 @@ final class HomeModel {
         rows.removeAll { $0.items.isEmpty }
         failed = rows.isEmpty
         loaded = !failed
+        version += 1
     }
 }
 
 /// Главная: разделы капсулами сверху; между разделами — свайпом влево-вправо по странице (ряды листаются своим
 /// жестом, раздел переключает свайп по заголовкам и промежуткам между рядами).
 struct HomeView: View {
+    @Environment(Library.self) private var library
+    @Environment(Taste.self) private var taste
+    @Environment(AppSettings.self) private var settings
     @State private var shelf: VodShelf = .all
     @State private var models: [VodShelf: HomeModel] =
         Dictionary(uniqueKeysWithValues: VodShelf.allCases.map { ($0, HomeModel()) })
@@ -56,6 +62,8 @@ struct HomeView: View {
             .toolbar(.hidden, for: .navigationBar)
             .aerialDestinations()
         }
+        // Соседи TMDb для подбора — при новых оценках и просмотрах.
+        .onChange(of: library.tasteRevision, initial: true) { taste.refresh(library, useHistory: settings.tasteHistory) }
     }
 }
 
@@ -64,12 +72,26 @@ private struct ShelfPage: View {
     let model: HomeModel
 
     @Environment(Library.self) private var library
+    @Environment(Taste.self) private var taste
+    @Environment(AppSettings.self) private var settings
+    @State private var forYou: [VodItem] = []
+    @State private var because: [BecauseRow] = []
+
+    private var tasteKey: String {
+        "\(library.tasteRevision)|\(taste.related.count)|\(model.version)|\(settings.tasteHistory)"
+    }
 
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 26) {
                 let continuing = library.continueWatching.filter { shelf.accepts($0.item) }
                 if !continuing.isEmpty { ContinueShelf(entries: continuing) }
+                if !forYou.isEmpty {
+                    PosterShelf(title: "Вам понравится?", items: forYou)
+                }
+                ForEach(because) { row in
+                    PosterShelf(title: "Потому что вам понравилось «\(row.seed.title)»", items: row.items)
+                }
                 if model.failed {
                     ContentUnavailableView {
                         Label("Каталог не загрузился", systemImage: "wifi.exclamationmark")
@@ -86,6 +108,18 @@ private struct ShelfPage: View {
         }
         .refreshable { await model.load(shelf, force: true) }
         .task { await model.load(shelf) }
+        .task(id: tasteKey) { updateTaste() }
+    }
+
+    /// «Вам понравится?» из рядов раздела и соседей TMDb; «Потому что…» не повторяет первое, что уже видно в нём.
+    private func updateTaste() {
+        let found = taste.forYou(shelf, pool: model.rows.flatMap(\.items), library: library, useHistory: settings.tasteHistory)
+        let head = Set(found.prefix(10).map(\.id))
+        forYou = found
+        because = taste.because(library).compactMap { row in
+            let items = row.items.filter { shelf.accepts($0) && !head.contains($0.id) }
+            return items.count >= 5 ? BecauseRow(seed: row.seed, items: items) : nil
+        }
     }
 }
 

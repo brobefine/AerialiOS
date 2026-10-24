@@ -31,11 +31,23 @@ struct WatchEntry: Codable, Hashable, Identifiable, Sendable {
     }
 }
 
-/// Медиатека: «Мой список», прогресс просмотра и последняя серия сериала. Хранение — UserDefaults (JSON).
+/// Оценка фильма, как `VodState.rate` ТВ: −1 «Не моё», 1 «Нравится», 2 «Обожаю». Карточка хранится вместе с оценкой —
+/// подбору нужны её жанры; дата — свежие отметки идут в ограниченный подбор первыми ([Recommendations.pickSeeds]).
+struct TasteMark: Codable, Hashable, Sendable {
+    var item: VodItem
+    var level: Int
+    var marked: Date
+}
+
+/// Медиатека: «Мой список», оценки, прогресс просмотра и последняя серия сериала. Хранение — UserDefaults (JSON).
 @MainActor @Observable
 final class Library {
     private(set) var saved: [VodItem] = []
     private(set) var entries: [String: WatchEntry] = [:]
+    private(set) var marks: [String: TasteMark] = [:]
+    /// Растёт, когда меняется то, из чего считается подбор: список, оценки, новый или досмотренный просмотр.
+    /// Ход позиции во время фильма его не трогает — главная не пересчитывает ряды каждые 5 с.
+    private(set) var tasteRevision = 0
 
     private let defaults = UserDefaults.standard
 
@@ -46,6 +58,9 @@ final class Library {
         }
         if let data = defaults.data(forKey: "library.entries"), let value = try? decoder.decode([String: WatchEntry].self, from: data) {
             entries = value
+        }
+        if let data = defaults.data(forKey: "library.marks"), let value = try? decoder.decode([String: TasteMark].self, from: data) {
+            marks = value
         }
     }
 
@@ -63,7 +78,41 @@ final class Library {
         } else {
             saved.insert(item, at: 0)
         }
+        tasteRevision += 1
         persist(saved, "library.saved")
+    }
+
+    // MARK: Оценки
+
+    /// −1 «Не моё», 0 — без оценки, 1 «Нравится», 2 «Обожаю».
+    func rating(_ item: VodItem) -> Int { marks[item.id]?.level ?? 0 }
+
+    func rate(_ item: VodItem, _ level: Int) {
+        Log.note("ДЕЙСТВИЕ", "оценка \(item.id) = \(level)")
+        marks[item.id] = level == 0 ? nil : TasteMark(item: item, level: level, marked: .now)
+        tasteRevision += 1
+        persist(marks, "library.marks")
+    }
+
+    func clearMarks() {
+        marks = [:]
+        tasteRevision += 1
+        persist(marks, "library.marks")
+    }
+
+    var liked: Set<String> { Set(marks.values.filter { $0.level >= 1 }.map(\.item.id)) }
+    var loved: Set<String> { Set(marks.values.filter { $0.level == 2 }.map(\.item.id)) }
+    var rejected: Set<String> { Set(marks.values.filter { $0.level == -1 }.map(\.item.id)) }
+    /// «Нравится» и «Обожаю» — свежие первыми (раздел медиатеки).
+    var likedItems: [VodItem] { marks.values.filter { $0.level >= 1 }.sorted { $0.marked > $1.marked }.map(\.item) }
+
+    /// Прогресс по фильму или сериалу целиком (последний просмотр) — сигнал вкуса для подбора.
+    var progressByItem: [String: WatchEntry] {
+        var latest: [String: WatchEntry] = [:]
+        for entry in entries.values where (latest[entry.item.id]?.updated ?? .distantPast) < entry.updated {
+            latest[entry.item.id] = entry
+        }
+        return latest
     }
 
     // MARK: Прогресс
@@ -77,23 +126,23 @@ final class Library {
 
     /// «Продолжить»: по одной записи на фильм или сериал — самая свежая и недосмотренная.
     var continueWatching: [WatchEntry] {
-        var latest: [String: WatchEntry] = [:]
-        for entry in entries.values where (latest[entry.item.id]?.updated ?? .distantPast) < entry.updated {
-            latest[entry.item.id] = entry
-        }
-        return latest.values.filter(\.resumable).sorted { $0.updated > $1.updated }
+        progressByItem.values.filter(\.resumable).sorted { $0.updated > $1.updated }
     }
 
     func record(item: VodItem, episode: VodEpisode?, position: Double, duration: Double, source: WatchSource?) {
         guard position.isFinite, duration.isFinite else { return }
         let key = Self.key(item, episode)
-        entries[key] = WatchEntry(key: key, item: item, episode: episode, position: position, duration: duration,
-                                  updated: .now, source: source ?? entries[key]?.source)
+        let old = entries[key]
+        let entry = WatchEntry(key: key, item: item, episode: episode, position: position, duration: duration,
+                               updated: .now, source: source ?? old?.source)
+        entries[key] = entry
+        if old == nil || ((old?.fraction ?? 0) >= 0.7) != (entry.fraction >= 0.7) { tasteRevision += 1 }
         persist(entries, "library.entries")
     }
 
     func forget(_ entry: WatchEntry) {
         entries[entry.key] = nil
+        tasteRevision += 1
         persist(entries, "library.entries")
     }
 

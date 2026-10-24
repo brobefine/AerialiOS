@@ -73,6 +73,7 @@ struct PosterGrid: View {
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("poster")
+                .contextMenu { PosterMenu(item: item) }
                 .onAppear { if item.id == items.last?.id { onAppearLast?() } }
             }
         }
@@ -161,7 +162,7 @@ struct PersonView: View {
     }
 }
 
-/// Медиатека: «Продолжить просмотр» и «Мой список».
+/// Медиатека: «Продолжить просмотр», «Мой список» и «Нравится».
 struct LibraryView: View {
     @Environment(Library.self) private var library
 
@@ -177,12 +178,19 @@ struct LibraryView: View {
                             PosterGrid(items: library.saved)
                         }
                     }
+                    let liked = library.likedItems
+                    if !liked.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            ShelfHeader(title: "Нравится")
+                            PosterGrid(items: liked)
+                        }
+                    }
                 }
                 .padding(.vertical, 12)
             }
             .background(Theme.background)
             .overlay {
-                if library.saved.isEmpty && library.continueWatching.isEmpty {
+                if library.saved.isEmpty && library.continueWatching.isEmpty && library.likedItems.isEmpty {
                     ContentUnavailableView("Здесь пока пусто", systemImage: "rectangle.stack",
                                            description: Text("Добавляйте фильмы кнопкой «+», а начатое появится в «Продолжить»."))
                 }

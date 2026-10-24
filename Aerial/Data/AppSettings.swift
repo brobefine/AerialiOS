@@ -39,6 +39,10 @@ final class AppSettings {
     /// Кэш встроенного TorrServer в памяти, МБ.
     var cacheMB: Int { didSet { defaults.set(cacheMB, forKey: "torrserver.cacheMB") } }
     var tmdbProxy: String { didSet { defaults.set(tmdbProxy, forKey: TMDb.proxyKey) } }
+    /// «Учитывать историю просмотра» в подборе «Вам понравится?».
+    var tasteHistory: Bool { didSet { defaults.set(tasteHistory, forKey: "taste.history") } }
+    /// Следующая серия — сама через 10 с после конца серии.
+    var autoplayNext: Bool { didSet { defaults.set(autoplayNext, forKey: "player.autoplayNext") } }
 
     init() {
         parserAddress = defaults.string(forKey: "parser.address") ?? Self.parserCatalog[0].address
@@ -48,5 +52,7 @@ final class AppSettings {
         externalAddress = defaults.string(forKey: "torrserver.address") ?? ""
         cacheMB = defaults.object(forKey: "torrserver.cacheMB") as? Int ?? 256
         tmdbProxy = defaults.string(forKey: TMDb.proxyKey) ?? TMDb.defaultProxy
+        tasteHistory = defaults.object(forKey: "taste.history") as? Bool ?? true
+        autoplayNext = defaults.object(forKey: "player.autoplayNext") as? Bool ?? true
     }
 }

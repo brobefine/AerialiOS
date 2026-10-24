@@ -10,11 +10,15 @@ struct PlayerView: View {
     @State private var controls = true
     @State private var scrub: Double?
     @State private var hideTask: Task<Void, Never>?
+    @State private var nextDismissed = false
+    @State private var countdown = 10
     private let dismiss: () -> Void
+    private let onNext: (PlaybackRequest) -> Void
 
-    init(request: PlaybackRequest, onClose: @escaping () -> Void) {
+    init(request: PlaybackRequest, onClose: @escaping () -> Void, onNext: @escaping (PlaybackRequest) -> Void) {
         _model = State(initialValue: PlayerModel(request: request))
         dismiss = onClose
+        self.onNext = onNext
     }
 
     var body: some View {
@@ -39,6 +43,7 @@ struct PlayerView: View {
             if controls || model.phase != .playing || model.paused {
                 overlay.transition(.opacity)
             }
+            corner
         }
         .animation(.easeOut(duration: 0.2), value: controls)
         .statusBarHidden(true)
@@ -46,7 +51,91 @@ struct PlayerView: View {
         .task { await model.start(settings: settings, library: library) }
         .onAppear { scheduleHide() }
         .onDisappear { model.stop() }
-        .onChange(of: model.finished) { _, finished in if finished { dismiss() } }
+        .onChange(of: model.finished) { _, finished in
+            if finished && (model.next == nil || nextDismissed) { dismiss() }
+        }
+        .task(id: model.finished) { await autoplay() }
+    }
+
+    // MARK: Серии
+
+    /// Справа внизу: «Пропустить заставку», а на титрах и после конца серии — «Далее».
+    @ViewBuilder private var corner: some View {
+        let upNext = model.next.flatMap { (model.finished || model.credits) && !nextDismissed ? $0 : nil }
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
+                if let upNext {
+                    nextCard(upNext)
+                } else if let skip = model.skipNow, !model.buffering {
+                    Button {
+                        model.skipSegment()
+                        scheduleHide()
+                    } label: {
+                        Label(skip.kind == .recap ? "Пропустить «Ранее в сериале»" : "Пропустить заставку", systemImage: "forward.end.fill")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.black)
+                            .padding(.horizontal, 18)
+                            .frame(height: 44)
+                            .background(.white, in: Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityIdentifier("player-skip")
+                }
+            }
+            .padding(.trailing, 24)
+            .padding(.bottom, controls ? 110 : 28)
+        }
+        .animation(.easeOut(duration: 0.2), value: upNext?.id)
+        .animation(.easeOut(duration: 0.2), value: model.skipNow)
+    }
+
+    private func nextCard(_ next: PlaybackRequest) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Далее").font(.caption.weight(.semibold)).foregroundStyle(Theme.secondaryText)
+                Spacer()
+                Button {
+                    nextDismissed = true
+                    if model.finished { dismiss() }
+                } label: {
+                    Image(systemName: "xmark").font(.caption.weight(.bold)).foregroundStyle(.white.opacity(0.8))
+                        .frame(width: 28, height: 28)
+                }
+                .accessibilityLabel("Скрыть")
+            }
+            if let episode = next.episode {
+                Text("\(episode.code) · \(episode.title)").font(.headline).foregroundStyle(.white).lineLimit(2)
+            }
+            if model.finished && settings.autoplayNext {
+                Text("Начнётся через \(countdown) с").font(.caption).foregroundStyle(Theme.secondaryText)
+            }
+            Button { playNext() } label: { Label("Смотреть", systemImage: "play.fill") }
+                .buttonStyle(PrimaryButtonStyle())
+                .accessibilityIdentifier("player-next")
+        }
+        .padding(16)
+        .frame(width: 300)
+        .glass(in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+    }
+
+    /// Серия кончилась — через 10 с следующая, если так в настройках и карточку не скрыли.
+    private func autoplay() async {
+        countdown = 10
+        guard model.finished, model.next != nil, settings.autoplayNext, !nextDismissed else { return }
+        while countdown > 0 {
+            try? await Task.sleep(for: .seconds(1))
+            if Task.isCancelled || nextDismissed { return }
+            countdown -= 1
+        }
+        playNext()
+    }
+
+    private func playNext() {
+        guard let next = model.next else { return }
+        model.stop()
+        onNext(next)
     }
 
     // MARK: Состояние
@@ -88,6 +177,11 @@ struct PlayerView: View {
                     .buttonStyle(CircleGlassButtonStyle(size: 44))
                     .accessibilityLabel("Закрыть")
                 Spacer()
+                if model.next != nil {
+                    Button { playNext() } label: { Image(systemName: "forward.end.fill") }
+                        .buttonStyle(CircleGlassButtonStyle(size: 42))
+                        .accessibilityLabel("Следующая серия")
+                }
                 if model.phase == .playing { tracksMenu }
             }
             .padding(.horizontal, 20)

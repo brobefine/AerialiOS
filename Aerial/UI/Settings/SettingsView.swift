@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// Вкладка «Настройки»: поиск раздач, TorrServer (встроенный или внешний), TMDb, кэш, журналы.
+/// Вкладка «Настройки»: поиск раздач, TorrServer (встроенный или внешний), плеер, подбор, TMDb, кэш, журналы.
 struct SettingsView: View {
     @Environment(AppSettings.self) private var settings
+    @Environment(Library.self) private var library
 
     @State private var probes: [String: Bool] = [:]
     @State private var externalCheck: String?
@@ -73,6 +74,25 @@ struct SettingsView: View {
                     Text(settings.serverMode == .embedded
                          ? "Встроенный работает, пока открыто приложение или идёт фильм. Раздача качается во время просмотра — по мобильной сети это трафик."
                          : "TorrServer на телевизоре или компьютере в той же сети.")
+                }
+
+                Section {
+                    Toggle("Следующая серия автоматически", isOn: $settings.autoplayNext)
+                } header: {
+                    Text("Плеер")
+                } footer: {
+                    Text("Серия кончилась — через 10 с начнётся следующая из той же раздачи. Заставку можно пропустить кнопкой, если её отметили зрители IntroDB или AniSkip.")
+                }
+
+                Section {
+                    Toggle("Учитывать историю просмотра", isOn: $settings.tasteHistory)
+                    LabeledContent("Оценок", value: String(library.marks.count))
+                    Button("Сбросить оценки", role: .destructive) { library.clearMarks() }
+                        .disabled(library.marks.isEmpty)
+                } header: {
+                    Text("Рекомендации")
+                } footer: {
+                    Text("«Вам понравится?» подбирается по оценкам «Нравится», «Обожаю» и «Не моё», «Моему списку» и просмотренному — вместе с похожими по TMDb.")
                 }
 
                 Section {

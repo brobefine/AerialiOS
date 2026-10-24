@@ -149,6 +149,12 @@ final class Catalogue: Sendable {
         }
     }
 
+    /// Рекомендации TMDb к работе — соседи для подбора «Вам понравится?» ([Taste]).
+    func recommendations(_ item: VodItem) async throws -> [VodItem] {
+        let body = try await tmdb.decode(TMDbPage.self, "\(item.tmdbType)/\(item.remoteId)/recommendations", ttl: 7 * DiskCache.day)
+        return try await items(body.results, kind: item.kind)
+    }
+
     /// Номер IMDb — для Torrentio. Без языка: ответ один на все языки.
     func imdbId(_ item: VodItem) async -> String? {
         struct Ids: Decodable { var imdbId: String? }

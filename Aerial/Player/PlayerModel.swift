@@ -42,7 +42,7 @@ final class Playback {
         guard controller == nil, let settings, let library, let presenter = Self.topController() else { return }
         self.request = request
         Orientation.allowLandscape(true)
-        let view = PlayerView(request: request) { [weak self] in self?.close() }
+        let view = PlayerScreen { [weak self] in self?.close() }
             .environment(settings)
             .environment(library)
             .environment(self)
@@ -61,6 +61,13 @@ final class Playback {
         }
     }
 
+    /// Следующая серия в том же окне плеера: прежний плеер уже остановлен и сохранил прогресс.
+    func advance(to next: PlaybackRequest) {
+        guard controller != nil else { return }
+        Log.note("ПЛЕЕР", "следующая серия: \(next.subtitle)")
+        request = next
+    }
+
     /// «Продолжить»: раздача и файл уже известны, позиция — из медиатеки.
     func resume(_ entry: WatchEntry) {
         guard let source = entry.source else { return }
@@ -74,6 +81,22 @@ final class Playback {
         var top = scene?.keyWindow?.rootViewController ?? scene?.windows.first?.rootViewController
         while let presented = top?.presentedViewController { top = presented }
         return top
+    }
+}
+
+/// Плеер текущего запроса [Playback]; новая серия — новый [PlayerView] со своим mpv.
+private struct PlayerScreen: View {
+    let onClose: () -> Void
+
+    @Environment(Playback.self) private var playback
+
+    var body: some View {
+        if let request = playback.request {
+            PlayerView(request: request, onClose: onClose) { playback.advance(to: $0) }
+                .id(request.id)
+        } else {
+            Color.black.ignoresSafeArea()
+        }
     }
 }
 
@@ -113,6 +136,22 @@ final class PlayerModel {
     private(set) var subtitleTracks: [MPVTrack] = []
     private(set) var peers = 0
     private(set) var speed: Int64 = 0
+    /// Заставка и титры серии (IntroDB, AniSkip); пусто — неизвестны.
+    private(set) var skips: [SkipSegment] = []
+    /// Следующая серия из той же раздачи; nil — фильм или серия последняя.
+    private(set) var next: PlaybackRequest?
+
+    /// Идёт заставка или «ранее в сериале» — кнопка пропуска (до конца отрезка больше 1,5 с).
+    var skipNow: SkipSegment? {
+        skips.first { $0.kind != .outro && position >= $0.start && position < $0.end - 1.5 }
+    }
+
+    /// Титры: с начала отмеченных, иначе за минуту до конца (или 2,5 % длины) — пора предложить следующую серию.
+    var credits: Bool {
+        guard duration > 0, next != nil else { return false }
+        if let outro = skips.first(where: { $0.kind == .outro }) { return position >= outro.start }
+        return duration - position <= max(60, duration / 40)
+    }
 
     @ObservationIgnored private var core: MPVCore?
     @ObservationIgnored private var library: Library?
@@ -123,6 +162,7 @@ final class PlayerModel {
     @ObservationIgnored private var observers: [NSObjectProtocol] = []
     private let nowPlaying = NowPlaying()
     @ObservationIgnored private var nowPlayingUpdated = Date.distantPast
+    @ObservationIgnored private var stopped = false
 
     init(request: PlaybackRequest) {
         self.request = request
@@ -149,6 +189,11 @@ final class PlayerModel {
             guard let file = chosen else { throw TorrServerError.noVideo }
             source = WatchSource(link: request.link, hash: info.hash, fileIndex: file.index, fileName: file.name,
                                  releaseTitle: request.releaseTitle)
+            let files = info.files
+            Task { [weak self] in
+                await self?.planNext(files: files, current: file)
+                await self?.loadSkips()
+            }
             Log.note("ПЛЕЕР", "\(request.title): \(file.name) (\(Format.bytes(file.bytes))), с \(Int(request.startAt)) с")
             phase = .preloading(0)
             await client.preload(hash: info.hash, file: file, duration: Double(request.runtimeMinutes * 60)) { [weak self] value, stat in
@@ -177,7 +222,10 @@ final class PlayerModel {
         }
     }
 
+    /// Повторный вызов ничего не делает: при переходе к следующей серии плеер останавливают раньше, чем экран уходит.
     func stop() {
+        guard !stopped else { return }
+        stopped = true
         save(force: true)
         stats?.cancel()
         core?.destroy()
@@ -196,6 +244,40 @@ final class PlayerModel {
     func skip(_ seconds: Double) { core?.seek(by: seconds) }
     func selectAudio(_ track: MPVTrack) { core?.selectAudio(track.id) }
     func selectSubtitle(_ track: MPVTrack?) { core?.selectSubtitle(track?.id) }
+    func skipSegment() {
+        if let segment = skipNow { seek(to: segment.end) }
+    }
+
+    // MARK: Сериал
+
+    /// Следующая серия — следующий по сезону и номеру файл той же раздачи (пачка сезона или нескольких сезонов).
+    /// Название и длительность — из TMDb, если сезон отвечает.
+    private func planNext(files: [TorrentFile], current: TorrentFile) async {
+        guard request.item.kind == .series, let episode = request.episode else { return }
+        let here = EpisodeMatch.coordinates(current.path) ?? (season: episode.season, episode: episode.number)
+        let found = files.compactMap { file -> (file: TorrentFile, season: Int, number: Int)? in
+            guard let place = EpisodeMatch.coordinates(file.path), (place.season, place.episode) > (here.season, here.episode) else {
+                return nil
+            }
+            return (file: file, season: place.season, number: place.episode)
+        }.min { ($0.season, $0.number) < ($1.season, $1.number) }
+        guard let found else { return }
+        let episodes = request.item.remoteId > 0 ? (try? await Catalogue.shared.season(request.item, found.season)) ?? [] : []
+        let meta = episodes.first { $0.number == found.number }
+            ?? VodEpisode(season: found.season, number: found.number, title: "Серия \(found.number)")
+        next = PlaybackRequest(item: request.item, episode: meta, link: request.link, fileIndex: found.file.index,
+                               releaseTitle: request.releaseTitle, runtimeMinutes: meta.runtimeMinutes, record: request.record)
+    }
+
+    private func loadSkips() async {
+        guard request.item.kind == .series, request.item.remoteId > 0, let episode = request.episode else { return }
+        let imdb = await Catalogue.shared.imdbId(request.item)
+        let found = await SkipSegments.shared.load(tmdbId: request.item.remoteId, imdbId: imdb, season: episode.season,
+                                                   episode: episode.number)
+        skips = found
+        let list = found.map { "\($0.kind) \(Int($0.start))-\(Int($0.end)) с" }.joined(separator: ", ")
+        Log.note("ЗАСТАВКА", "\(request.title) S\(episode.season)E\(episode.number) imdb=\(imdb ?? "—") → \(list.isEmpty ? "нет отметок" : list)")
+    }
 
     // MARK: События
 

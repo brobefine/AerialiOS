@@ -8,6 +8,7 @@ struct AerialApp: App {
     @Environment(\.scenePhase) private var scenePhase
     @State private var settings = AppSettings()
     @State private var library = Library()
+    @State private var taste = Taste()
     @State private var playback = Playback()
 
     init() {
@@ -25,6 +26,7 @@ struct AerialApp: App {
             RootView()
                 .environment(settings)
                 .environment(library)
+                .environment(taste)
                 .environment(playback)
                 .preferredColorScheme(.dark)
                 .tint(Theme.accent)

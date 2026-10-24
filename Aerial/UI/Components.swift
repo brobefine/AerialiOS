@@ -81,6 +81,64 @@ struct PosterCard: View {
     }
 }
 
+/// Оценка работы, как у ТВ: «Обожаю», «Нравится», «Не моё». Повторный выбор снимает оценку.
+enum TasteLevel: Int, CaseIterable, Identifiable {
+    case loved = 2, liked = 1, rejected = -1
+
+    var id: Int { rawValue }
+    var title: String {
+        switch self {
+        case .loved: "Обожаю"
+        case .liked: "Нравится"
+        case .rejected: "Не моё"
+        }
+    }
+    var symbol: String {
+        switch self {
+        case .loved: "heart"
+        case .liked: "hand.thumbsup"
+        case .rejected: "hand.thumbsdown"
+        }
+    }
+
+    /// Значок кнопки оценки: выбранная — закрашенным, без оценки — пустой палец вверх.
+    static func symbol(_ level: Int) -> String {
+        TasteLevel(rawValue: level).map { $0.symbol + ".fill" } ?? "hand.thumbsup"
+    }
+}
+
+/// Пункты оценки — для меню кнопки на странице фильма и меню постера.
+struct TasteMenuItems: View {
+    let item: VodItem
+
+    @Environment(Library.self) private var library
+
+    var body: some View {
+        let current = library.rating(item)
+        ForEach(TasteLevel.allCases) { level in
+            Button {
+                library.rate(item, current == level.rawValue ? 0 : level.rawValue)
+            } label: {
+                Label(level.title, systemImage: current == level.rawValue ? level.symbol + ".fill" : level.symbol)
+            }
+        }
+    }
+}
+
+/// Меню постера по долгому нажатию: «Мой список» и оценка.
+struct PosterMenu: View {
+    let item: VodItem
+
+    @Environment(Library.self) private var library
+
+    var body: some View {
+        Button { library.toggleSaved(item) } label: {
+            library.isSaved(item) ? Label("Убрать из списка", systemImage: "checkmark") : Label("В мой список", systemImage: "plus")
+        }
+        Section("Оценка") { TasteMenuItems(item: item) }
+    }
+}
+
 /// Постер с номером — «Топ-10», как в ряду «В тренде сегодня».
 struct RankedPoster: View {
     let rank: Int
@@ -132,6 +190,7 @@ struct PosterShelf: View {
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("poster")
+                        .contextMenu { PosterMenu(item: item) }
                     }
                 }
                 .scrollTargetLayout()

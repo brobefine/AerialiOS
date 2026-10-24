@@ -1,7 +1,8 @@
 import XCTest
 
 /// Снимки экранов на CI (Mac нет — так видно, что собралось и как выглядит): главная, разделы, сериал с сезонами
-/// и раздачами серии, фильм, актёр, «Смотреть всё», медиатека, настройки, поиск; отдельно — воспроизведение.
+/// и раздачами серии, фильм и его оценка, «Вам понравится?», актёр, «Смотреть всё», медиатека, настройки, поиск;
+/// отдельно — воспроизведение.
 /// Ждём появления элементов, а не фиксированное время; короткая пауза перед снимком — чтобы догрузились картинки.
 /// Шаг, для которого не нашлось элемента, пропускается (снимка нет), а не роняет весь прогон.
 /// Снимки — в `SCREENS_DIR` (CI передаёт через `TEST_RUNNER_SCREENS_DIR`) и вложениями результата.
@@ -70,6 +71,7 @@ final class ScreensTests: XCTestCase {
         home()
         series()
         movie(person: true)
+        forYou()
         section()
         tabs(search: true)
     }
@@ -126,6 +128,10 @@ final class ScreensTests: XCTestCase {
             let watch = element("details-watch")
             XCTAssertTrue(watch.waitForExistence(timeout: 30), "страница фильма не открылась")
             shot("07-details")
+            // Оценка «Нравится» — из неё главная собирает «Вам понравится?».
+            if tap(element("details-rate"), wait: 3), tap(app.buttons["Нравится"].firstMatch, wait: 3) {
+                shot("07b-details-rated", settle: 1)
+            }
             app.swipeUp()
             shot("08-details-more")
             if person, tapVisible("person", wait: 3) {
@@ -142,6 +148,13 @@ final class ScreensTests: XCTestCase {
                 back()
             }
             back()
+        }
+    }
+
+    /// Ряд «Вам понравится?» после оценки фильма: соседи TMDb приходят за несколько секунд.
+    private func forYou() {
+        if app.staticTexts["Вам понравится?"].firstMatch.waitForExistence(timeout: 20) {
+            shot("07c-home-for-you", settle: 2)
         }
     }
 

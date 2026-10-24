@@ -124,11 +124,27 @@ struct DetailsView: View {
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(.white.opacity(0.75))
                 .multilineTextAlignment(.center)
-            if shown.rating > 0 && shown.votes >= 10 {
+            let rated = shown.rating > 0 && shown.votes >= 10
+            let trailer = (details?.trailerKey).flatMap { $0.isEmpty ? nil : URL(string: "https://www.youtube.com/watch?v=\($0)") }
+            if rated || trailer != nil {
                 HStack(spacing: 8) {
-                    RatingRing(value: shown.rating, size: 34)
-                    Text("TMDb · \(shown.votes) \(Format.plural(shown.votes, "голос", "голоса", "голосов"))")
-                        .font(.caption).foregroundStyle(.white.opacity(0.75))
+                    if rated {
+                        RatingRing(value: shown.rating, size: 34)
+                        Text("TMDb · \(shown.votes) \(Format.plural(shown.votes, "голос", "голоса", "голосов"))")
+                            .font(.caption).foregroundStyle(.white.opacity(0.75))
+                    }
+                    if let trailer {
+                        Button { openURL(trailer) } label: {
+                            Label("Трейлер", systemImage: "play.rectangle")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 12)
+                                .frame(height: 30)
+                                .glass(in: Capsule(), interactive: true)
+                        }
+                        .buttonStyle(.plain)
+                        .padding(.leading, rated ? 6 : 0)
+                    }
                 }
             }
             actions.frame(maxWidth: 440)
@@ -219,11 +235,15 @@ struct DetailsView: View {
             }
             .buttonStyle(CircleGlassButtonStyle())
             .accessibilityLabel(library.isSaved(item) ? "Убрать из списка" : "В мой список")
-            if let key = details?.trailerKey, !key.isEmpty, let url = URL(string: "https://www.youtube.com/watch?v=\(key)") {
-                Button { openURL(url) } label: { Image(systemName: "film") }
-                    .buttonStyle(CircleGlassButtonStyle())
-                    .accessibilityLabel("Трейлер")
+            Menu { TasteMenuItems(item: shown) } label: {
+                Image(systemName: TasteLevel.symbol(library.rating(item)))
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .frame(width: 48, height: 48)
+                    .glass(in: Circle(), interactive: true)
             }
+            .accessibilityLabel("Оценка")
+            .accessibilityIdentifier("details-rate")
         }
     }
 
