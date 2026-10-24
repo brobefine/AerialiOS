@@ -221,8 +221,7 @@ enum AI {
                     "Dig deeper: lesser-known but fitting works, other countries and decades.\n") +
                 "Return a JSON object {\"themes\": [short theme names in Russian], \"items\": [{\"title\": title in Russian if it exists, else original, " +
                 "\"original\": original title, \"year\": release year as number, \"type\": \"movie\" or \"tv\", " +
-                "\"why\": the shared theme in Russian, one short phrase (max 70 chars)}]}. Only real, existing titles.
-" +
+                "\"why\": the shared theme in Russian, one short phrase (max 70 chars)}]}. Only real, existing titles.\n" +
                 SpoilerGuard.rules,
                 json: true, temperature: 0.6, strong: true)
         }
