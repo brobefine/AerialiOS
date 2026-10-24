@@ -29,11 +29,13 @@ final class Feeds {
     @ObservationIgnored private var fourKJob: Task<Void, Never>?
 
     /// Перенос `refreshFourK` ТВ: популярные фильмы, вышедшие в онлайн или на диске за 4 месяца (TMDb), и для каждого —
-    /// поиск раздачи 4K с тем же годом. По одному запросу с паузой (парсер ограничивает частоту). Раз в 6 часов.
+    /// поиск раздачи 4K с тем же годом. По одному запросу с паузой (парсер ограничивает частоту). На телефоне — раз в
+    /// сутки (на ТВ раз в 6 часов) и не во время фильма: до 45 поисков с разбором сотен названий — сеть и процессор
+    /// впустую (perf.log 24 октября).
     func refreshFourK(_ settings: AppSettings) {
         let defaults = UserDefaults.standard
         guard !settings.parserAddress.isEmpty, fourKJob == nil else { return }
-        if Date().timeIntervalSince1970 - defaults.double(forKey: "feeds.fourKAt") < 6 * 3600 && !fourK.isEmpty { return }
+        if Date().timeIntervalSince1970 - defaults.double(forKey: "feeds.fourKAt") < 24 * 3600 && !fourK.isEmpty { return }
         let parser = ReleaseSearch.Parser(address: settings.parserAddress, key: settings.parserKey, torrentio: false)
         fourKJob = Task { [weak self] in
             defer { self?.fourKJob = nil }
@@ -41,6 +43,10 @@ final class Feeds {
             var films: [VodItem] = []
             for film in candidates {
                 if films.count >= 24 || Task.isCancelled { break }
+                // Идёт фильм — ждём: поток и процессор нужнее плееру.
+                while PerfMonitor.activity.hasPrefix("плеер"), !Task.isCancelled {
+                    try? await Task.sleep(for: .seconds(30))
+                }
                 if await Self.hasFourK(film, parser: parser) {
                     films.append(film)
                     if films.count >= 3 { self?.fourK = films }
