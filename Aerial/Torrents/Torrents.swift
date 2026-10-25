@@ -143,4 +143,16 @@ enum Torrents {
         guard settings.serverMode == .embedded else { return }
         try? await EmbeddedTorrServer.shared.ensureRunning(cacheMB: settings.cacheMB)
     }
+
+    /// Свернули без фильма и загрузки — раздачи встроенного сервера закрываются сразу, а не через 30 с без
+    /// читателей: таймер сервера во сне не идёт, и усыплённое приложение держало кэш (до сотен МБ), пиров и сеть.
+    /// В базе раздачи остаются — «Продолжить» откроет их снова.
+    static func releaseForBackground() async {
+        guard case .running = EmbeddedTorrServer.shared.state,
+              let list = try? await EmbeddedTorrServer.shared.client.list() else { return }
+        let loaded = list.filter(\.loaded)
+        guard !loaded.isEmpty else { return }
+        for torrent in loaded { try? await EmbeddedTorrServer.shared.client.drop(torrent.hash) }
+        Log.note("TORRSERVER", "в фоне закрыто раздач: \(loaded.count)")
+    }
 }

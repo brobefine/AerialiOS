@@ -16,6 +16,8 @@ struct TorrentInfo: Sendable {
     var peers: Int
     var speed: Int64
     var metadataReady: Bool
+    /// Раздача открыта в памяти сервера (кэш, пиры); `false` — только запись в базе (`stat` 5).
+    var loaded = true
 }
 
 enum TorrServerError: LocalizedError {
@@ -97,6 +99,11 @@ struct TorrServerClient: Sendable {
         let data = try await HTTP.postJSON(base.appending(path: "torrents"), body: ["action": "list"], timeout: 10, headers: headers)
         let rows = (try JSONSerialization.jsonObject(with: data) as? [[String: Any]]) ?? []
         return rows.compactMap { try? Self.parse($0) }
+    }
+
+    /// Закрыть раздачу в памяти сервера (кэш, пиры, сеть); в базе она остаётся.
+    func drop(_ hash: String) async throws {
+        _ = try await HTTP.postJSON(base.appending(path: "torrents"), body: ["action": "drop", "hash": hash], timeout: 5, headers: headers)
     }
 
     func remove(_ hash: String) async throws {
@@ -196,7 +203,8 @@ struct TorrServerClient: Sendable {
         }
         let title = [row["title"] as? String, row["name"] as? String].compactMap { $0 }.first { !$0.isEmpty } ?? hash
         return TorrentInfo(hash: hash, title: title, files: files, peers: (row["active_peers"] as? NSNumber)?.intValue ?? 0,
-                           speed: Int64((row["download_speed"] as? NSNumber)?.doubleValue ?? 0), metadataReady: !stats.isEmpty)
+                           speed: Int64((row["download_speed"] as? NSNumber)?.doubleValue ?? 0), metadataReady: !stats.isEmpty,
+                           loaded: (row["stat"] as? NSNumber)?.intValue != 5)
     }
 }
 

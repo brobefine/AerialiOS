@@ -46,10 +46,12 @@
   русский; `L("…")` — строка интерфейса: русский текст — ключ, перевод — `English.table`, подстановки `%@`; TMDb, даты и ИИ —
   на том же языке), `English` (таблица перевода и формы множественного числа), `CrashGuard` (падения — сигналы и исключения в `logs/crash.log`; выход через exit() — отметка `exit.marker` (так
   перезапускает LiveContainer); как кончился прошлый запуск — «в фоне без
-  падения» значит выгрузила система), `Storage` (где данные; в LiveContainer документы бывают в общей папке группы — тогда
+  падения» значит выгрузила система; к записи добавлено, когда ушёл в фон, сколько жил и сколько держал памяти), `Storage` (где данные; в LiveContainer документы бывают в общей папке группы — тогда
   база TorrServer во временной папке процесса), `BuildKeys` (ключи сборки из Info.plist), `Log` (журналы `Documents/logs`), `PerfMonitor` (`perf.log`: раз в 15 с
-  ЦП, память, нагрев, заряд, яркость, что идёт и как декодируется видео; раз в 5 мин — СВОДКА: средний и пиковый ЦП, сеть
-  Wi‑Fi/сотовая, расход заряда в час, заторы; после ухода в фон — пульс 20 с; «ЗАТОР» — главный поток молчал > 250 мс; `logs/metrics/` — отчёты и диагностика MetricKit), `HTTP`, `DiskCache` (ответы TMDb: срок по виду запроса, при сбое — старый
+  ЦП, память, нагрев, заряд, яркость, что идёт и как декодируется видео; раз в минуту — СВОДКА: средний и пиковый ЦП, сеть
+  Wi‑Fi/сотовая, расход заряда в час, заторы; после ухода в фон — пульс 20 с; «ЗАТОР» — главный поток молчал > 250 мс; `logs/metrics/` — отчёты и диагностика MetricKit; в `app.log` —
+  «ДИАГНОСТИКА»: причины закрытий за сутки (`MXAppExitMetric`: jetsam, лимит памяти, блокировка файла, сторож) и
+  код каждого падения), `HTTP`, `DiskCache` (ответы TMDb: срок по виду запроса, при сбое — старый
   ответ), `Text` (`Rx` — NSRegularExpression с просмотром назад; `SearchText`, `Suggestions` — подсказки поиска с раскладкой и опечатками,
   `Format`).
 - `Data/` — `Models` (`VodItem`, `VodShelf.accepts`, `CinemaSection`), `TMDb` (прямой API → Worker-прокси, последний
@@ -68,7 +70,8 @@
   ключей UserDefaults в plist).
 - `Torrents/` — `TorrServerClient` (HTTP-API: add, stat, awaitFiles, preload с ранним стартом, streamURL, settings),
   `Torrents` (`EmbeddedTorrServer` — 127.0.0.1:18090, запускается один раз за жизнь процесса — остановка и повторный
-  запуск движка Go обрывали приложение при возврате из фона; настройки кэша; выбор встроенный/внешний),
+  запуск движка Go обрывали приложение при возврате из фона; настройки кэша; выбор встроенный/внешний;
+  `releaseForBackground` — свернули без фильма и загрузки: раздачи закрываются (`drop`), кэш, пиры и сеть не висят во сне),
   `Release` (`Release`, `ReleaseInfo` — разбор названия, `EpisodeMatch` — файл серии), `ReleaseSearch` (JacRed exact →
   Jackett, плюс `Torrentio`), `DownloadLive` (загрузка в Dynamic Island — Live Activity при обычной установке), `DownloadKeepAlive` (беззвучный
   звук держит приложение живым, пока идёт загрузка; в LiveContainer — определяется по пути приложения — загрузка в Dynamic
@@ -120,7 +123,7 @@
 ## Данные на устройстве
 
 - UserDefaults: настройки (`parser.*`, `torrserver.*`, `tmdbProxy`, `taste.history`, `player.autoplayNext`, `mdblist.key`,
-  `mdblist.blocked`, `mdblist.shown`, `mdblist.sources`, `episodes.overviews`, `episodes.hideSpoilers`, `app.language`, `ui.posterSize`, `ui.actorPhoto`, `ui.titleLogos`, `releases.sort`, `releases.quality`, `search.recent`, `ai.*`, `opensubs.*`, `reviews.sort`), медиатека (`library.saved`, `library.entries`,
+  `mdblist.blocked`, `mdblist.shown`, `mdblist.sources`, `episodes.overviews`, `episodes.hideSpoilers`, `app.language`, `ui.posterSize`, `ui.actorPhoto`, `ui.titleLogos`, `releases.sort`, `releases.quality`, `search.recent`, `ai.*`, `opensubs.*`, `reviews.sort`), запуск (`session.state`, `session.background` — для «ПРОШЛЫЙ ЗАПУСК»), медиатека (`library.saved`, `library.entries`,
   `library.marks`, `library.followed`), друзья (`friends.*`), подбор (`taste.related`, `taste.relatedKey`, `taste.forYou.<раздел>`, `taste.ai*`), `feeds.fourK*`.
 - Caches: `api-cache/` (TMDb, MDBList, ИИ, Википедия, списки «Вселенных»), `images/` (картинки). Application Support: `downloads.json` — список загрузок.
 - Documents (видно в «Файлах» › На iPhone › Aerial): `logs/app.log`, `logs/mpv.log`, `logs/perf.log` (+ `.1` — прошлый запуск), `logs/metrics/` (MetricKit),

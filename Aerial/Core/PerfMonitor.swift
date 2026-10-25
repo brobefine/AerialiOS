@@ -22,10 +22,12 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
     /// Заторы главного потока за текущее окно сводки.
     nonisolated(unsafe) static var stalls = 0
 
-    /// Окно сводки (5 мин): замеры процессора, сеть и заряд в начале.
+    /// Окно сводки (1 мин): замеры процессора и сеть в начале.
     private var windowStart = Date()
     private var windowCPU: [Double] = []
-    private var windowBattery: Float = -1
+    /// Заряд считается с возврата на экран: за минуту он меняется на 0–1 % — скорость в час по окну была бы шумом.
+    private var batteryStart = Date()
+    private var batteryLevel: Float = -1
     private var windowNet: (wifi: UInt64, cell: UInt64)?
     private var heartbeat: Task<Void, Never>?
     private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
@@ -38,7 +40,6 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
         try? FileManager.default.createDirectory(at: metrics, withIntermediateDirectories: true)
         MXMetricManager.shared.add(self)
         UIDevice.current.isBatteryMonitoringEnabled = true
-        windowBattery = UIDevice.current.batteryLevel
         windowNet = Self.networkBytes()
         startWatchdog()
         resume()
@@ -53,6 +54,8 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
             backgroundTask = .invalid
         }
         Self.foreground = true
+        batteryStart = Date()
+        batteryLevel = UIDevice.current.batteryLevel
         guard sampler == nil else { return }
         sampler = Task { [weak self] in
             while !Task.isCancelled {
@@ -68,6 +71,18 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
         sampler?.cancel()
         sampler = nil
         sample(tag: "в фон")
+        Self.rememberBackground(seconds: 0)
+    }
+
+    /// Последнее, что известно о свёрнутом приложении: когда ушло в фон, сколько прожило и сколько держало памяти.
+    /// Если iOS его выгрузит, следующий запуск напишет это в «ПРОШЛЫЙ ЗАПУСК» ([CrashGuard]).
+    nonisolated static let backgroundKey = "session.background"
+
+    private static func rememberBackground(seconds: Int) {
+        let since = Date().addingTimeInterval(-Double(seconds))
+        UserDefaults.standard.set(String(format: "ушёл в фон %@, жил в фоне ≥ %d с, память %.0f МБ%@",
+                                         since.formatted(date: .omitted, time: .standard), seconds, memoryMB(),
+                                         activity.isEmpty ? "" : ", \(activity)"), forKey: backgroundKey)
     }
 
     private func sample(tag: String = "ЗАМЕР") {
@@ -88,7 +103,7 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
         Log.perf(String(format: "%@ ЦП %.0f %% · память %.0f МБ · нагрев %@ · заряд %@%@%@ · яркость %.0f %%%@%@", tag, cpu,
                         Self.memoryMB(), thermal, battery, charging, saver, UIScreen.main.brightness * 100, what, detail))
         windowCPU.append(cpu)
-        if Date().timeIntervalSince(windowStart) >= 300 { summary() }
+        if Date().timeIntervalSince(windowStart) >= 60 { summary() }
         let threads = threadBreakdown()
         if !threads.isEmpty { Log.perf("  потоки: " + threads) }
     }
@@ -103,7 +118,7 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
         Log.perf("  TorrServer: раздач с пирами \(busy.count), пиров \(busy.reduce(0) { $0 + $1.peers }), \(Format.bytes(speed))/с")
     }
 
-    // MARK: Сводка за 5 минут
+    // MARK: Сводка за минуту
 
     /// Средний и пиковый процессор, сеть Wi‑Fi и сотовая, расход заряда и его скорость в час, заторы — по этому видно,
     /// сажает ли приложение батарею и на чём.
@@ -123,17 +138,22 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
             let wifi = Double(net.wifi &- start.wifi) / 1_048_576, cell = Double(net.cell &- start.cell) / 1_048_576
             parts.append(String(format: "сеть Wi‑Fi %.0f МБ, сотовая %.0f МБ", wifi, cell))
         }
-        if windowBattery >= 0, level >= 0, !charging, minutes > 0 {
-            let used = Double(windowBattery - level) * 100
-            parts.append(String(format: "заряд −%.0f %% (≈ %.0f %% в час)", used, used / minutes * 60))
-        } else if charging {
+        let onScreen = now.timeIntervalSince(batteryStart) / 60
+        if charging {
             parts.append("на зарядке")
+            batteryStart = now
+            batteryLevel = -1
+        } else if batteryLevel < 0 {
+            batteryStart = now
+            batteryLevel = level
+        } else if level >= 0, onScreen > 0 {
+            let used = Double(batteryLevel - level) * 100
+            parts.append(String(format: "заряд −%.0f %% за %.0f мин на экране (≈ %.0f %% в час)", used, onScreen, used / onScreen * 60))
         }
         parts.append("заторов \(Self.stalls)")
         Log.perf(String(format: "СВОДКА за %.0f мин: ", minutes) + parts.joined(separator: " · "))
         windowStart = now
         windowCPU = []
-        windowBattery = level
         windowNet = net
         Self.stalls = 0
     }
@@ -179,6 +199,7 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
                 if Task.isCancelled { return }
                 Log.perf(String(format: "ФОН %d с · ЦП %.0f %% · память %.0f МБ%@", second, Self.cpuPercent(), Self.memoryMB(),
                                 Self.activity.isEmpty ? "" : " · \(Self.activity)"))
+                Self.rememberBackground(seconds: second)
             }
             guard let self else { return }
             if backgroundTask != .invalid {
@@ -302,7 +323,40 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
                 parts.append("яркость \(Int(display.averageMeasurement.value)) APL")
             }
             Log.perf("METRICKIT сутки: " + parts.joined(separator: " · "))
+            if let exits = payload.applicationExitMetrics { Self.logExits(exits) }
         }
+    }
+
+    /// Почему iOS закрывала приложение за сутки — единственный точный ответ на «выгрузила в фоне»: падения в фоне
+    /// не оставляют следов в процессе, а здесь их причины посчитаны системой.
+    nonisolated private static func logExits(_ exits: MXAppExitMetric) {
+        let back = exits.backgroundExitData
+        let background: [(String, Int)] = [
+            ("обычно", back.cumulativeNormalAppExitCount),
+            ("нехватка памяти у системы (jetsam)", back.cumulativeMemoryPressureExitCount),
+            ("превышен лимит памяти", back.cumulativeMemoryResourceLimitExitCount),
+            ("лимит ЦП", back.cumulativeCPUResourceLimitExitCount),
+            ("блокировка файла во сне (0xdead10cc)", back.cumulativeSuspendedWithLockedFileExitCount),
+            ("не закрыта фоновая задача", back.cumulativeBackgroundTaskAssertionTimeoutExitCount),
+            ("сторож (завис)", back.cumulativeAppWatchdogExitCount),
+            ("падение: доступ к памяти", back.cumulativeBadAccessExitCount),
+            ("падение: инструкция", back.cumulativeIllegalInstructionExitCount),
+            ("падение: прочее", back.cumulativeAbnormalExitCount),
+        ]
+        let front = exits.foregroundExitData
+        let foreground: [(String, Int)] = [
+            ("обычно", front.cumulativeNormalAppExitCount),
+            ("превышен лимит памяти", front.cumulativeMemoryResourceLimitExitCount),
+            ("сторож (завис)", front.cumulativeAppWatchdogExitCount),
+            ("падение: доступ к памяти", front.cumulativeBadAccessExitCount),
+            ("падение: инструкция", front.cumulativeIllegalInstructionExitCount),
+            ("падение: прочее", front.cumulativeAbnormalExitCount),
+        ]
+        func line(_ rows: [(String, Int)]) -> String {
+            let shown = rows.filter { $0.1 > 0 }.map { "\($0.0) \($0.1)" }
+            return shown.isEmpty ? "нет" : shown.joined(separator: ", ")
+        }
+        Log.note("ДИАГНОСТИКА", "MetricKit, закрытия за сутки — в фоне: \(line(background)); на экране: \(line(foreground))")
     }
 
     nonisolated func didReceive(_ payloads: [MXDiagnosticPayload]) {
@@ -314,6 +368,11 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
             let disk = payload.diskWriteExceptionDiagnostics?.count ?? 0
             Log.perf("METRICKIT диагностика: падений \(crashes), зависаний \(hangs), перегрузок ЦП \(cpu), записи на диск \(disk)")
             Log.note("ДИАГНОСТИКА", "MetricKit: падений \(crashes), зависаний \(hangs) — подробно в logs/metrics")
+            for crash in payload.crashDiagnostics ?? [] {
+                let parts = [crash.signal.map { "сигнал \($0)" }, crash.exceptionType.map { "исключение \($0)" },
+                             crash.exceptionCode.map { "код \($0)" }, crash.terminationReason].compactMap { $0 }
+                Log.note("ДИАГНОСТИКА", "падение \(crash.metaData.applicationBuildVersion): " + parts.joined(separator: " · "))
+            }
         }
     }
 

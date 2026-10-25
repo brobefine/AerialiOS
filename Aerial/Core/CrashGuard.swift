@@ -24,7 +24,8 @@ enum CrashGuard {
             // приложение, когда его открывают ярлыком или из списка LiveContainer.
             Log.note("ПРОШЛЫЙ ЗАПУСК", "завершён вызовом exit() в состоянии «\(previous)» — закрыл код в процессе (LiveContainer?), не iOS")
         case "background" where !crashed:
-            Log.note("ПРОШЛЫЙ ЗАПУСК", "закрыт в фоне без падения — выгрузила система (память, сторож или блокировка файла)")
+            let last = UserDefaults.standard.string(forKey: PerfMonitor.backgroundKey).map { "; \($0)" } ?? ""
+            Log.note("ПРОШЛЫЙ ЗАПУСК", "закрыт в фоне без падения — выгрузила система (память, сторож или блокировка файла)\(last)")
         case "active" where !crashed:
             Log.note("ПРОШЛЫЙ ЗАПУСК", "оборвался на экране без записи о падении (сторож iOS или убит)")
         default:
