@@ -23,12 +23,27 @@ final class EmbeddedTorrServer {
     var address: String { "http://127.0.0.1:\(Self.port)" }
     var client: TorrServerClient { try! TorrServerClient(address: address) }
 
-    /// База и журнал сервера. Обычно — `Documents/TorrServer` (видно в «Файлах»). Если документы лежат в общей папке
-    /// группы приложений (так бывает в LiveContainer), база уходит в личную временную папку процесса: сервер всё время
-    /// держит блокировку файла базы, а свёрнутое приложение с блокировкой в общей папке iOS сразу закрывает.
+    /// База и журнал сервера. Обычно — `Documents/TorrServer` (видно в «Файлах»). Сервер всё время держит `flock` на
+    /// файле базы (bbolt), а уснувший процесс с замком на файле в чужом контейнере iOS закрывает (0xdead10cc). В
+    /// LiveContainer документы принадлежат ему, а не процессу Aerial (в многозадачном режиме Aerial — отдельный процесс,
+    /// иногда и в общей папке группы), и приложение выгружалось через минуту после сворачивания. Там база — в личной
+    /// временной папке процесса; журнал отдаёт «Поделиться журналами».
     var dataDirectory: URL {
-        Storage.sharedGroup ? Storage.privateTemp.appending(path: "TorrServer", directoryHint: .isDirectory)
-            : URL.documentsDirectory.appending(path: "TorrServer", directoryHint: .isDirectory)
+        Storage.sharedGroup || DownloadKeepAlive.insideContainer
+            ? Storage.privateTemp.appending(path: "TorrServer", directoryHint: .isDirectory) : Self.documentsData
+    }
+
+    private static let documentsData = URL.documentsDirectory.appending(path: "TorrServer", directoryHint: .isDirectory)
+
+    /// Переезд в личную папку: база с раздачами и настройки сервера из документов, если на новом месте их ещё нет.
+    private static func migrate(to directory: URL) {
+        let manager = FileManager.default
+        guard directory != documentsData, !manager.fileExists(atPath: directory.appending(path: "config.db").path) else { return }
+        for name in ["config.db", "settings.json", "viewed.json"] {
+            let source = documentsData.appending(path: name)
+            guard manager.fileExists(atPath: source.path) else { continue }
+            try? manager.copyItem(at: source, to: directory.appending(path: name))
+        }
     }
 
     func ensureRunning(cacheMB: Int) async throws {
@@ -62,7 +77,9 @@ final class EmbeddedTorrServer {
         state = .starting
         let directory = dataDirectory
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        Self.migrate(to: directory)
         Self.trimLogs(in: directory)
+        Log.note("TORRSERVER", "база в \(directory.path)")
         let port = Self.port
         let error: String = await Task.detached(priority: .userInitiated) {
             TorrServerEngine.start(port: port, dataDir: directory.path)

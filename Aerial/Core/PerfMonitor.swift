@@ -72,6 +72,31 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
         sampler = nil
         sample(tag: "в фон")
         Self.rememberBackground(seconds: 0)
+        let files = Self.openFiles()
+        if !files.isEmpty { Log.note("ФАЙЛЫ", "открыты при уходе в фон (🔒 — заблокирован): " + files.joined(separator: ", ")) }
+    }
+
+    /// Открытые файлы процесса. Если iOS закрывает уснувшее приложение за блокировку файла (0xdead10cc), виновник —
+    /// среди отмеченных 🔒: их держит `flock` (так база bbolt у TorrServer), проверка — попытка взять общий замок.
+    nonisolated static func openFiles() -> [String] {
+        let home = URL.documentsDirectory.deletingLastPathComponent().path
+        var paths = Set<String>()
+        var buffer = [CChar](repeating: 0, count: Int(MAXPATHLEN))
+        for fd in 0..<getdtablesize() where fcntl(fd, F_GETPATH, &buffer) != -1 {
+            let path = String(cString: buffer)
+            guard path.hasPrefix("/"), !path.hasPrefix("/dev/") else { continue }
+            var locked = false
+            let probe = open(path, O_RDONLY | O_NONBLOCK)
+            if probe >= 0 {
+                if flock(probe, LOCK_SH | LOCK_NB) == 0 { flock(probe, LOCK_UN) } else { locked = errno == EWOULDBLOCK }
+                close(probe)
+            }
+            // F_GETPATH даёт `/private/var/…`, а папка документов — `/var/…`.
+            let plain = path.hasPrefix("/private/") ? String(path.dropFirst("/private".count)) : path
+            let short = plain.hasPrefix(home) ? "~" + plain.dropFirst(home.count) : plain
+            paths.insert((locked ? "🔒 " : "") + short)
+        }
+        return paths.sorted()
     }
 
     /// Последнее, что известно о свёрнутом приложении: когда ушло в фон, сколько прожило и сколько держало памяти.

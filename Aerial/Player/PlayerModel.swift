@@ -300,6 +300,11 @@ final class PlayerModel {
     func stop() {
         guard !stopped else { return }
         stopped = true
+        // Закрыли, не дождавшись видео: сервер подкачку сам не бросает — без сидов он ещё минуты искал пиров
+        // (сеть, батарея). Раздачу закрываем; в базе она остаётся.
+        if phase != .playing, let client, let hash = source?.hash, !hash.isEmpty {
+            Task { try? await client.drop(hash) }
+        }
         partySync?.cancel()
         Friends.shared.watching = nil
         save(force: true)

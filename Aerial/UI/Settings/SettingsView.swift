@@ -349,8 +349,11 @@ struct SettingsView: View {
                 files.append(url)
             }
         }
-        let server = URL.documentsDirectory.appending(path: "TorrServer/torrserver.log")
-        if manager.fileExists(atPath: server.path) { files.append(server) }
+        // В LiveContainer база и журнал сервера — во временной папке процесса, в «Файлах» их не видно.
+        let server = EmbeddedTorrServer.shared.dataDirectory
+        for name in ["torrserver.log", "torrserver.log.1"] where manager.fileExists(atPath: server.appending(path: name).path) {
+            files.append(server.appending(path: name))
+        }
         return files.sorted { $0.path < $1.path }
     }
 
