@@ -88,6 +88,13 @@
   `planNext`; `PlayerScreen` — новая серия открывается новым `PlayerView` в том же окне через `Playback.advance`),
   `PlayerView` (панель как у системного плеера iOS 26–27: −10/пауза/+10 в кругах жидкого стекла по центру видео, стеклянные
   панели сверху и снизу; показ и скрытие — прозрачностью и масштабом (вставка/удаление стекла не анимируется); поворот; справа внизу — «Пропустить заставку» и карточка «Далее» с отсчётом),
+  `Native/` — системный плеер (по умолчанию, настройка `player.native`): `NativeEngine` (AVPlayer; протокол
+  `PlayerEngine` — общий с `MPVCore`; MP4/MOV напрямую, MKV — через HLS; не справился — событие `.fallback`, и
+  `PlayerModel` переходит на mpv; субтитры-текст — своей строкой `subtitleText`), `HLSServer` (127.0.0.1, VOD-плейлист,
+  `HLSSession` — отрезки по запросу, следующий заранее, два в памяти; отпущенный сеанс живёт для окна PiP),
+  `Remuxer` (FFmpeg из MPVKit: MKV → fMP4 по ключевым кадрам из Cues, видео как есть — HEVC `hvc1`, Dolby Vision 5 —
+  `dvh1`, профиль 7 — базовый слой HDR10; AAC/AC3/E-AC3 как есть, остальной звук — `AudioTranscoder` в AAC стерео;
+  dts — свои, `tfdt` абсолютный у каждого отрезка), `MP4Writer` (сборщик `mov` в память).
   `SkipSegments` (заставка и титры: IntroDB по IMDb, затем AniSkip через ARM), `OpenSubtitles` (поиск и `sub-add`),
   `WatchParty` (комната: WebSocket к `party/<код>`, действия ещё и POST с повтором до подтверждения, сторож связи;
   `PlayerModel` сверяет ход раз в секунду — `startPartySync`), `PartyViews` (уведомления и реакции поверх видео,
@@ -122,7 +129,8 @@
   адрес и checksum — в `Package.swift`. Обёртка `TorrServerEngine`: `start`, `stop`, `isRunning`, `setRuntime` (при старте —
   GOGC 200, лимит кэш + 128 МБ, 2 потока), `freeMemory` (после закрытия раздач в фоне).
 - MPVKit 1.0.0 (mpv 0.41, LGPL-сборка) — пакет из `project.yml`.
-- `AerialTests/` — разбор раздач, файлов серий, адресов, ответов TMDb, подбор (`RecommendationsTests`), подсказки, MDBList, имена загрузок, ответы ИИ, Википедия, комната (`FeaturesTests`) (Swift Testing); `AerialUITests/ScreensTests` —
+- `AerialTests/` — разбор раздач, файлов серий, адресов, ответов TMDb, подбор (`RecommendationsTests`), подсказки, MDBList, имена загрузок, ответы ИИ, Википедия, комната (`FeaturesTests`), системный плеер — перепаковка тестовых MKV из
+  `AerialTests/Media` и их показ через AVPlayer (`NativePlayerTests`) (Swift Testing); `AerialUITests/ScreensTests` —
   снимки экранов и проверка воспроизведения на свободном Big Buck Bunny.
 - `docs/port-gaps.md` — сверка с приложением для ТВ: что перенесено и чего нет (с причинами).
 - `reports/` и `research_notes/` — исследования (энергопотребление, LiveContainer, mpv, Go TorrServer) и заметки к ним.
@@ -130,7 +138,7 @@
 
 ## Данные на устройстве
 
-- UserDefaults: настройки (`parser.*`, `torrserver.*`, `tmdbProxy`, `taste.history`, `player.autoplayNext`, `mdblist.key`,
+- UserDefaults: настройки (`parser.*`, `torrserver.*`, `tmdbProxy`, `taste.history`, `player.autoplayNext`, `player.native`, `mdblist.key`,
   `mdblist.blocked`, `mdblist.shown`, `mdblist.sources`, `episodes.overviews`, `episodes.hideSpoilers`, `app.language`, `ui.posterSize`, `ui.actorPhoto`, `ui.titleLogos`, `releases.sort`, `releases.quality`, `search.recent`, `ai.*`, `opensubs.*`, `reviews.sort`), запуск (`session.state`, `session.background` — для «ПРОШЛЫЙ ЗАПУСК»), медиатека (`library.saved`, `library.entries`,
   `library.marks`, `library.followed`), друзья (`friends.*`), подбор (`taste.related`, `taste.relatedKey`, `taste.forYou.<раздел>`, `taste.ai*`), `feeds.fourK*`.
 - Caches: `api-cache/` (TMDb, MDBList, ИИ, Википедия, списки «Вселенных»), `images/` (картинки). Application Support: `downloads.json` — список загрузок.

@@ -171,6 +171,9 @@ enum English {
         "Спойлеры: у непросмотренных серий кадр размыт, а описание скрыто.": "Spoilers: unwatched episodes have a blurred still and hidden description.",
         "Сбросить фильтры и сортировку раздач": "Reset torrent filters and sorting", "Очистить историю поиска": "Clear search history",
         "Следующая серия автоматически": "Play next episode automatically",
+        "Системный плеер": "System player",
+        "Системный плеер — видео путём Apple: меньше расход батареи, настоящий HDR и Dolby Vision. MKV перепаковывается на лету без потери качества; звук DTS и TrueHD — в AAC стерео. Если файл ему не по силам, сам откроется mpv.":
+            "System player plays video the Apple way: less battery drain, true HDR and Dolby Vision. MKV is remuxed on the fly without quality loss; DTS and TrueHD audio become stereo AAC. If a file is beyond it, mpv opens instead.",
         "Серия кончилась — через 10 с начнётся следующая из той же раздачи. Заставку можно пропустить кнопкой, если её отметили зрители IntroDB или AniSkip. Скачанное (удерживайте раздачу — «Скачать») играет с телефона без сети и лежит в «Файлах» › Aerial › Downloads.":
             "When an episode ends, the next one from the same torrent starts in 10 s. The intro can be skipped if IntroDB or AniSkip viewers marked it. Downloads (hold a torrent — Download) play offline and are in Files › Aerial › Downloads.",
         "Размер постеров": "Poster size", "Обычные": "Normal", "Крупные": "Large", "Размер фото актёров": "Actor photo size",

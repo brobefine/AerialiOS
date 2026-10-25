@@ -38,6 +38,10 @@ enum MPVEvent: Sendable {
     case fileLoaded
     case tracks([MPVTrack])
     case ended(error: String?)
+    /// Системный плеер не справился с файлом (кодек, нет индекса MKV) — играть через mpv.
+    case fallback(String)
+    /// Реплика субтитров системного плеера (mpv рисует субтитры сам).
+    case subtitle(String?)
 }
 
 /// Ядро mpv (libmpv из MPVKit) без UIKit: свой поток событий, команды из любого потока (API mpv потокобезопасен),

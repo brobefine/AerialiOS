@@ -194,8 +194,13 @@ final class PlayerModel {
     private(set) var next: PlaybackRequest?
     /// Скорость воспроизведения.
     private(set) var rate: Double = 1
-    /// Поток для «Картинки в картинке»: только контейнеры, которые понимает AVPlayer ([PictureInPicture]).
+    /// Поток для «Картинки в картинке»: только контейнеры, которые понимает AVPlayer ([PictureInPicture]); у системного
+    /// плеера — его же поток (MKV — через перепаковку в HLS).
     private(set) var pipURL: URL?
+    /// Слой системного плеера ([NativeEngine]); nil — играет mpv в [layer].
+    private(set) var nativeLayer: AVPlayerLayer?
+    /// Реплика субтитров системного плеера — рисует [PlayerView].
+    private(set) var subtitleText: String?
 
     /// Идёт заставка или «ранее в сериале» — кнопка пропуска (до конца отрезка больше 1,5 с).
     var skipNow: SkipSegment? {
@@ -209,7 +214,9 @@ final class PlayerModel {
         return duration - position <= max(60, duration / 40)
     }
 
-    @ObservationIgnored private var core: MPVCore?
+    @ObservationIgnored private var core: PlayerEngine?
+    /// Что играем — для перехода с системного плеера на mpv.
+    @ObservationIgnored private var playURL: URL?
     @ObservationIgnored private var library: Library?
     @ObservationIgnored private var client: TorrServerClient?
     @ObservationIgnored private var source: WatchSource?
@@ -275,10 +282,13 @@ final class PlayerModel {
             if PictureInPicture.supported, PictureInPicture.containers.contains((source?.fileName as NSString?)?.pathExtension.lowercased() ?? "") {
                 pipURL = url
             }
-            let core = MPVCore(layer: layer)
-            core.onEvent = { [weak self] event in self?.handle(event) }
-            self.core = core
-            core.load(url, start: request.startAt, title: request.title)
+            playURL = url
+            let name = source?.fileName ?? url.lastPathComponent
+            if settings.nativePlayer, NativeEngine.accepts(fileName: name) {
+                startNative(url)
+            } else {
+                startMPV(url, at: request.startAt)
+            }
             phase = .playing
             nowPlaying.activate(title: request.title, subtitle: request.subtitle, poster: request.item.poster,
                                 toggle: { [weak self] in self?.togglePause() },
@@ -294,6 +304,25 @@ final class PlayerModel {
             Log.note("ПЛЕЕР", "сбой: \(error.localizedDescription)")
             phase = .failed(error.localizedDescription)
         }
+    }
+
+    /// Системный плеер: MKV — перепаковкой в HLS, MP4 — напрямую; видео путём Apple, экономнее mpv.
+    private func startNative(_ url: URL) {
+        let engine = NativeEngine()
+        engine.onEvent = { [weak self] event in self?.handle(event) }
+        core = engine
+        nativeLayer = engine.layer
+        Log.note("ПЛЕЕР", "системный плеер")
+        engine.load(url, start: request.startAt, title: request.title)
+    }
+
+    private func startMPV(_ url: URL, at start: Double) {
+        let core = MPVCore(layer: layer)
+        core.onEvent = { [weak self] event in self?.handle(event) }
+        self.core = core
+        nativeLayer = nil
+        subtitleText = nil
+        core.load(url, start: start, title: request.title)
     }
 
     /// Повторный вызов ничего не делает: при переходе к следующей серии плеер останавливают раньше, чем экран уходит.
@@ -495,6 +524,7 @@ final class PlayerModel {
         case .cache: break
         case .fileLoaded:
             Log.note("ПЛЕЕР", "файл открыт")
+            if let native = core as? NativeEngine, let url = native.playbackURL { pipURL = url }
             // Параметры видео появляются с первым кадром — через пару секунд: в журнал батареи, что и как декодируется.
             Task { [weak self] in
                 try? await Task.sleep(for: .seconds(3))
@@ -512,6 +542,13 @@ final class PlayerModel {
                 selectAudio(track)
             }
             subtitleTracks = tracks.filter { $0.type == "sub" }
+        case .fallback(let reason):
+            guard core is NativeEngine, let playURL else { return }
+            Log.note("ПЛЕЕР", "системный плеер не справился (\(reason)) — mpv")
+            core?.destroy()
+            startMPV(playURL, at: started ? position : request.startAt)
+        case .subtitle(let text):
+            subtitleText = text
         case .ended(let error):
             if let error {
                 phase = .failed(L("Не удалось воспроизвести: %@", "\(error)"))

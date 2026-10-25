@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 import UIKit
 
@@ -28,7 +29,14 @@ struct PlayerView: View {
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            MPVVideoView(layer: model.layer) { model.refreshVideo() }.ignoresSafeArea()
+            if let native = model.nativeLayer {
+                NativeVideoView(layer: native).ignoresSafeArea()
+            } else {
+                MPVVideoView(layer: model.layer) { model.refreshVideo() }.ignoresSafeArea()
+            }
+            if let text = model.subtitleText {
+                SubtitleLine(text: text)
+            }
             if !model.started {
                 // Пока видео не пошло — кадр фильма в размытии, как у системного плеера при загрузке.
                 CachedImage(path: model.request.item.backdrop.isEmpty ? model.request.item.poster : model.request.item.backdrop,
@@ -500,6 +508,35 @@ private struct Scrubber: View {
             .animation(.easeOut(duration: 0.15), value: scrub == nil)
         }
         .frame(height: 28)
+    }
+}
+
+/// Слой системного плеера ([NativeEngine]).
+struct NativeVideoView: UIViewRepresentable {
+    let layer: AVPlayerLayer
+
+    func makeUIView(context: Context) -> NativeVideoHost { NativeVideoHost(layer: layer) }
+    func updateUIView(_ view: NativeVideoHost, context: Context) {}
+}
+
+/// Реплика субтитров системного плеера: внизу кадра, белым с тенью, как у системного плеера.
+private struct SubtitleLine: View {
+    let text: String
+
+    var body: some View {
+        VStack {
+            Spacer()
+            Text(text)
+                .font(.aerial(.title3, .semibold))
+                .foregroundStyle(.white)
+                .multilineTextAlignment(.center)
+                .shadow(color: .black.opacity(0.9), radius: 3)
+                .shadow(color: .black.opacity(0.6), radius: 8)
+                .padding(.horizontal, 40)
+                .padding(.bottom, 36)
+        }
+        .frame(maxWidth: .infinity)
+        .allowsHitTesting(false)
     }
 }
 

@@ -45,6 +45,8 @@ final class AppSettings {
     var tasteHistory: Bool { didSet { defaults.set(tasteHistory, forKey: "taste.history") } }
     /// Следующая серия — сама через 10 с после конца серии.
     var autoplayNext: Bool { didSet { defaults.set(autoplayNext, forKey: "player.autoplayNext") } }
+    /// Системный плеер (AVPlayer, MKV — перепаковкой в HLS) вместо mpv: экономнее, настоящий HDR и Dolby Vision.
+    var nativePlayer: Bool { didSet { defaults.set(nativePlayer, forKey: "player.native") } }
     /// Оценки MDBList на странице фильма (как «Показывать оценки MDBList» ТВ) и какие источники показывать.
     var mdblistShown: Bool { didSet { defaults.set(mdblistShown, forKey: "mdblist.shown") } }
     var ratingSources: Set<String> { didSet { defaults.set(ratingSources.sorted(), forKey: "mdblist.sources") } }
@@ -104,6 +106,7 @@ final class AppSettings {
         mdblistKey = defaults.string(forKey: "mdblist.key") ?? ""
         tasteHistory = defaults.object(forKey: "taste.history") as? Bool ?? true
         autoplayNext = defaults.object(forKey: "player.autoplayNext") as? Bool ?? true
+        nativePlayer = defaults.object(forKey: "player.native") as? Bool ?? true
         mdblistShown = defaults.object(forKey: "mdblist.shown") as? Bool ?? true
         ratingSources = Set(defaults.stringArray(forKey: "mdblist.sources") ?? ["imdb", "tomatoes", "metacritic", "letterboxd"])
         episodeOverviews = defaults.object(forKey: "episodes.overviews") as? Bool ?? true
