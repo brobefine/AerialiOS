@@ -366,7 +366,7 @@ struct SettingsView: View {
                 Text(title)
             } icon: {
                 Image(systemName: symbol)
-                    .font(.aerial(size: 14, .semibold))
+                    .font(.system(size: 14, weight: .semibold))
                     .foregroundStyle(.white)
                     .frame(width: 29, height: 29)
                     .background(color.gradient, in: RoundedRectangle(cornerRadius: 7, style: .continuous))

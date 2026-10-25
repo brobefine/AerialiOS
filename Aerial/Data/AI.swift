@@ -225,8 +225,15 @@ enum AI {
                 SpoilerGuard.rules,
                 json: true, temperature: 0.6, strong: true)
         }
-        let picks = titles(text, withWhy: true)
-        // Спойлеры — по смыслу: проверка, переписывание отмеченных, повторная проверка ([SpoilerGuard]).
+        return titles(text, withWhy: true)
+    }
+
+    /// «Чем связан» без спойлеров — по смыслу: проверка, переписывание отмеченных, повторная проверка ([SpoilerGuard]).
+    /// Отдельно от подбора: фильмы показываются сразу, а описания — когда проверка закончится.
+    static func safeWhys(_ details: VodDetails, _ picks: [AiTitle]) async -> [AiTitle] {
+        let title = titleOf(details)
+        let year = Int(details.item.year) ?? 0
+        let started = Date()
         let seed = "\(title)\(year > 0 ? " (\(year))" : "")"
         let pairs = picks.map { (title: $0.original.isEmpty ? $0.title : $0.original, why: $0.why) }
         let checked = try? await cached("spoilers2", [AppLanguage.english ? "en" : "ru", seed] + pairs.map { "\($0.title)|\($0.why)" }, ttl: 30 * day) {
@@ -252,7 +259,8 @@ enum AI {
         }
         let safe = SpoilerGuard.merge(picks, verdict: verdict, rewrites: rewrites, recheck: recheck)
         let changed = zip(picks, safe).filter { $0.0.why != $0.1.why }.count
-        if changed > 0 { Log.note("ИИ", "родственники «\(title)»: \(changed) «чем связан» переписано без спойлеров") }
+        Log.note("ИИ", String(format: "родственники «%@»: проверка спойлеров %.1f с, переписано %d", title,
+                              Date().timeIntervalSince(started), changed))
         return safe
     }
 

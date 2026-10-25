@@ -17,6 +17,18 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
     nonisolated(unsafe) static var activity = ""
     /// Сторож главного потока спит, пока приложение в фоне: каждое его пробуждение — лишняя трата батареи.
     nonisolated(unsafe) static var foreground = true
+    /// Подробности того, что идёт: у плеера — разрешение, кодек, аппаратное ли декодирование.
+    nonisolated(unsafe) static var detail = ""
+    /// Заторы главного потока за текущее окно сводки.
+    nonisolated(unsafe) static var stalls = 0
+
+    /// Окно сводки (5 мин): замеры процессора, сеть и заряд в начале.
+    private var windowStart = Date()
+    private var windowCPU: [Double] = []
+    private var windowBattery: Float = -1
+    private var windowNet: (wifi: UInt64, cell: UInt64)?
+    private var heartbeat: Task<Void, Never>?
+    private var backgroundTask: UIBackgroundTaskIdentifier = .invalid
 
     private var sampler: Task<Void, Never>?
     private var watchdog: Thread?
@@ -26,12 +38,20 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
         try? FileManager.default.createDirectory(at: metrics, withIntermediateDirectories: true)
         MXMetricManager.shared.add(self)
         UIDevice.current.isBatteryMonitoringEnabled = true
+        windowBattery = UIDevice.current.batteryLevel
+        windowNet = Self.networkBytes()
         startWatchdog()
         resume()
     }
 
     /// На экране — замеры идут; в фоне — стоят (сам сборщик не должен тратить батарею).
     func resume() {
+        heartbeat?.cancel()
+        heartbeat = nil
+        if backgroundTask != .invalid {
+            UIApplication.shared.endBackgroundTask(backgroundTask)
+            backgroundTask = .invalid
+        }
         Self.foreground = true
         guard sampler == nil else { return }
         sampler = Task { [weak self] in
@@ -63,8 +83,12 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
         }
         let saver = ProcessInfo.processInfo.isLowPowerModeEnabled ? " · энергосбережение" : ""
         let what = Self.activity.isEmpty ? "" : " · \(Self.activity)"
-        Log.perf(String(format: "%@ ЦП %.0f %% · память %.0f МБ · нагрев %@ · заряд %@%@%@%@", tag, Self.cpuPercent(),
-                        Self.memoryMB(), thermal, battery, charging, saver, what))
+        let cpu = Self.cpuPercent()
+        let detail = Self.detail.isEmpty ? "" : " · \(Self.detail)"
+        Log.perf(String(format: "%@ ЦП %.0f %% · память %.0f МБ · нагрев %@ · заряд %@%@%@ · яркость %.0f %%%@%@", tag, cpu,
+                        Self.memoryMB(), thermal, battery, charging, saver, UIScreen.main.brightness * 100, what, detail))
+        windowCPU.append(cpu)
+        if Date().timeIntervalSince(windowStart) >= 300 { summary() }
         let threads = threadBreakdown()
         if !threads.isEmpty { Log.perf("  потоки: " + threads) }
     }
@@ -77,6 +101,91 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
         guard !busy.isEmpty else { return }
         let speed = busy.reduce(Int64(0)) { $0 + $1.speed }
         Log.perf("  TorrServer: раздач с пирами \(busy.count), пиров \(busy.reduce(0) { $0 + $1.peers }), \(Format.bytes(speed))/с")
+    }
+
+    // MARK: Сводка за 5 минут
+
+    /// Средний и пиковый процессор, сеть Wi‑Fi и сотовая, расход заряда и его скорость в час, заторы — по этому видно,
+    /// сажает ли приложение батарею и на чём.
+    private func summary() {
+        let now = Date()
+        let minutes = now.timeIntervalSince(windowStart) / 60
+        let device = UIDevice.current
+        let level = device.batteryLevel
+        let charging = device.batteryState == .charging || device.batteryState == .full
+        var parts: [String] = []
+        if !windowCPU.isEmpty {
+            parts.append(String(format: "ЦП в среднем %.0f %%, пик %.0f %%", windowCPU.reduce(0, +) / Double(windowCPU.count),
+                                windowCPU.max() ?? 0))
+        }
+        let net = Self.networkBytes()
+        if let start = windowNet, let net {
+            let wifi = Double(net.wifi &- start.wifi) / 1_048_576, cell = Double(net.cell &- start.cell) / 1_048_576
+            parts.append(String(format: "сеть Wi‑Fi %.0f МБ, сотовая %.0f МБ", wifi, cell))
+        }
+        if windowBattery >= 0, level >= 0, !charging, minutes > 0 {
+            let used = Double(windowBattery - level) * 100
+            parts.append(String(format: "заряд −%.0f %% (≈ %.0f %% в час)", used, used / minutes * 60))
+        } else if charging {
+            parts.append("на зарядке")
+        }
+        parts.append("заторов \(Self.stalls)")
+        Log.perf(String(format: "СВОДКА за %.0f мин: ", minutes) + parts.joined(separator: " · "))
+        windowStart = now
+        windowCPU = []
+        windowBattery = level
+        windowNet = net
+        Self.stalls = 0
+    }
+
+    /// Байты через Wi‑Fi (`en*`) и сотовую (`pdp_ip*`) с включения телефона — по всем приложениям; разница за окно
+    /// при открытом Aerial — почти вся его. Счётчики 32-битные — разница с переполнением (`&-`).
+    nonisolated static func networkBytes() -> (wifi: UInt64, cell: UInt64)? {
+        var list: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&list) == 0, let first = list else { return nil }
+        defer { freeifaddrs(list) }
+        var wifi: UInt64 = 0, cell: UInt64 = 0
+        var pointer: UnsafeMutablePointer<ifaddrs>? = first
+        while let entry = pointer {
+            defer { pointer = entry.pointee.ifa_next }
+            guard let address = entry.pointee.ifa_addr, address.pointee.sa_family == UInt8(AF_LINK),
+                  let raw = entry.pointee.ifa_data else { continue }
+            let data = raw.assumingMemoryBound(to: if_data.self).pointee
+            let name = String(cString: entry.pointee.ifa_name)
+            let bytes = UInt64(data.ifi_ibytes) + UInt64(data.ifi_obytes)
+            if name.hasPrefix("en") { wifi += bytes } else if name.hasPrefix("pdp_ip") { cell += bytes }
+        }
+        return (wifi, cell)
+    }
+
+    // MARK: Фон
+
+    /// После ухода в фон 20 с пишем пульс раз в 2 с: по журналу видно, сколько приложение прожило свёрнутым и что
+    /// в это время делало (если его закрыли — пульс обрывается).
+    func backgroundHeartbeat() {
+        heartbeat?.cancel()
+        if backgroundTask == .invalid {
+            backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "perf-heartbeat") { [weak self] in
+                MainActor.assumeIsolated {
+                    Log.perf("ФОН: iOS забирает время у приложения")
+                    if let task = self?.backgroundTask { UIApplication.shared.endBackgroundTask(task) }
+                    self?.backgroundTask = .invalid
+                }
+            }
+        }
+        heartbeat = Task { [weak self] in
+            for second in stride(from: 2, through: 20, by: 2) {
+                try? await Task.sleep(for: .seconds(2))
+                if Task.isCancelled { return }
+                Log.perf(String(format: "ФОН %d с · ЦП %.0f %% · память %.0f МБ%@", second, Self.cpuPercent(), Self.memoryMB(),
+                                Self.activity.isEmpty ? "" : " · \(Self.activity)"))
+            }
+            guard let self else { return }
+            if backgroundTask != .invalid {
+                UIApplication.shared.endBackgroundTask(backgroundTask)
+                backgroundTask = .invalid
+            }
+        }
     }
 
     // MARK: Потоки
@@ -163,7 +272,10 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
                 let ms = Double(DispatchTime.now().uptimeNanoseconds - sent.uptimeNanoseconds) / 1_000_000
                 if ms > 250 {
                     let state = DispatchQueue.main.sync { UIApplication.shared.applicationState == .active }
-                    if state { Log.perf(String(format: "ЗАТОР %.0f мс · %@", ms, PerfMonitor.activity)) }
+                    if state {
+                        PerfMonitor.stalls += 1
+                        Log.perf(String(format: "ЗАТОР %.0f мс · %@", ms, PerfMonitor.activity))
+                    }
                 }
                 Thread.sleep(forTimeInterval: 1)
             }

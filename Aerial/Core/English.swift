@@ -48,7 +48,7 @@ enum English {
         "Жду список файлов…": "Waiting for the file list…", "Не удалось воспроизвести: %@": "Could not play: %@",
         "Открыть комнату": "Open a room", "Пропустить «Ранее в сериале»": "Skip recap", "Пропустить заставку": "Skip intro",
         "Далее": "Up next", "Скрыть": "Hide", "Смотреть": "Watch", "Подготовка к просмотру": "Getting ready",
-        "Закрыть": "Close", "Картинка в картинке": "Picture in Picture", "Следующая серия": "Next episode",
+        "Закрыть": "Close", "Назад на 10 с": "Back 10 s", "Вперёд на 10 с": "Forward 10 s", "Картинка в картинке": "Picture in Picture", "Следующая серия": "Next episode",
         "Звук": "Audio", "Скорость": "Speed", "Обычная": "Normal", "Субтитры": "Subtitles", "Выключены": "Off",
         "Найти субтитры…": "Find subtitles…", "Звук, субтитры и скорость": "Audio, subtitles and speed",
         "Ищу на OpenSubtitles…": "Searching OpenSubtitles…", "Субтитров не нашлось": "No subtitles found", "Отмена": "Cancel",
@@ -117,7 +117,7 @@ enum English {
         "Обожаю": "Love", "Не моё": "Not for me", "Убрать из «Смотреть позже»": "Remove from Watch later",
         "Убрать из «Продолжить»": "Remove from Continue", "Оценка": "Rating", "Оценка %@": "Rating %@",
         "Продолжить просмотр": "Continue watching", "Открыть страницу": "Open page", "Духовные родственники": "Kindred spirits",
-        "Близки по настроению и темам": "Close in mood and themes",
+        "Близки по настроению и темам": "Close in mood and themes", "Проверяю, нет ли спойлеров…": "Checking for spoilers…",
         "ИИ подбирает фильмы по темам…": "AI is matching films by theme…", "Разбор сериала": "Series breakdown",
         "Разбор фильма": "Film breakdown", "Понятно": "OK",
         "Откроется, когда вы посмотрите хотя бы одну серию, — разбор будет до неё: в нём спойлеры.":

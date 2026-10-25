@@ -95,6 +95,7 @@ final class Playback {
         }
         self.controller = nil
         PerfMonitor.activity = ""
+        PerfMonitor.detail = ""
         controller.dismiss(animated: true) { [weak self] in
             Orientation.allowLandscape(false)
             DownloadKeepAlive.shared.resumeAfterPlayer()
@@ -485,7 +486,15 @@ final class PlayerModel {
             publishNowPlaying()
         case .buffering(let value): buffering = value
         case .cache: break
-        case .fileLoaded: Log.note("ПЛЕЕР", "файл открыт")
+        case .fileLoaded:
+            Log.note("ПЛЕЕР", "файл открыт")
+            // Параметры видео появляются с первым кадром — через пару секунд: в журнал батареи, что и как декодируется.
+            Task { [weak self] in
+                try? await Task.sleep(for: .seconds(3))
+                guard let summary = self?.core?.videoSummary() else { return }
+                PerfMonitor.detail = "видео " + summary
+                Log.note("ПЛЕЕР", "видео \(summary)")
+            }
         case .tracks(let tracks):
             let firstTracks = audioTracks.isEmpty
             audioTracks = tracks.filter { $0.type == "audio" }

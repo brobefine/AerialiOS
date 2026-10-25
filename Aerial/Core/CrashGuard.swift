@@ -15,7 +15,14 @@ enum CrashGuard {
         let previous = UserDefaults.standard.string(forKey: stateKey) ?? ""
         let crashFile = Log.directory.appending(path: "crash.log")
         let crashed = (try? String(contentsOf: crashFile, encoding: .utf8)).map { !$0.isEmpty } ?? false
+        let exitMarker = Log.directory.appending(path: "exit.marker")
+        let exited = FileManager.default.fileExists(atPath: exitMarker.path)
+        try? FileManager.default.removeItem(at: exitMarker)
         switch previous {
+        case _ where exited:
+            // `exit()` зовёт не iOS (та убивает без него), а код в процессе — так LiveContainer перезапускает
+            // приложение, когда его открывают ярлыком или из списка LiveContainer.
+            Log.note("ПРОШЛЫЙ ЗАПУСК", "завершён вызовом exit() в состоянии «\(previous)» — закрыл код в процессе (LiveContainer?), не iOS")
         case "background" where !crashed:
             Log.note("ПРОШЛЫЙ ЗАПУСК", "закрыт в фоне без падения — выгрузила система (память, сторож или блокировка файла)")
         case "active" where !crashed:
@@ -41,8 +48,17 @@ enum CrashGuard {
             CrashGuard.write("ИСКЛЮЧЕНИЕ \(exception.name.rawValue): \(exception.reason ?? "")\n"
                 + exception.callStackSymbols.prefix(30).joined(separator: "\n") + "\n")
         }
+        // Выход через exit(): отметка файлом (обработчик atexit — без UserDefaults, только write).
+        exitFD = open(exitMarker.path + ".pending", O_WRONLY | O_CREAT | O_TRUNC, 0o644)
+        CrashGuardFD.exitPath = strdup(exitMarker.path)
+        CrashGuardFD.pendingPath = strdup(exitMarker.path + ".pending")
+        atexit(exitHandler)
+        let environment = ProcessInfo.processInfo.environment.keys.filter { $0.hasPrefix("LC_") }.sorted()
+        if !environment.isEmpty { Log.note("ЗАПУСК", "переменные LiveContainer: \(environment.joined(separator: ", "))") }
         mark("active")
     }
+
+    nonisolated(unsafe) private static var exitFD: Int32 = -1
 
     /// «active», «background» или «terminated».
     static func mark(_ state: String) {
@@ -69,4 +85,12 @@ private func crashSignal(_ signal: Int32) {
 /// Номер файла для обработчика сигнала (глобальная функция не видит закрытые поля [CrashGuard]).
 enum CrashGuardFD {
     nonisolated(unsafe) static var value: Int32 = -1
+    nonisolated(unsafe) static var exitPath: UnsafeMutablePointer<CChar>?
+    nonisolated(unsafe) static var pendingPath: UnsafeMutablePointer<CChar>?
+}
+
+/// Процесс завершается через exit(): переименовать заготовленный файл-отметку — следующий запуск увидит, кто закрыл.
+private func exitHandler() {
+    guard let pending = CrashGuardFD.pendingPath, let path = CrashGuardFD.exitPath else { return }
+    rename(pending, path)
 }

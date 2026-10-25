@@ -293,7 +293,7 @@ struct DetailsView: View {
             let marked = rating != 0 || library.isSaved(item)
             Menu { PosterMenu(item: shown) } label: {
                 Image(systemName: rating != 0 ? TasteLevel.symbol(rating) : marked ? "bookmark.fill" : "bookmark")
-                    .font(.aerial(size: 19, .semibold))
+                    .font(.system(size: 19, weight: .semibold))
                     .foregroundStyle(marked && accent == nil ? .black : .white)
                     .frame(width: 48, height: 48)
                     .background {

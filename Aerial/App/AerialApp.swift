@@ -43,6 +43,7 @@ struct AerialApp: App {
             switch phase {
             case .background:
                 CrashGuard.mark("background")
+                PerfMonitor.shared.backgroundHeartbeat()
                 PerfMonitor.shared.pause()
                 Friends.shared.setForeground(false)
                 Log.note("ЖИЗНЬ", "в фоне\(playback.request == nil ? "" : ", идёт фильм")")

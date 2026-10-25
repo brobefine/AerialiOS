@@ -48,14 +48,11 @@ struct PlayerView: View {
                     if value.translation.height > 120 && abs(value.translation.width) < value.translation.height { dismiss() }
                 })
             status
-            if controls || model.phase != .playing || model.paused {
-                overlay.transition(.opacity)
-            }
+            overlay
             corner
             PartyOverlay(party: WatchParty.shared)
             knockBanner
         }
-        .animation(.easeOut(duration: 0.2), value: controls)
         .statusBarHidden(true)
         .persistentSystemOverlays(.hidden)
         .task { await model.start(settings: settings, library: library) }
@@ -228,76 +225,99 @@ struct PlayerView: View {
 
     // MARK: Панель
 
-    /// Панель как у системного плеера iOS 26: слева сверху — закрыть, справа — кнопки одной стеклянной капсулой,
-    /// по центру — перемотка и пауза крупными знаками без подложки, снизу — название и шкала на стекле.
+    /// Панель как у системного плеера iOS 26–27: слева сверху — закрыть, справа — кнопки одной стеклянной капсулой;
+    /// по центру видео — −10, пауза и +10 в кругах жидкого стекла; снизу — название и шкала на стеклянной панели.
+    /// Показывается и прячется плавно: панель всегда в иерархии, меняется прозрачность и масштаб — стекло при
+    /// вставке и удалении вида не анимируется.
     private var overlay: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 12) {
-                Button { dismiss() } label: { Image(systemName: "xmark") }
-                    .buttonStyle(CircleGlassButtonStyle(size: 44, tint: accent))
-                    .accessibilityLabel(L("Закрыть"))
-                    .accessibilityIdentifier("player-close")
-                Spacer()
-                HStack(spacing: 4) {
-                    if WatchParty.shared.enabled && model.partyMedia != nil {
-                        barButton(WatchParty.shared.active ? "person.2.fill" : "person.2", label: L("Смотреть вместе")) { partyOpen = true }
-                    }
-                    if let pip = model.pipURL {
-                        barButton("pip.enter", label: L("Картинка в картинке")) {
-                            let position = model.position
-                            let request = model.request
-                            model.stop()
-                            PictureInPicture.shared.start(url: pip, at: position, request: request)
-                            dismiss()
-                        }
-                    }
-                    if model.next != nil {
-                        barButton("forward.end.fill", label: L("Следующая серия")) { playNext() }
-                    }
-                    if model.phase == .playing { tracksMenu }
-                }
-                .padding(.horizontal, 4)
-                .glass(in: Capsule(), tint: accent?.opacity(0.55))
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 12)
-            Spacer()
-            if model.phase == .playing && model.started {
-                HStack(spacing: 56) {
-                    transport("gobackward.10", size: 34) { model.skip(-10) }
-                    transport(model.paused ? "play.fill" : "pause.fill", size: 52) { model.togglePause() }
-                        .accessibilityIdentifier("player-pause")
-                    transport("goforward.10", size: 34) { model.skip(10) }
-                }
-                Spacer()
-                VStack(alignment: .leading, spacing: 8) {
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(model.request.title).font(.aerial(.headline)).lineLimit(1)
-                        Text(model.request.subtitle).font(.aerial(.caption)).foregroundStyle(.white.opacity(0.7)).lineLimit(1)
-                    }
-                    .foregroundStyle(.white)
-                    timeline
-                }
-                .padding(.horizontal, 18)
-                .padding(.top, 12)
-                .padding(.bottom, 6)
-                .glass(in: RoundedRectangle(cornerRadius: 26, style: .continuous), tint: accent?.opacity(0.35))
-                .padding(.horizontal, 16)
-                .padding(.bottom, 10)
-            } else {
-                Spacer()
-            }
-        }
-        .background {
+        let shown = controlsVisible
+        return ZStack {
+            // Затемнение краёв под кнопками.
             VStack {
-                LinearGradient(colors: [.black.opacity(0.45), .clear], startPoint: .top, endPoint: .bottom).frame(height: 120)
+                LinearGradient(colors: [.black.opacity(0.5), .clear], startPoint: .top, endPoint: .bottom).frame(height: 130)
                 Spacer()
-                LinearGradient(colors: [.clear, .black.opacity(0.45)], startPoint: .top, endPoint: .bottom).frame(height: 170)
+                LinearGradient(colors: [.clear, .black.opacity(0.5)], startPoint: .top, endPoint: .bottom).frame(height: 190)
             }
             .ignoresSafeArea()
             .allowsHitTesting(false)
+
+            VStack(spacing: 0) {
+                HStack(spacing: 12) {
+                    Button { dismiss() } label: { Image(systemName: "xmark") }
+                        .buttonStyle(CircleGlassButtonStyle(size: 44, tint: accent))
+                        .accessibilityLabel(L("Закрыть"))
+                        .accessibilityIdentifier("player-close")
+                    Spacer()
+                    HStack(spacing: 2) {
+                        if WatchParty.shared.enabled && model.partyMedia != nil {
+                            barButton(WatchParty.shared.active ? "person.2.fill" : "person.2", label: L("Смотреть вместе")) { partyOpen = true }
+                        }
+                        if let pip = model.pipURL {
+                            barButton("pip.enter", label: L("Картинка в картинке")) {
+                                let position = model.position
+                                let request = model.request
+                                model.stop()
+                                PictureInPicture.shared.start(url: pip, at: position, request: request)
+                                dismiss()
+                            }
+                        }
+                        if model.next != nil {
+                            barButton("forward.end.fill", label: L("Следующая серия")) { playNext() }
+                        }
+                        if model.phase == .playing { tracksMenu }
+                    }
+                    .padding(.horizontal, 4)
+                    .glass(in: Capsule(), tint: accent?.opacity(0.45))
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 12)
+                .offset(y: shown ? 0 : -16)
+                Spacer()
+                if model.phase == .playing && model.started {
+                    VStack(alignment: .leading, spacing: 8) {
+                        HStack(alignment: .firstTextBaseline) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(model.request.title).font(.aerial(.headline)).lineLimit(1)
+                                Text(model.request.subtitle).font(.aerial(.caption)).foregroundStyle(.white.opacity(0.7)).lineLimit(1)
+                            }
+                            Spacer(minLength: 12)
+                            if model.rate != 1 {
+                                Text(String(format: "%g×", model.rate)).font(.aerial(.caption, .semibold)).foregroundStyle(.white.opacity(0.8))
+                            }
+                        }
+                        .foregroundStyle(.white)
+                        timeline
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.top, 12)
+                    .padding(.bottom, 6)
+                    .glass(in: RoundedRectangle(cornerRadius: 26, style: .continuous), tint: accent?.opacity(0.3))
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 10)
+                    .offset(y: shown ? 0 : 20)
+                }
+            }
+
+            // Перемотка и пауза — по центру экрана, то есть по центру видео (оно вписано по центру).
+            if model.phase == .playing && model.started {
+                HStack(spacing: 36) {
+                    transport("gobackward.10", size: 64, label: L("Назад на 10 с")) { model.skip(-10) }
+                    transport(model.paused ? "play.fill" : "pause.fill", size: 84, label: model.paused ? L("Смотреть") : L("Пауза")) {
+                        model.togglePause()
+                    }
+                    .accessibilityIdentifier("player-pause")
+                    transport("goforward.10", size: 64, label: L("Вперёд на 10 с")) { model.skip(10) }
+                }
+                .scaleEffect(shown ? 1 : 0.9)
+            }
         }
+        .opacity(shown ? 1 : 0)
+        .allowsHitTesting(shown)
+        .animation(.smooth(duration: 0.3), value: shown)
     }
+
+    /// Панель на виду: касанием, а на паузе, при подготовке и ошибке — всегда.
+    private var controlsVisible: Bool { controls || model.phase != .playing || model.paused }
 
     private func barButton(_ symbol: String, label: String, action: @escaping () -> Void) -> some View {
         Button {
@@ -305,7 +325,7 @@ struct PlayerView: View {
             scheduleHide()
         } label: {
             Image(systemName: symbol)
-                .font(.aerial(size: 17, .semibold))
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 42, height: 42)
                 .contentShape(Rectangle())
@@ -314,20 +334,22 @@ struct PlayerView: View {
         .accessibilityLabel(label)
     }
 
-    /// Знаки перемотки и паузы — без кругов, с тенью, как у системного плеера.
-    private func transport(_ symbol: String, size: CGFloat, action: @escaping () -> Void) -> some View {
+    /// Кнопка в круге жидкого стекла; значок паузы сменяется анимацией символа.
+    private func transport(_ symbol: String, size: CGFloat, label: String, action: @escaping () -> Void) -> some View {
         Button {
             action()
             scheduleHide()
         } label: {
             Image(systemName: symbol)
-                .font(.aerial(size: size, .semibold))
+                .font(.system(size: size * 0.42, weight: .semibold))
+                .contentTransition(.symbolEffect(.replace))
                 .foregroundStyle(.white)
-                .shadow(color: .black.opacity(0.35), radius: 8)
-                .frame(width: size * 1.8, height: size * 1.8)
+                .frame(width: size, height: size)
+                .glass(in: Circle(), tint: accent?.opacity(0.35))
                 .contentShape(Circle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(PressScaleStyle())
+        .accessibilityLabel(label)
     }
 
     private var timeline: some View {
@@ -375,7 +397,7 @@ struct PlayerView: View {
             }
         } label: {
             Image(systemName: "captions.bubble")
-                .font(.aerial(size: 17, .semibold))
+                .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(.white)
                 .frame(width: 42, height: 42)
                 .contentShape(Rectangle())
@@ -393,7 +415,7 @@ struct PlayerView: View {
     }
 
     private func toggleControls() {
-        controls.toggle()
+        withAnimation(.smooth(duration: 0.3)) { controls.toggle() }
         if controls { scheduleHide() }
     }
 
@@ -404,7 +426,7 @@ struct PlayerView: View {
         hideTask = Task {
             try? await Task.sleep(for: .seconds(4))
             guard !Task.isCancelled, model.phase == .playing, !model.paused, scrub == nil else { return }
-            controls = false
+            withAnimation(.smooth(duration: 0.4)) { controls = false }
         }
     }
 }
@@ -517,6 +539,14 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         Orientation.mask
     }
 
+    func application(_ application: UIApplication,
+                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        let keys = launchOptions?.keys.map(\.rawValue).sorted().joined(separator: ", ") ?? ""
+        Log.note("ЗАПУСК", "состояние \(application.applicationState == .background ? "в фоне" : "на экране")"
+            + (keys.isEmpty ? "" : ", причина: \(keys)"))
+        return true
+    }
+
     func applicationWillTerminate(_ application: UIApplication) {
         CrashGuard.mark("terminated")
         Log.note("ЖИЗНЬ", "закрыто")
@@ -587,5 +617,14 @@ private struct SubtitleSearch: View {
         } catch {
             failure = error.localizedDescription
         }
+    }
+}
+
+/// Нажатие — лёгкое сжатие, как у кнопок системного плеера.
+private struct PressScaleStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.88 : 1)
+            .animation(.spring(response: 0.25, dampingFraction: 0.6), value: configuration.isPressed)
     }
 }

@@ -7,6 +7,8 @@ import SwiftUI
 struct Relative: Identifiable {
     var item: VodItem
     var why: String
+    /// «Чем связан» ещё проверяется на спойлеры — текст не показан.
+    var checking = false
     var id: String { item.id }
 }
 
@@ -53,7 +55,9 @@ struct RelativesSection: View {
                                             // уже подписи под ним.
                                             PosterCard(item: row.item, width: width, squareBottom: true)
                                                 .frame(width: width, height: width * 1.5)
-                                            Text(row.why).font(.aerial(.caption2)).foregroundStyle(.white.opacity(0.85))
+                                            Text(row.checking ? L("Проверяю, нет ли спойлеров…") : row.why)
+                                                .font(.aerial(.caption2))
+                                                .foregroundStyle(.white.opacity(row.checking ? 0.5 : 0.85))
                                                 .lineLimit(4, reservesSpace: true)
                                                 .padding(8)
                                                 .frame(width: width, alignment: .leading)
@@ -96,7 +100,9 @@ struct RelativesSection: View {
         for attempt in 0..<2 {
             if attempt > 0 { try? await Task.sleep(for: .seconds(5)) }
             do {
+                let started = Date()
                 let picks = try await AI.relatives(details, avoid: Array(overused.prefix(40)))
+                Log.note("ИИ", String(format: "родственники «%@»: подбор %.1f с", details.item.title, Date().timeIntervalSince(started)))
                 let franchise = Set(details.collection.map(\.id))
                 let rejected = library.rejected
                 var found: [Relative] = []
@@ -106,7 +112,8 @@ struct RelativesSection: View {
                     && seen.insert(item.id).inserted {
                     let why = picks.first { SearchText.normalized($0.title) == SearchText.normalized(item.title)
                         || SearchText.normalized($0.original) == SearchText.normalized(item.originalTitle) }?.why ?? ""
-                    found.append(Relative(item: item, why: why))
+                    // Непроверенный текст не хранится вовсе — ни в ряду, ни в предпросмотре.
+                    found.append(Relative(item: item, why: "", checking: !why.isEmpty))
                 }
                 let fresh = found.filter { !overused.contains($0.item.title) }
                 if fresh.count >= 5 { found = fresh }
@@ -115,8 +122,18 @@ struct RelativesSection: View {
                 updated[details.item.id] = found.map(\.item.title)
                 if updated.count > 60, let first = updated.keys.sorted().first { updated[first] = nil }
                 UserDefaults.standard.set(updated, forKey: Self.logKey)
+                // Фильмы — сразу; «чем связан» — после проверки на спойлеры.
                 items = found
                 failure = nil
+                let safe = await AI.safeWhys(details, picks)
+                items = items.map { relative in
+                    var updated = relative
+                    let match = zip(picks, safe).first { SearchText.normalized($0.0.title) == SearchText.normalized(relative.item.title)
+                        || SearchText.normalized($0.0.original) == SearchText.normalized(relative.item.originalTitle) }
+                    updated.why = match?.1.why ?? ""
+                    updated.checking = false
+                    return updated
+                }
                 return
             } catch {
                 if HTTP.isCancellation(error) { return }
@@ -435,7 +452,7 @@ private struct RelativePreview: View {
                 Text(row.item.title).font(.aerial(.headline))
                 Text([row.item.year, row.item.kindLabel].filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(.aerial(.caption)).foregroundStyle(Theme.secondaryText)
-                Text(row.why)
+                Text(row.checking ? L("Проверяю, нет ли спойлеров…") : row.why)
                     .font(.aerial(.subheadline))
                     .frame(width: 186, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)

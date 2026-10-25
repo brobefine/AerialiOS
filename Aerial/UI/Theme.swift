@@ -89,7 +89,7 @@ struct CircleGlassButtonStyle: ButtonStyle {
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.aerial(size: size * 0.4, .semibold))
+            .font(.system(size: size * 0.4, weight: .semibold))  // значки SF Symbols — системным шрифтом: у Commissioner нет их насыщенности
             .foregroundStyle(.white)
             .frame(width: size, height: size)
             // Интерактивное стекло внутри стиля кнопки на iOS 26 перехватывало касание — кнопка не срабатывала.

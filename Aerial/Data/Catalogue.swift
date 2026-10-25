@@ -68,8 +68,9 @@ final class Catalogue: Sendable {
         let extra = item.kind == .movie ? "release_dates" : "content_ratings"
         let body = try await tmdb.decode(TMDbDetails.self, "\(type)/\(item.remoteId)", [
             "append_to_response": "credits,recommendations,images,videos,external_ids,\(extra)",
-            "include_image_language": "ru,en,null",
-            "include_video_language": "ru,en",
+            // Логотипы и трейлеры — на языке приложения, запасным — английские.
+            "include_image_language": AppLanguage.english ? "en,null" : "ru,en,null",
+            "include_video_language": AppLanguage.english ? "en" : "ru,en",
         ], ttl: 12 * DiskCache.hour)
         let names = await genres.names()
         var fresh = item
@@ -300,9 +301,9 @@ final class Catalogue: Sendable {
 
     // MARK: Разбор
 
-    /// Логотипы: только русский PNG, широкие раньше, затем по оценке и ширине (как `selectLogos` ТВ).
+    /// Логотипы: только PNG на языке приложения, широкие раньше, затем по оценке и ширине (как `selectLogos` ТВ).
     static func logo(_ logos: [TMDbDetails.Image]) -> String {
-        logos.filter { ($0.filePath ?? "").hasSuffix(".png") && $0.iso6391 == "ru" }
+        logos.filter { ($0.filePath ?? "").hasSuffix(".png") && $0.iso6391 == (AppLanguage.english ? "en" : "ru") }
             .sorted { a, b in
                 let wideA = Double(a.width ?? 0) > Double(a.height ?? 0) * 1.5
                 let wideB = Double(b.width ?? 0) > Double(b.height ?? 0) * 1.5
@@ -317,7 +318,8 @@ final class Catalogue: Sendable {
     static func trailer(_ videos: [TMDbDetails.Video]) -> String {
         videos.filter { $0.site == "YouTube" && ["Trailer", "Teaser"].contains($0.type ?? "") && !($0.key ?? "").isEmpty }
             .sorted { a, b in
-                if (a.iso6391 == "ru") != (b.iso6391 == "ru") { return a.iso6391 == "ru" }
+                let lang = AppLanguage.english ? "en" : "ru"
+                if (a.iso6391 == lang) != (b.iso6391 == lang) { return a.iso6391 == lang }
                 if (a.type == "Trailer") != (b.type == "Trailer") { return a.type == "Trailer" }
                 return (a.official ?? false) && !(b.official ?? false)
             }

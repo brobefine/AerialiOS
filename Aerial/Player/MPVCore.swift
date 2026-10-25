@@ -111,6 +111,14 @@ final class MPVCore: @unchecked Sendable {
     func addSubtitle(_ file: URL) { command(["sub-add", file.path, "select"]) }
     func selectSubtitle(_ id: Int?) { set("sid", id.map(String.init) ?? "no") }
     /// В фоне видео выключаем — звук играет дальше, а при возврате не бывает чёрного экрана (как в демо MPVKit).
+    /// Для журнала батареи: «1920×1080 hevc · аппаратно (videotoolbox)» или «… · программно».
+    func videoSummary() -> String {
+        let width = string("video-params/w") ?? "?", height = string("video-params/h") ?? "?"
+        let codec = string("video-codec-name") ?? string("video-format") ?? "?"
+        let hw = string("hwdec-current") ?? "no"
+        return "\(width)×\(height) \(codec) · " + (hw == "no" || hw.isEmpty ? "программно" : "аппаратно (\(hw))")
+    }
+
     func setVideoEnabled(_ enabled: Bool) { set("vid", enabled ? "auto" : "no") }
 
     /// Размер вывода сменился (поворот). Контекст MoltenVK в сборке MPVKit (патч `0001-player-add-moltenvk-context`)
