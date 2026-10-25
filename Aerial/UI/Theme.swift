@@ -51,6 +51,19 @@ extension View {
 }
 
 extension View {
+    /// Соседние стёкла — одним проходом: на iOS 26 `GlassEffectContainer` рисует их вместе (дешевле для GPU), чем
+    /// каждое стекло отдельно. Расстояние слияния 0 — круги не сливаются в одну каплю.
+    @ViewBuilder
+    func glassGroup() -> some View {
+        if #available(iOS 26, *) {
+            GlassEffectContainer(spacing: 0) { self }
+        } else {
+            self
+        }
+    }
+}
+
+extension View {
     /// Экран с картинкой под панелью навигации. На iOS 26 панель и так прозрачная, а при прокрутке система сама
     /// размывает край под ней — её не трогаем; на iOS 18 прячем фон панели.
     @ViewBuilder

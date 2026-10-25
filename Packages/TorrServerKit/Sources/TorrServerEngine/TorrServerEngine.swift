@@ -16,4 +16,15 @@ public enum TorrServerEngine {
     public static var isRunning: Bool {
         TorrserverkitIsRunning()
     }
+
+    /// Рантайм Go: процент сборки мусора (GOGC), мягкий лимит памяти в МБ (GOMEMLIMIT), число потоков (GOMAXPROCS).
+    /// 0 — не менять. Переменные окружения Go читает при загрузке библиотеки — раньше, чем их может задать приложение.
+    public static func setRuntime(gcPercent: Int, memoryLimitMB: Int, maxProcs: Int) {
+        TorrserverkitSetRuntime(gcPercent, memoryLimitMB, maxProcs)
+    }
+
+    /// Сборка мусора и возврат освобождённой памяти системе — перед сном приложения.
+    public static func freeMemory() {
+        TorrserverkitFreeMemory()
+    }
 }

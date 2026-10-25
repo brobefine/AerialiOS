@@ -1,6 +1,6 @@
 // swift-tools-version:6.0
-// TorrServer внутри приложения: готовая gomobile-сборка из релиза TorrServer (MatriX).
-// Новая версия — поменять адрес и checksum (`shasum -a 256` архива).
+// TorrServer внутри приложения: gomobile-сборка релиза TorrServer (MatriX) с правками Aerial (`patches/`) — собирает
+// задача CI `torrserverkit` и кладёт в релиз этого репозитория. Новая версия — запустить её и вписать адрес и checksum.
 
 import PackageDescription
 
@@ -13,8 +13,8 @@ let package = Package(
     targets: [
         .binaryTarget(
             name: "TorrServerKit",
-            url: "https://github.com/YouROK/TorrServer/releases/download/MatriX.147.1/TorrServer-ios-TorrServerKit.xcframework.zip",
-            checksum: "7a4b5400eda368deb1a120bc2edf05c0473d7b7a75a5cb7efdda516a615dace5"
+            url: "https://github.com/brobefine/AerialiOS/releases/download/torrserverkit-MatriX.147.1-aerial1/TorrServer-ios-TorrServerKit.xcframework.zip",
+            checksum: "dbb8448857c2ee4c71c899142c4dfc26b30bd26f8ab2e48d06de0635cc498a93"
         ),
         .target(
             name: "TorrServerEngine",

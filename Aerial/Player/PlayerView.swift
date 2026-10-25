@@ -308,6 +308,7 @@ struct PlayerView: View {
                     .accessibilityIdentifier("player-pause")
                     transport("goforward.10", size: 64, label: L("Вперёд на 10 с")) { model.skip(10) }
                 }
+                .glassGroup()
                 .scaleEffect(shown ? 1 : 0.9)
             }
         }

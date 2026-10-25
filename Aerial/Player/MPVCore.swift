@@ -69,6 +69,9 @@ final class MPVCore: @unchecked Sendable {
             // памяти (perf.log 24 октября). 64+16 МБ — это минуты видео, остальное держит сервер.
             ("cache", "yes"), ("demuxer-max-bytes", "64MiB"), ("demuxer-max-back-bytes", "16MiB"),
             ("demuxer-readahead-secs", "30"), ("network-timeout", "90"),
+            // Дочитывать запас пачками: набрал — ждёт, пока впереди останется 15 с, а не подкачивает понемногу всё время
+            // (меньше пробуждений mpv, Go и радио).
+            ("demuxer-hysteresis-secs", "15"),
             ("alang", "ru,rus,en,eng"), ("slang", "ru,rus,en,eng"), ("subs-fallback", "yes"),
             ("input-default-bindings", "no"), ("input-vo-keyboard", "no"),
         ]

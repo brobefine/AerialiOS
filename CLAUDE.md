@@ -75,7 +75,7 @@
   `Torrents` (`EmbeddedTorrServer` — 127.0.0.1:18090, запускается один раз за жизнь процесса — остановка и повторный
   запуск движка Go обрывали приложение при возврате из фона; настройки кэша; выбор встроенный/внешний;
   `releaseForBackground` — свернули без фильма и загрузки: раздачи закрываются (`drop`), кэш, пиры и сеть не висят во сне;
-  свои ретрекеры выключены (`RetrackersMode` 0), раздача без читателей закрывается через 10 с),
+  свои ретрекеры выключены (`RetrackersMode` 0), раздача без читателей закрывается через 10 с, без uTP, 15 соединений),
   `Release` (`Release`, `ReleaseInfo` — разбор названия, `EpisodeMatch` — файл серии), `ReleaseSearch` (JacRed exact →
   Jackett, плюс `Torrentio`), `DownloadLive` (загрузка в Dynamic Island — Live Activity при обычной установке), `DownloadKeepAlive` (беззвучный
   звук держит приложение живым, пока идёт загрузка; в LiveContainer — определяется по пути приложения — загрузка в Dynamic
@@ -116,8 +116,11 @@
 - `AerialWidgets/` — расширение виджетов: Live Activity загрузки (Dynamic Island, экран блокировки); `Shared/DownloadActivity.swift` —
   атрибуты, общие с приложением. Info.plist расширения — `Config/Widgets-Info.plist` (генерирует XcodeGen).
 
-- `Packages/TorrServerKit` — готовая gomobile-сборка TorrServer (релиз MatriX.147.1, адрес и checksum в `Package.swift`)
-  и обёртка `TorrServerEngine` (`start`, `stop`, `isRunning`).
+- `Packages/TorrServerKit` — gomobile-сборка TorrServer MatriX.147.1 с правками `patches/aerial-energy.patch` (полный GC
+  при вытеснении кэша — не чаще раза в 30 с; `SetRuntime`, `FreeMemory`). Собирает задача CI `torrserverkit`
+  (`.github/workflows/torrserverkit.yml`, запуск вручную) в релиз `torrserverkit-<версия>-aerial<n>` этого репозитория;
+  адрес и checksum — в `Package.swift`. Обёртка `TorrServerEngine`: `start`, `stop`, `isRunning`, `setRuntime` (при старте —
+  GOGC 200, лимит кэш + 128 МБ, 2 потока), `freeMemory` (после закрытия раздач в фоне).
 - MPVKit 1.0.0 (mpv 0.41, LGPL-сборка) — пакет из `project.yml`.
 - `AerialTests/` — разбор раздач, файлов серий, адресов, ответов TMDb, подбор (`RecommendationsTests`), подсказки, MDBList, имена загрузок, ответы ИИ, Википедия, комната (`FeaturesTests`) (Swift Testing); `AerialUITests/ScreensTests` —
   снимки экранов и проверка воспроизведения на свободном Big Buck Bunny.

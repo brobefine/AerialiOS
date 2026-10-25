@@ -112,13 +112,17 @@ private struct UniverseBall: View {
             ZStack {
                 Circle().fill(Color(hex: 0x14171C))
                 if let atlas {
-                    HStack(spacing: 0) {
-                        Image(uiImage: atlas).resizable().frame(width: width, height: side)
-                        Image(uiImage: atlas).resizable().frame(width: width, height: side)
+                    // 15 кадров в секунду, а не анимация на частоте экрана: бесконечное движение держало дисплей на
+                    // 60–120 Гц всё время, пока открыты «Вселенные». Мозаика едет ~10 точек в секунду — глаз разницы не видит.
+                    TimelineView(.animation(minimumInterval: 1.0 / 15, paused: !spin)) { context in
+                        let phase = context.date.timeIntervalSinceReferenceDate.truncatingRemainder(dividingBy: 60) / 60
+                        HStack(spacing: 0) {
+                            Image(uiImage: atlas).resizable().frame(width: width, height: side)
+                            Image(uiImage: atlas).resizable().frame(width: width, height: side)
+                        }
+                        .offset(x: width / 2 - width * phase)
+                        .frame(width: side, height: side)
                     }
-                    .offset(x: spin ? -width / 2 : width / 2)
-                    .animation(.linear(duration: 60).repeatForever(autoreverses: false), value: spin)
-                    .frame(width: side, height: side)
                 }
                 // Объём: тень к краям и блик слева сверху.
                 Circle().fill(RadialGradient(colors: [.clear, .black.opacity(0.75)], center: .center, startRadius: side * 0.2, endRadius: side * 0.55))

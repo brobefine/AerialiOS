@@ -106,6 +106,9 @@ final class EmbeddedTorrServer {
             return
         }
         await configure(cacheMB: cacheMB)
+        // Сборка мусора реже (GOGC 200), но не выше кэша с запасом; два потока Go — серверу фильма хватает, а ядра
+        // и батарея не заняты планировщиком.
+        TorrServerEngine.setRuntime(gcPercent: 200, memoryLimitMB: cacheMB + 128, maxProcs: 2)
         Log.note("TORRSERVER", "встроенный \(version) на \(address)")
         state = .running(version: version)
     }
@@ -145,6 +148,10 @@ final class EmbeddedTorrServer {
             // Раздача без читателей закрывается через 10 с, а не 30: меньше анонсов и пиров после закрытия плеера.
             // Следующая серия той же раздачи открывается раньше — её это не задевает.
             sets["TorrentDisconnectTimeout"] = 10
+            // uTP в TorrServer — чистый Go поверх UDP, дороже TCP по процессору; 15 соединений вместо 25 — для потока
+            // фильма хватает, а сеть и процессор заняты меньше.
+            sets["DisableUTP"] = true
+            sets["ConnectionsLimit"] = 15
             try await client.setSettings(sets)
         } catch {
             Log.note("TORRSERVER", "настройки: \(error.localizedDescription)")
@@ -180,6 +187,8 @@ enum Torrents {
         let loaded = list.filter(\.loaded)
         guard !loaded.isEmpty else { return }
         for torrent in loaded { try? await EmbeddedTorrServer.shared.client.drop(torrent.hash) }
-        Log.note("TORRSERVER", "в фоне закрыто раздач: \(loaded.count)")
+        // Кэш закрытых раздач освобождён, но Go вернул бы память системе только на следующей сборке — уже во сне.
+        await Task.detached { TorrServerEngine.freeMemory() }.value
+        Log.note("TORRSERVER", String(format: "в фоне закрыто раздач: %d, память %.0f МБ", loaded.count, PerfMonitor.memoryMB()))
     }
 }

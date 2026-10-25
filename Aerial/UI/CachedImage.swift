@@ -39,6 +39,9 @@ final class ImageLoader: @unchecked Sendable {
         return nil
     }
 
+    /// Свернули — картинки в памяти отпускаем (диск остаётся): меньше памяти у спящего процесса, ниже риск выгрузки.
+    func trimMemory() { memory.removeAllObjects() }
+
     func clear() {
         memory.removeAllObjects()
         session.configuration.urlCache?.removeAllCachedResponses()

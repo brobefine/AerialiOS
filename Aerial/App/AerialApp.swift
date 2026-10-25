@@ -46,6 +46,7 @@ struct AerialApp: App {
                 PerfMonitor.shared.pause()
                 // Без фильма и загрузки раздачи закрываются; фоновое время — только на это.
                 let release = !Downloads.shared.busy && playback.request == nil
+                ImageLoader.shared.trimMemory()
                 PerfMonitor.shared.backgroundHeartbeat { if release { await Torrents.releaseForBackground() } }
                 Friends.shared.setForeground(false)
                 Log.note("ЖИЗНЬ", "в фоне\(playback.request == nil ? "" : ", идёт фильм")")
