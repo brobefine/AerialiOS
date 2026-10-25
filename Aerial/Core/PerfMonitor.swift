@@ -78,6 +78,8 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
 
     /// Открытые файлы процесса. Если iOS закрывает уснувшее приложение за блокировку файла (0xdead10cc), виновник —
     /// среди отмеченных 🔒: их держит `flock` (так база bbolt у TorrServer), проверка — попытка взять общий замок.
+    /// Каждому обычному файлу ставится атрибут «можно усыпить с замком» ([Storage.allowSuspendLocked]): кто возьмёт
+    /// замок позже (SQLite, Go), тоже не станет причиной выгрузки.
     nonisolated static func openFiles() -> [String] {
         let home = URL.documentsDirectory.deletingLastPathComponent().path
         var paths = Set<String>()
@@ -85,6 +87,9 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
         for fd in 0..<getdtablesize() where fcntl(fd, F_GETPATH, &buffer) != -1 {
             let path = String(cString: buffer)
             guard path.hasPrefix("/"), !path.hasPrefix("/dev/") else { continue }
+            var info = stat()
+            guard stat(path, &info) == 0, info.st_mode & S_IFMT == S_IFREG else { continue }
+            Storage.allowSuspendLocked(path)
             var locked = false
             let probe = open(path, O_RDONLY | O_NONBLOCK)
             if probe >= 0 {

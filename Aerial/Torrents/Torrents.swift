@@ -84,6 +84,10 @@ final class EmbeddedTorrServer {
         let error: String = await Task.detached(priority: .userInitiated) {
             TorrServerEngine.start(port: port, dataDir: directory.path)
         }.value
+        // Файлы базы открыты и под замком — помечаем, чтобы уснувший процесс iOS не закрывала (см. [Storage]).
+        if let names = try? FileManager.default.contentsOfDirectory(atPath: directory.path) {
+            for name in names where name.hasSuffix(".db") { Storage.allowSuspendLocked(directory.appending(path: name).path) }
+        }
         if !error.isEmpty {
             Log.note("TORRSERVER", "старт: \(error)")
             state = .failed(error)
