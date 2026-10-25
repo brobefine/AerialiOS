@@ -52,7 +52,7 @@
   `com.apple.runningboard.can-suspend-locked`, как `Dead10ccFix` LiveContainer: файлам базы при старте сервера и всем
   открытым файлам при уходе в фон), `BuildKeys` (ключи сборки из Info.plist), `Log` (журналы `Documents/logs`), `PerfMonitor` (`perf.log`: раз в 15 с
   ЦП, память, нагрев, заряд, яркость, что идёт и как декодируется видео; раз в минуту — СВОДКА: средний и пиковый ЦП, сеть
-  Wi‑Fi/сотовая, расход заряда в час, заторы; после ухода в фон — пульс 20 с; «ЗАТОР» — главный поток молчал > 250 мс; `logs/metrics/` — отчёты и диагностика MetricKit; в `app.log` —
+  Wi‑Fi/сотовая, расход заряда в час, заторы; после ухода в фон фоновое время — только на закрытие раздач, затем «ФОН: сплю через N с»; сторож главного потока в фоне спит на семафоре; у циклов `Task.sleep` — допуск; «ВНИМАНИЕ» — программное декодирование видео; «ЗАТОР» — главный поток молчал > 250 мс; `logs/metrics/` — отчёты и диагностика MetricKit; в `app.log` —
   «ДИАГНОСТИКА»: причины закрытий за сутки (`MXAppExitMetric`: jetsam, лимит памяти, блокировка файла, сторож) и
   код каждого падения; «ФАЙЛЫ» — открытые при уходе в фон, 🔒 — под `flock`), `HTTP`, `DiskCache` (ответы TMDb: срок по виду запроса, при сбое — старый
   ответ), `Text` (`Rx` — NSRegularExpression с просмотром назад; `SearchText`, `Suggestions` — подсказки поиска с раскладкой и опечатками,
@@ -74,7 +74,8 @@
 - `Torrents/` — `TorrServerClient` (HTTP-API: add, stat, awaitFiles, preload с ранним стартом, streamURL, settings),
   `Torrents` (`EmbeddedTorrServer` — 127.0.0.1:18090, запускается один раз за жизнь процесса — остановка и повторный
   запуск движка Go обрывали приложение при возврате из фона; настройки кэша; выбор встроенный/внешний;
-  `releaseForBackground` — свернули без фильма и загрузки: раздачи закрываются (`drop`), кэш, пиры и сеть не висят во сне),
+  `releaseForBackground` — свернули без фильма и загрузки: раздачи закрываются (`drop`), кэш, пиры и сеть не висят во сне;
+  свои ретрекеры выключены (`RetrackersMode` 0), раздача без читателей закрывается через 10 с),
   `Release` (`Release`, `ReleaseInfo` — разбор названия, `EpisodeMatch` — файл серии), `ReleaseSearch` (JacRed exact →
   Jackett, плюс `Torrentio`), `DownloadLive` (загрузка в Dynamic Island — Live Activity при обычной установке), `DownloadKeepAlive` (беззвучный
   звук держит приложение живым, пока идёт загрузка; в LiveContainer — определяется по пути приложения — загрузка в Dynamic
@@ -121,6 +122,7 @@
 - `AerialTests/` — разбор раздач, файлов серий, адресов, ответов TMDb, подбор (`RecommendationsTests`), подсказки, MDBList, имена загрузок, ответы ИИ, Википедия, комната (`FeaturesTests`) (Swift Testing); `AerialUITests/ScreensTests` —
   снимки экранов и проверка воспроизведения на свободном Big Buck Bunny.
 - `docs/port-gaps.md` — сверка с приложением для ТВ: что перенесено и чего нет (с причинами).
+- `reports/` и `research_notes/` — исследования (энергопотребление, LiveContainer, mpv, Go TorrServer) и заметки к ним.
 - `.claude/skills/` — скиллы Apple (rshankras/claude-code-apple-skills, MIT; см. `SOURCE-apple-skills.txt`).
 
 ## Данные на устройстве

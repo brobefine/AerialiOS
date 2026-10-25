@@ -91,8 +91,9 @@ final class Friends {
         loop = Task { [weak self] in
             while !Task.isCancelled {
                 if let self, Date().timeIntervalSince(reportedAt) >= (watching != nil ? Self.watchingPeriod : next) { await report() }
-                // Раз в 5 с, а не в секунду: лишние пробуждения процесса — это батарея.
-                try? await Task.sleep(for: .seconds(5))
+                // Раз в 5 с, а не в секунду: лишние пробуждения процесса — это батарея; в энергосбережении — раз в 15 с.
+                let saver = ProcessInfo.processInfo.isLowPowerModeEnabled
+                try? await Task.sleep(for: .seconds(saver ? 15 : 5), tolerance: .seconds(saver ? 3 : 1))
             }
         }
     }

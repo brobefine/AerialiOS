@@ -389,7 +389,9 @@ final class PlayerModel {
         partySync = Task { [weak self] in
             var wasBuffering = false
             while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(1))
+                // Вне комнаты — раз в 5 с: сверять нечего, а секундные пробуждения шли весь фильм.
+                let inRoom = WatchParty.shared.room != nil
+                try? await Task.sleep(for: .seconds(inRoom ? 1 : 5), tolerance: .milliseconds(inRoom ? 100 : 1000))
                 guard let self else { return }
                 let party = WatchParty.shared
                 guard partyFile, started, let room = party.room else { continue }
@@ -499,6 +501,8 @@ final class PlayerModel {
                 guard let summary = self?.core?.videoSummary() else { return }
                 PerfMonitor.detail = "видео " + summary
                 Log.note("ПЛЕЕР", "видео \(summary)")
+                // Самая дорогая для батареи поломка — тихий переход на программное декодирование (HEVC 10-бит).
+                if summary.hasSuffix("программно") { Log.perf("ВНИМАНИЕ: видео декодируется программно — \(summary)") }
             }
         case .tracks(let tracks):
             let firstTracks = audioTracks.isEmpty
@@ -544,7 +548,7 @@ final class PlayerModel {
                 }
                 // Пиры и скорость видны только при подкачке — во время просмотра спрашиваем реже.
                 let busy = self.map { $0.buffering || !$0.started } ?? false
-                try? await Task.sleep(for: .seconds(busy ? 2 : 15))
+                try? await Task.sleep(for: .seconds(busy ? 2 : 15), tolerance: .seconds(busy ? 0.3 : 3))
             }
         }
     }

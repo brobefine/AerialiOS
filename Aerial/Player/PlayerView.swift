@@ -426,7 +426,7 @@ struct PlayerView: View {
         // В UI-тестах панель не прячется: по её часам тест видит, что видео пошло.
         guard !UITestHooks.active else { return }
         hideTask = Task {
-            try? await Task.sleep(for: .seconds(4))
+            try? await Task.sleep(for: .seconds(4), tolerance: .milliseconds(500))
             guard !Task.isCancelled, model.phase == .playing, !model.paused, scrub == nil else { return }
             withAnimation(.smooth(duration: 0.4)) { controls = false }
         }

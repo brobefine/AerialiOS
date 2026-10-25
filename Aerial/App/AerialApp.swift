@@ -43,14 +43,15 @@ struct AerialApp: App {
             switch phase {
             case .background:
                 CrashGuard.mark("background")
-                PerfMonitor.shared.backgroundHeartbeat()
                 PerfMonitor.shared.pause()
+                // Без фильма и загрузки раздачи закрываются; фоновое время — только на это.
+                let release = !Downloads.shared.busy && playback.request == nil
+                PerfMonitor.shared.backgroundHeartbeat { if release { await Torrents.releaseForBackground() } }
                 Friends.shared.setForeground(false)
                 Log.note("ЖИЗНЬ", "в фоне\(playback.request == nil ? "" : ", идёт фильм")")
                 // Сервер не останавливаем: повторный запуск движка Go в том же процессе обрывал приложение при
                 // возврате — и открытая страница терялась. iOS сама усыпит его вместе с приложением.
                 if Downloads.shared.busy { Downloads.shared.enterBackground() }
-                else if playback.request == nil { Task { await Torrents.releaseForBackground() } }
                 DownloadKeepAlive.shared.enterBackground()
             case .active:
                 Log.note("ЖИЗНЬ", "на экране")

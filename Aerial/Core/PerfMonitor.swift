@@ -41,6 +41,11 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
         MXMetricManager.shared.add(self)
         UIDevice.current.isBatteryMonitoringEnabled = true
         windowNet = Self.networkBytes()
+        // В многозадачном режиме LiveContainer на iOS 17 и раньше гость (расширение LiveProcess) узнаёт о сворачивании
+        // только этим уведомлением — атрибут «можно усыпить с замком» ставим и по нему.
+        NotificationCenter.default.addObserver(forName: .NSExtensionHostDidEnterBackground, object: nil, queue: .main) { _ in
+            _ = Self.openFiles()
+        }
         startWatchdog()
         resume()
     }
@@ -54,6 +59,7 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
             backgroundTask = .invalid
         }
         Self.foreground = true
+        Self.wake.signal()
         batteryStart = Date()
         batteryLevel = UIDevice.current.batteryLevel
         guard sampler == nil else { return }
@@ -61,7 +67,7 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
             while !Task.isCancelled {
                 self?.sample()
                 await Self.torrserverLine()
-                try? await Task.sleep(for: .seconds(15))
+                try? await Task.sleep(for: .seconds(15), tolerance: .seconds(3))
             }
         }
     }
@@ -210,9 +216,10 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
 
     // MARK: Фон
 
-    /// После ухода в фон 20 с пишем пульс раз в 2 с: по журналу видно, сколько приложение прожило свёрнутым и что
-    /// в это время делало (если его закрыли — пульс обрывается).
-    func backgroundHeartbeat() {
+    /// Фоновое время — ровно на [work] (закрыть раздачи), потом приложение засыпает: раньше пульс держал его 20 с, и
+    /// столько же работали Go, mpv и радио, а проверка замков LiveContainer (`Dead10ccFix`) ждёт конца фоновых задач.
+    /// Перед сном — запись для «ПРОШЛЫЙ ЗАПУСК» и атрибут «можно усыпить с замком» файлам, открытым за это время.
+    func backgroundHeartbeat(_ work: @escaping @MainActor () async -> Void) {
         heartbeat?.cancel()
         if backgroundTask == .invalid {
             backgroundTask = UIApplication.shared.beginBackgroundTask(withName: "perf-heartbeat") { [weak self] in
@@ -224,13 +231,14 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
             }
         }
         heartbeat = Task { [weak self] in
-            for second in stride(from: 2, through: 20, by: 2) {
-                try? await Task.sleep(for: .seconds(2))
-                if Task.isCancelled { return }
-                Log.perf(String(format: "ФОН %d с · ЦП %.0f %% · память %.0f МБ%@", second, Self.cpuPercent(), Self.memoryMB(),
-                                Self.activity.isEmpty ? "" : " · \(Self.activity)"))
-                Self.rememberBackground(seconds: second)
-            }
+            let started = Date()
+            await work()
+            if Task.isCancelled { return }
+            let seconds = Int(Date().timeIntervalSince(started).rounded())
+            Log.perf(String(format: "ФОН: сплю через %d с · ЦП %.0f %% · память %.0f МБ%@", seconds, Self.cpuPercent(), Self.memoryMB(),
+                            Self.activity.isEmpty ? "" : " · \(Self.activity)"))
+            Self.rememberBackground(seconds: seconds)
+            _ = Self.openFiles()
             guard let self else { return }
             if backgroundTask != .invalid {
                 UIApplication.shared.endBackgroundTask(backgroundTask)
@@ -305,12 +313,15 @@ final class PerfMonitor: NSObject, MXMetricManagerSubscriber {
 
     // MARK: Главный поток
 
+    /// Будит сторож при возврате на экран: в фоне он ждёт на семафоре, а не просыпается раз в 5 с.
+    nonisolated private static let wake = DispatchSemaphore(value: 0)
+
     /// Сторож главного потока: раз в секунду ставит в него метку и смотрит, через сколько она выполнилась.
     private func startWatchdog() {
         let thread = Thread {
             while true {
                 if !PerfMonitor.foreground {
-                    Thread.sleep(forTimeInterval: 5)
+                    PerfMonitor.wake.wait()
                     continue
                 }
                 let sent = DispatchTime.now()

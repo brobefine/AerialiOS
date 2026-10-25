@@ -34,7 +34,8 @@ final class Feeds {
     /// впустую (perf.log 24 октября).
     func refreshFourK(_ settings: AppSettings) {
         let defaults = UserDefaults.standard
-        guard !settings.parserAddress.isEmpty, fourKJob == nil else { return }
+        // В энергосбережении фоновый обход раздач («Вышли в 4K») ждёт до следующего раза.
+        guard !settings.parserAddress.isEmpty, fourKJob == nil, !ProcessInfo.processInfo.isLowPowerModeEnabled else { return }
         if Date().timeIntervalSince1970 - defaults.double(forKey: "feeds.fourKAt") < 24 * 3600 && !fourK.isEmpty { return }
         let parser = ReleaseSearch.Parser(address: settings.parserAddress, key: settings.parserKey, torrentio: false)
         fourKJob = Task { [weak self] in
@@ -45,13 +46,13 @@ final class Feeds {
                 if films.count >= 24 || Task.isCancelled { break }
                 // Идёт фильм — ждём: поток и процессор нужнее плееру.
                 while PerfMonitor.activity.hasPrefix("плеер"), !Task.isCancelled {
-                    try? await Task.sleep(for: .seconds(30))
+                    try? await Task.sleep(for: .seconds(30), tolerance: .seconds(5))
                 }
                 if await Self.hasFourK(film, parser: parser) {
                     films.append(film)
                     if films.count >= 3 { self?.fourK = films }
                 }
-                try? await Task.sleep(for: .milliseconds(1200))
+                try? await Task.sleep(for: .milliseconds(1200), tolerance: .milliseconds(300))
             }
             guard !films.isEmpty else { return }
             self?.fourK = films
