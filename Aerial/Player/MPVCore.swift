@@ -113,11 +113,13 @@ final class MPVCore: @unchecked Sendable {
     /// В фоне видео выключаем — звук играет дальше, а при возврате не бывает чёрного экрана (как в демо MPVKit).
     func setVideoEnabled(_ enabled: Bool) { set("vid", enabled ? "auto" : "no") }
 
-    /// Размер вывода сменился (поворот): mpv перестраивает картинку под новый размер слоя сразу, а не со следующим
-    /// кадром — на паузе и при медленном потоке кадр оставался обрезанным или за краями экрана.
+    /// Размер вывода сменился (поворот). Контекст MoltenVK в сборке MPVKit (патч `0001-player-add-moltenvk-context`)
+    /// не сообщает mpv о смене размера (`control` — `VO_NOTIMPL`) и читает `drawableSize` слоя только при перенастройке
+    /// вывода. Без неё после поворота mpv рисовал в прежний размер — видео в углу, обрезано или за краями экрана.
+    /// Перенастройка — выключить и включить видеодорожку (так же видео возвращается после фона).
     func refreshVideo() {
-        set("video-zoom", "0.0001")
-        set("video-zoom", "0")
+        set("vid", "no")
+        set("vid", "auto")
     }
 
     func destroy() {
@@ -240,6 +242,8 @@ final class MPVViewController: UIViewController {
     /// Слой сменил размер — плеер перестраивает картинку.
     var onResize: (() -> Void)?
     private var lastSize = CGSize.zero
+    private var rotating = false
+    private var settle: DispatchWorkItem?
 
     init(layer: MPVMetalLayer) {
         metalLayer = layer
@@ -269,19 +273,29 @@ final class MPVViewController: UIViewController {
         let size = CGSize(width: (view.bounds.width * scale).rounded(), height: (view.bounds.height * scale).rounded())
         metalLayer.drawableSize = size
         CATransaction.commit()
+        // Размер сменился не поворотом (окно на iPad) — перенастройка после того, как размер успокоится.
         if size != lastSize, size.width > 1, size.height > 1 {
+            let first = lastSize == .zero
             lastSize = size
-            onResize?()
+            guard !first, !rotating else { return }
+            settle?.cancel()
+            let work = DispatchWorkItem { [weak self] in self?.onResize?() }
+            settle = work
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3, execute: work)
         }
     }
 
     override func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
         super.viewWillTransition(to: size, with: coordinator)
-        // После анимации поворота — окончательный размер ещё раз.
+        // Поворот: перенастройка один раз — после анимации, с окончательным размером.
+        rotating = true
         coordinator.animate(alongsideTransition: nil) { [weak self] _ in
-            self?.view.setNeedsLayout()
-            self?.view.layoutIfNeeded()
-            self?.onResize?()
+            guard let self else { return }
+            rotating = false
+            view.setNeedsLayout()
+            view.layoutIfNeeded()
+            settle?.cancel()
+            onResize?()
         }
     }
 }
