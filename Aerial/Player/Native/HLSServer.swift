@@ -64,12 +64,12 @@ final class HLSServer: @unchecked Sendable {
         queue.asyncAfter(deadline: .now() + 60) { [weak self] in
             guard let self else { return }
             let stale = lock.withLock { () -> [HLSSession] in
-                let stale = sessions.values.filter { $0.released && Date().timeIntervalSince($0.lastAccess) > 180 }
-                stale.forEach { sessions[$0.id] = nil }
+                let stale = self.sessions.values.filter { $0.released && Date().timeIntervalSince($0.lastAccess) > 180 }
+                stale.forEach { self.sessions[$0.id] = nil }
                 return stale
             }
             stale.forEach { $0.close() }
-            if lock.withLock({ !sessions.isEmpty }) { sweepLater() }
+            if lock.withLock({ !self.sessions.isEmpty }) { sweepLater() }
         }
     }
 
