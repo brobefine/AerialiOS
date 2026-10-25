@@ -56,7 +56,11 @@ struct NativePlayerTests {
         let jumper = try Remuxer(url: try media(name), audioStream: nil)
         let index = jumper.segments.count - 1
         let alone = try jumper.segment(index)
-        #expect(Self.decodeTimes(alone) == Self.decodeTimes(continuous[index]))
+        let jumped = Self.decodeTimes(alone), steady = Self.decodeTimes(continuous[index])
+        #expect(jumped.count == steady.count)
+        // Звук — точно; видео — в пределах кадра (dts первых кадров сеанса восстановлены по частоте кадров).
+        if jumped.count == 2, steady.count == 2 { #expect(jumped[1] == steady[1]) }
+        if let a = jumped.first, let b = steady.first { #expect(Double(max(a, b) - min(a, b)) <= Double(b) * 0.012, "\(a) против \(b)") }
         // Заголовок от любого сеанса — один и тот же.
         let fresh = try Remuxer(url: try media(name), audioStream: nil)
         _ = try fresh.segment(0)

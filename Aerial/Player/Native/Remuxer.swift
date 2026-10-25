@@ -88,6 +88,8 @@ final class Remuxer {
     private let videoIndex: Int32
     private let videoBase: AVRational
     private let frameTicks: Int64
+    /// Длительность кадра точно (у MKV миллисекунды, кадр 24 к/с — 41,67): сдвиг и первые dts сеанса — без округлений.
+    private let frameLength: Double
     private let reorder: Int
     private let shift: Int64
     private var dovi: Int = -1
@@ -156,9 +158,10 @@ final class Remuxer {
         let rate = stream.pointee.avg_frame_rate.num > 0 ? stream.pointee.avg_frame_rate : stream.pointee.r_frame_rate
         frameRate = rate.num > 0 && rate.den > 0 ? Double(rate.num) / Double(rate.den) : 24
         // Длительность кадра в единицах видеопотока (у MKV обычно миллисекунды).
-        frameTicks = max(1, Int64((Double(videoBase.den) / Double(max(1, videoBase.num)) / frameRate).rounded()))
+        frameLength = Double(videoBase.den) / Double(max(1, videoBase.num)) / frameRate
+        frameTicks = max(1, Int64(frameLength.rounded()))
         reorder = max(Int(par.pointee.video_delay), 3) + 1
-        shift = frameTicks * Int64(reorder)
+        shift = Int64((frameLength * Double(reorder)).rounded())
         if let side = av_packet_side_data_get(par.pointee.coded_side_data, par.pointee.nb_coded_side_data, AV_PKT_DATA_DOVI_CONF) {
             dovi = Int(UnsafeRawPointer(side.pointee.data).assumingMemoryBound(to: AVDOVIDecoderConfigurationRecord.self).pointee.dv_profile)
         }
@@ -234,6 +237,9 @@ final class Remuxer {
         return max(0, (segments.lastIndex { $0.start <= ticks } ?? 0))
     }
 
+    /// Следующий отрезок сеанса — его [segment] сделает без перемотки.
+    var upcoming: Int { next }
+
     /// Отрезок `index`: подряд за прошлым — продолжая сеанс, иначе — новым сеансом с его ключевого кадра.
     func segment(_ index: Int) throws -> Data {
         guard input != nil, segments.indices.contains(index) else { throw Failure.broken("нет отрезка \(index)") }
@@ -288,6 +294,8 @@ final class Remuxer {
         let last = index == segments.count - 1
         let audioBase = audio.flatMap { input.pointee.streams[Int($0.stream)]?.pointee.time_base } ?? AVRational(num: 1, den: 1000)
         let audioEnd = av_rescale_q(segment.end, videoBase, audioBase)
+        // Звук раньше начала отрезка — прошлому отрезку (после перемотки MKV отдаёт его с начала кластера).
+        let audioStart = index == 0 ? Int64.min : av_rescale_q(segment.start, videoBase, audioBase)
         var videoDone = false
         var audioDone = audio == nil
         var sawVideo = false
@@ -329,7 +337,7 @@ final class Remuxer {
                     audioDone = true
                     held.append(packet)
                     keep = true
-                } else if packet.pointee.pts != Self.noTime {
+                } else if packet.pointee.pts != Self.noTime, packet.pointee.pts >= audioStart {
                     try writeAudio(packet, base: audioBase, to: output)
                 }
             } else if textTracks.contains(where: { $0.stream == stream }) {
@@ -359,7 +367,7 @@ final class Remuxer {
         if window.count > reorder {
             dts = window.removeFirst()
         } else {
-            dts = (window.first ?? pts) - frameTicks * Int64(reorder - window.count + 1)
+            dts = (window.first ?? pts) - Int64((frameLength * Double(reorder - window.count + 1)).rounded())
         }
         if lastDts != Int64.min, dts <= lastDts { dts = lastDts + 1 }
         if dts > pts { dts = pts }

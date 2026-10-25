@@ -259,6 +259,11 @@ final class HLSSession: @unchecked Sendable {
     private func segment(_ index: Int) throws -> Data {
         if let data = cache[index] { return data }
         guard !closed else { throw Remuxer.Failure.broken("сеанс закрыт") }
+        // Новый сеанс перепаковки (перемотка): отрезки прежнего не смешиваем с ним — время кадров может разойтись на кадр.
+        if index != remuxer.upcoming {
+            cache = [:]
+            order = []
+        }
         let data = try remuxer.segment(index)
         cache[index] = data
         order.append(index)
