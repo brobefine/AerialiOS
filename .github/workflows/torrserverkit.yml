@@ -42,18 +42,18 @@ jobs:
           git clone --depth 1 --branch "$VERSION" https://github.com/YouROK/TorrServer.git ts
           for p in Packages/TorrServerKit/patches/*.patch; do
             echo "== $p"
-            patch -p1 -d ts/src < "$p"
+            patch -p1 -d ts < "$p"
           done
 
       - name: Сборка
-        working-directory: ts/src
+        working-directory: ts
         run: VERSION="$VERSION" ./build-ios.sh
 
       - name: Релиз
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          zip=ts/src/dist/TorrServer-ios-TorrServerKit.xcframework.zip
+          zip=ts/dist/TorrServer-ios-TorrServerKit.xcframework.zip
           sum=$(swift package compute-checksum "$zip")
           gh release create "$TAG" "$zip" --title "$TAG" \
             --notes "TorrServer $VERSION + Packages/TorrServerKit/patches. checksum: $sum"
