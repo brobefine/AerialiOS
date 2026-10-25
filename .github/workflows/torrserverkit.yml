@@ -1,0 +1,62 @@
+# TorrServerKit с правками Aerial (Packages/TorrServerKit/patches/*.patch) — без Mac: TorrServer нужного релиза,
+# правки, build-ios.sh (gomobile), архив в релиз этого репозитория. Адрес и checksum — в итоге задачи; их вписать в
+# Packages/TorrServerKit/Package.swift. Запуск вручную: Actions → torrserverkit → Run workflow.
+name: torrserverkit
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Релиз TorrServer
+        default: MatriX.147.1
+      build:
+        description: Номер сборки Aerial (тег torrserverkit-<релиз>-aerial<номер>)
+        default: "1"
+
+permissions:
+  contents: write
+
+jobs:
+  xcframework:
+    runs-on: macos-26
+    timeout-minutes: 60
+    env:
+      VERSION: ${{ inputs.version }}
+      TAG: torrserverkit-${{ inputs.version }}-aerial${{ inputs.build }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+          cache: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: TorrServer и правки
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.6.app
+          corepack enable || true
+          git clone --depth 1 --branch "$VERSION" https://github.com/YouROK/TorrServer.git ts
+          for p in Packages/TorrServerKit/patches/*.patch; do
+            echo "== $p"
+            patch -p1 -d ts/src < "$p"
+          done
+
+      - name: Сборка
+        working-directory: ts/src
+        run: VERSION="$VERSION" ./build-ios.sh
+
+      - name: Релиз
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          zip=ts/src/dist/TorrServer-ios-TorrServerKit.xcframework.zip
+          sum=$(swift package compute-checksum "$zip")
+          gh release create "$TAG" "$zip" --title "$TAG" \
+            --notes "TorrServer $VERSION + Packages/TorrServerKit/patches. checksum: $sum"
+          echo "url: https://github.com/${{ github.repository }}/releases/download/$TAG/TorrServer-ios-TorrServerKit.xcframework.zip" >> "$GITHUB_STEP_SUMMARY"
+          echo "checksum: $sum" >> "$GITHUB_STEP_SUMMARY"
+          echo "checksum: $sum"

@@ -1,0 +1,77 @@
+diff -ruN a/server/mobile/torrserverkit/torrserverkit.go b/server/mobile/torrserverkit/torrserverkit.go
+--- a/server/mobile/torrserverkit/torrserverkit.go	2026-10-25 17:44:01.029636400 +0300
++++ b/server/mobile/torrserverkit/torrserverkit.go	2026-10-25 17:44:14.185674900 +0300
+@@ -7,6 +7,8 @@
+ 	"net"
+ 	"os"
+ 	"path/filepath"
++	"runtime"
++	"runtime/debug"
+ 	"server"
+ 	"server/log"
+ 	"server/settings"
+@@ -104,3 +106,23 @@
+ func IsRunning() bool {
+ 	return atomic.LoadInt32(&running) == 1
+ }
++
++// SetRuntime tunes the Go runtime: GC percent (GOGC), soft memory limit in MiB (GOMEMLIMIT) and GOMAXPROCS.
++// Zero or negative leaves a value unchanged. Environment variables are read before the host app can set them.
++func SetRuntime(gcPercent int, memoryLimitMB int, maxProcs int) {
++	if gcPercent > 0 {
++		debug.SetGCPercent(gcPercent)
++	}
++	if memoryLimitMB > 0 {
++		debug.SetMemoryLimit(int64(memoryLimitMB) << 20)
++	}
++	if maxProcs > 0 {
++		runtime.GOMAXPROCS(maxProcs)
++	}
++}
++
++// FreeMemory runs a GC and returns freed memory to the OS — before the host app is suspended.
++func FreeMemory() {
++	runtime.GC()
++	debug.FreeOSMemory()
++}
+diff -ruN a/server/torr/storage/torrstor/cache.go b/server/torr/storage/torrstor/cache.go
+--- a/server/torr/storage/torrstor/cache.go	2026-10-25 17:44:00.810999700 +0300
++++ b/server/torr/storage/torrstor/cache.go	2026-10-25 17:44:14.184670700 +0300
+@@ -255,7 +255,7 @@
+ 			c.removePiece(p)
+ 			rems--
+ 			if rems <= 0 {
+-				utils.FreeOSMemGC()
++				utils.FreeOSMemGCThrottled()
+ 				return
+ 			}
+ 		}
+diff -ruN a/server/torr/utils/freemem.go b/server/torr/utils/freemem.go
+--- a/server/torr/utils/freemem.go	2026-10-25 17:44:00.593231100 +0300
++++ b/server/torr/utils/freemem.go	2026-10-25 17:44:14.184670700 +0300
+@@ -3,6 +3,8 @@
+ import (
+ 	"runtime"
+ 	"runtime/debug"
++	"sync/atomic"
++	"time"
+ )
+ 
+ func FreeOSMem() {
+@@ -13,3 +15,16 @@
+ 	runtime.GC()
+ 	debug.FreeOSMemory()
+ }
++
++var lastThrottledFree atomic.Int64
++
++// FreeOSMemGCThrottled is FreeOSMemGC at most once per 30 s. Aerial (iOS): cache eviction called a full GC with
++// memory release on every evicted piece — several times a second while streaming, a major battery cost.
++func FreeOSMemGCThrottled() {
++	now := time.Now().UnixNano()
++	last := lastThrottledFree.Load()
++	if now-last < int64(30*time.Second) || !lastThrottledFree.CompareAndSwap(last, now) {
++		return
++	}
++	FreeOSMemGC()
++}
