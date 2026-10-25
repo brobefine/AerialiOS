@@ -344,8 +344,10 @@ struct PlayerView: View {
                 .font(.system(size: size * 0.42, weight: .semibold))
                 .contentTransition(.symbolEffect(.replace))
                 .foregroundStyle(.white)
+                // На светлом кадре белый значок терялся: стекло чуть темнее, у значка — тень.
+                .shadow(color: .black.opacity(0.35), radius: 4)
                 .frame(width: size, height: size)
-                .glass(in: Circle(), tint: accent?.opacity(0.35))
+                .glass(in: Circle(), tint: (accent ?? .black).opacity(0.35))
                 .contentShape(Circle())
         }
         .buttonStyle(PressScaleStyle())
