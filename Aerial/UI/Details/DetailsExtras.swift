@@ -49,7 +49,10 @@ struct RelativesSection: View {
                                     NavigationLink(value: Route.details(row.item)) {
                                         // Чем связан — под постером в его зеркальном размытии, как описание серии.
                                         VStack(alignment: .leading, spacing: 0) {
+                                            // Высота постера задана: в ряду без неё он ужимался по высоте и выходил
+                                            // уже подписи под ним.
                                             PosterCard(item: row.item, width: width, squareBottom: true)
+                                                .frame(width: width, height: width * 1.5)
                                             Text(row.why).font(.aerial(.caption2)).foregroundStyle(.white.opacity(0.85))
                                                 .lineLimit(4, reservesSpace: true)
                                                 .padding(8)

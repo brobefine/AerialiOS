@@ -226,15 +226,33 @@ enum AI {
                 json: true, temperature: 0.6, strong: true)
         }
         let picks = titles(text, withWhy: true)
-        // Проверка на спойлеры — отдельным запросом; сбой — все «чем связан» скрыты ([SpoilerGuard]).
+        // Спойлеры — по смыслу: проверка, переписывание отмеченных, повторная проверка ([SpoilerGuard]).
+        let seed = "\(title)\(year > 0 ? " (\(year))" : "")"
         let pairs = picks.map { (title: $0.original.isEmpty ? $0.title : $0.original, why: $0.why) }
-        let verdict = try? await cached("spoilers1", ["ru", title, String(year)] + pairs.map { "\($0.title)|\($0.why)" }, ttl: 30 * day) {
-            try await generate(SpoilerGuard.checkPrompt(seed: "\(title)\(year > 0 ? " (\(year))" : "")", items: pairs),
-                               json: true, temperature: 0, strong: true)
+        let checked = try? await cached("spoilers2", ["ru", seed] + pairs.map { "\($0.title)|\($0.why)" }, ttl: 30 * day) {
+            try await generate(SpoilerGuard.checkPrompt(seed: seed, items: pairs), json: true, temperature: 0, strong: true)
         }
-        let safe = SpoilerGuard.apply(picks, verdict: verdict.flatMap(SpoilerGuard.parseVerdict))
-        let hidden = zip(picks, safe).filter { !$0.0.why.isEmpty && $0.1.why.isEmpty }.count
-        if hidden > 0 { Log.note("ИИ", "родственники «\(title)»: скрыто \(hidden) «чем связан» как спойлеры") }
+        let verdict = SpoilerGuard.parseVerdict(checked)
+        var rewrites: [Int: String] = [:]
+        var recheck: Set<Int>?
+        if let verdict, !verdict.isEmpty {
+            let flagged = verdict.sorted().filter { $0 < pairs.count }.map { (index: $0, title: pairs[$0].title, why: pairs[$0].why) }
+            let rewritten = try? await cached("spoilerfix1", ["ru", seed] + flagged.map { "\($0.index)|\($0.title)|\($0.why)" }, ttl: 30 * day) {
+                try await generate(SpoilerGuard.rewritePrompt(seed: seed, items: flagged), json: true, temperature: 0.3, strong: true)
+            }
+            rewrites = SpoilerGuard.parseRewrites(rewritten)
+            // Повторная проверка переписанного; номера — исходные.
+            let fixed = rewrites.keys.sorted()
+            let fixedPairs = fixed.map { (title: pairs[$0].title, why: rewrites[$0] ?? "") }
+            let rechecked = try? await cached("spoilers2", ["ru", seed] + fixedPairs.map { "\($0.title)|\($0.why)" }, ttl: 30 * day) {
+                try await generate(SpoilerGuard.checkPrompt(seed: seed, items: fixedPairs), json: true, temperature: 0, strong: true)
+            }
+            let again = SpoilerGuard.parseVerdict(rechecked)
+            recheck = again.map { Set($0.compactMap { $0 < fixed.count ? fixed[$0] : nil }) }
+        }
+        let safe = SpoilerGuard.merge(picks, verdict: verdict, rewrites: rewrites, recheck: recheck)
+        let changed = zip(picks, safe).filter { $0.0.why != $0.1.why }.count
+        if changed > 0 { Log.note("ИИ", "родственники «\(title)»: \(changed) «чем связан» переписано без спойлеров") }
         return safe
     }
 

@@ -2,72 +2,71 @@ import Foundation
 import Testing
 @testable import Aerial
 
-/// «Духовные родственники» без спойлеров: ни при каком ответе модели развязка не попадает на экран.
+/// «Духовные родственники» без спойлеров: что бы ни ответила модель, на экране — либо безопасное описание, либо
+/// нейтральная фраза; развязки нет, пустого места нет.
 struct SpoilerGuardTests {
+    private let hereditary = "переселение душ через ритуалы черной магии в чужие тела"
+    private let safe = "мать и сын в доме, где горе становится чудовищем"
+
     private func pick(_ title: String, _ why: String) -> AiTitle {
         AiTitle(title: title, original: title, year: 2000, tv: false, why: why)
     }
 
-    /// Случай 24 октября: «Реинкарнация» → «Ключ от всех дверей». Проверка назвала строку спойлером — текст скрыт.
-    @Test func verdictHidesHereditaryTwist() {
-        let picks = [pick("Ключ от всех дверей", "переселение душ через ритуалы черной магии в чужие тела"),
-                     pick("Бабадук", "мать и сын в доме, где горе становится чудовищем")]
-        let safe = SpoilerGuard.apply(picks, verdict: [0])
-        #expect(safe[0].why.isEmpty)
-        #expect(safe[1].why == picks[1].why)
+    /// Случай 25 октября: проверка отметила, модель переписала, повторная проверка приняла — показан новый текст.
+    @Test func flaggedIsRewritten() {
+        let picks = [pick("Ключ от всех дверей", hereditary), pick("Бабадук", safe)]
+        let result = SpoilerGuard.merge(picks, verdict: [0], rewrites: [0: "семейные тайны и старый дом с запертыми комнатами"],
+                                        recheck: [])
+        #expect(result[0].why == "семейные тайны и старый дом с запертыми комнатами")
+        #expect(result[1].why == safe)
     }
 
-    /// Та же строка, даже если проверка её пропустила: признак «переселение» — скрыта всё равно.
-    @Test func markersCatchWhatCheckMissed() {
-        let picks = [pick("Ключ от всех дверей", "переселение душ через ритуалы черной магии в чужие тела")]
-        #expect(SpoilerGuard.apply(picks, verdict: []).first?.why.isEmpty == true)
+    /// Переписанное всё ещё спойлер — нейтральная фраза, а не пустота и не спойлер.
+    @Test func rewriteStillSpoilerFallsBack() {
+        let picks = [pick("Ключ от всех дверей", hereditary)]
+        let result = SpoilerGuard.merge(picks, verdict: [0], rewrites: [0: "души переселяются в тела"], recheck: [0])
+        #expect(result[0].why == SpoilerGuard.fallback)
     }
 
-    /// Проверка не ответила или ответила мусором — не показывается ни одно «чем связан».
-    @Test func failedCheckHidesEverything() {
-        let picks = [pick("Бабадук", "мать и сын в доме, где горе становится чудовищем"), pick("Сияние", "семья в отрезанном от мира отеле")]
-        #expect(SpoilerGuard.apply(picks, verdict: nil).allSatisfy { $0.why.isEmpty })
+    /// Переписать не удалось или повторной проверки не было — нейтральная фраза.
+    @Test func missingRewriteOrRecheckFallsBack() {
+        let picks = [pick("Ключ от всех дверей", hereditary)]
+        #expect(SpoilerGuard.merge(picks, verdict: [0], rewrites: [:], recheck: []).first?.why == SpoilerGuard.fallback)
+        #expect(SpoilerGuard.merge(picks, verdict: [0], rewrites: [0: "тайны дома"], recheck: nil).first?.why == SpoilerGuard.fallback)
+    }
+
+    /// Проверка не ответила — ни одной исходной фразы на экране, у всех нейтральная.
+    @Test func failedCheckNeverShowsOriginals() {
+        let picks = [pick("Ключ от всех дверей", hereditary), pick("Бабадук", safe)]
+        #expect(SpoilerGuard.merge(picks, verdict: nil).allSatisfy { $0.why == SpoilerGuard.fallback })
         #expect(SpoilerGuard.parseVerdict("не JSON") == nil)
         #expect(SpoilerGuard.parseVerdict("{\"other\": [1]}") == nil)
+        #expect(SpoilerGuard.parseVerdict(nil) == nil)
     }
 
-    @Test func verdictParsing() {
+    /// Не отмеченные проверкой — без изменений; пустые так и остаются пустыми.
+    @Test func cleanLinesStay() {
+        let picks = [pick("Бабадук", safe), pick("Без связи", "")]
+        let result = SpoilerGuard.merge(picks, verdict: [])
+        #expect(result[0].why == safe)
+        #expect(result[1].why.isEmpty)
+    }
+
+    @Test func parsing() {
         #expect(SpoilerGuard.parseVerdict("{\"spoilers\": [0, 3]}") == [0, 3])
-        #expect(SpoilerGuard.parseVerdict("{\"spoilers\": []}") == [])
         #expect(SpoilerGuard.parseVerdict("{\"spoilers\": [\"2\"]}") == [2])
+        #expect(SpoilerGuard.parseRewrites("{\"items\": [{\"i\": 1, \"why\": \"тайны дома\"}, {\"i\": \"4\", \"why\": \" \"}]}") == [1: "тайны дома"])
+        #expect(SpoilerGuard.parseRewrites("мусор").isEmpty)
     }
 
-    /// Типичные формулировки развязок — все пойманы признаками.
-    @Test(arguments: [
-        "в финале выясняется, что герой мертв",
-        "оказывается, это всё ему приснилось",
-        "на самом деле девочка одержима демоном",
-        "главный твист — подмена личности",
-        "концовка с неожиданным поворотом",
-        "the twist is that he was dead all along",
-        "призрак вселяется в тело дочери",
-    ])
-    func spoilerPhrasesAreCaught(_ phrase: String) {
-        #expect(SpoilerGuard.hasMarkers(phrase))
-    }
-
-    /// Безопасные описания завязки не трогаются.
-    @Test(arguments: [
-        "семья переживает утрату бабушки",
-        "одинокий смотритель маяка и нарастающая тревога",
-        "подростки в маленьком городе и странные исчезновения",
-    ])
-    func premisePhrasesStay(_ phrase: String) {
-        #expect(!SpoilerGuard.hasMarkers(phrase))
-        #expect(SpoilerGuard.apply([pick("X", phrase)], verdict: []).first?.why == phrase)
-    }
-
-    /// Запрос «родственников» и проверки несут правила про спойлеры обеих работ.
+    /// Запросы требуют суждения по смыслу о ОБЕИХ работах и описания только по завязке.
     @Test func promptsCarryRules() {
         #expect(SpoilerGuard.rules.contains("SPOILER-FREE for BOTH works"))
         let check = SpoilerGuard.checkPrompt(seed: "Hereditary (2018)", items: [("The Skeleton Key", "переселение душ")])
-        #expect(check.contains("Hereditary (2018)"))
+        #expect(check.contains("Judge by MEANING"))
         #expect(check.contains("0: \"The Skeleton Key\" — переселение душ"))
-        #expect(check.contains("When in doubt, mark it"))
+        let fix = SpoilerGuard.rewritePrompt(seed: "Hereditary (2018)", items: [(3, "The Skeleton Key", "переселение душ")])
+        #expect(fix.contains("3: \"The Skeleton Key\""))
+        #expect(fix.contains(SpoilerGuard.rules))
     }
 }

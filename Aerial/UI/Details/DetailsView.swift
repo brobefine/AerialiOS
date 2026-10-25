@@ -2,7 +2,7 @@ import SwiftUI
 
 /// Страница фильма или сериала. Как в Apple TV, содержимое скользит поверх постера: постер стоит на месте, под ним —
 /// его зеркальное продолжение в размытии (вместо затемнения к низу — как у Aerial на ТВ). Под логотипом, кнопками
-/// и описанием — живое размытие того, что позади, с плавным началом у логотипа; ниже — чёрный с резкой границей.
+/// и разделами — живое размытие того, что позади, с плавным началом у логотипа: вся страница скользит поверх постера.
 struct DetailsView: View {
     let item: VodItem
 
@@ -24,8 +24,6 @@ struct DetailsView: View {
     @State private var trailerOpen = false
     /// Насколько страницу оттянули вниз в самом начале — постер растягивается следом.
     @State private var pull: CGFloat = 0
-    /// Серия, чьё описание открыто целиком (из меню удержания).
-    @State private var fullEpisode: VodEpisode?
 
     private var shown: VodItem { details?.item ?? item }
     private var art: String { shown.backdrop.isEmpty ? shown.poster : shown.backdrop }
@@ -38,23 +36,25 @@ struct DetailsView: View {
                 Theme.background
                 // Оттянули вниз в начале — постер растягивается от верха: иначе между ним и опустившимся размытием
                 // открывался резкий край зеркального размытия.
-                backdrop(width: width, height: hero)
+                backdrop(width: width, height: hero, screen: geometry.size.height + geometry.safeAreaInsets.top)
                     .scaleEffect(1 + pull / hero, anchor: .top)
                 ScrollView {
                     VStack(spacing: 0) {
                         // Постер виден целиком; информация начинается у его нижней трети.
                         Color.clear.frame(height: hero * 0.62)
-                        info
-                            .padding(.top, 72)
-                            .padding(.bottom, 40)
-                            .frame(maxWidth: .infinity)
-                            .background { frost }
-                        sections
-                            .padding(.top, 8)
-                            // Под нижней пилюлей вкладок: без запаса последние разделы не долистывались.
-                            .padding(.bottom, geometry.safeAreaInsets.bottom + 96)
-                            // Чёрный начинается резкой границей сразу под размытием.
-                            .background(Theme.background)
+                        // Вся страница скользит поверх неподвижного постера, как на ТВ: под информацией и разделами —
+                        // одно живое размытие с плавным началом у логотипа.
+                        VStack(spacing: 0) {
+                            info
+                                .padding(.top, 72)
+                                .padding(.bottom, 40)
+                                .frame(maxWidth: .infinity)
+                            sections
+                                .padding(.top, 8)
+                                // Под нижней пилюлей вкладок: без запаса последние разделы не долистывались.
+                                .padding(.bottom, geometry.safeAreaInsets.bottom + 96)
+                        }
+                        .background { frost }
                     }
                 }
                 .scrollIndicators(.hidden)
@@ -69,17 +69,6 @@ struct DetailsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { if details == nil { await load() } }
         .task(id: season) { await loadSeason() }
-        .sheet(item: $fullEpisode) { episode in
-            ScrollView {
-                VStack(alignment: .leading, spacing: 10) {
-                    Text("\(episode.code) · \(episode.title)").font(.aerial(.title3, .bold))
-                    Text(episode.overview).font(.aerial(.body)).foregroundStyle(.white.opacity(0.92))
-                }
-                .padding(24)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .presentationDetents([.medium, .large])
-        }
         .fullScreenCover(isPresented: $trailerOpen) {
             if let key = details?.trailerKey, !key.isEmpty { TrailerView(key: key) }
         }
@@ -108,7 +97,8 @@ struct DetailsView: View {
     // MARK: Фон
 
     /// Постер и под ним его зеркальное продолжение в размытии; стоит на месте, пока страница листается.
-    private func backdrop(width: CGFloat, height: CGFloat) -> some View {
+    /// Постер и под ним его зеркальное продолжение в размытии до низа экрана: разделы скользят поверх него.
+    private func backdrop(width: CGFloat, height: CGFloat, screen: CGFloat) -> some View {
         VStack(spacing: 0) {
             CachedImage(path: art, size: "w1280", pixelWidth: 1600)
                 .frame(width: width, height: height)
@@ -118,23 +108,23 @@ struct DetailsView: View {
                     LinearGradient(colors: [.black.opacity(0.35), .clear], startPoint: .top, endPoint: .bottom).frame(height: 110)
                 }
             CachedImage(path: art, size: "w780", pixelWidth: 800)
-                .frame(width: width, height: height)
+                .frame(width: width, height: max(height, screen - height))
                 .clipped()
                 .scaleEffect(x: 1, y: -1)
                 .blur(radius: 36, opaque: true)
-                .overlay(Color.black.opacity(0.2))
-                .mask(LinearGradient(stops: [.init(color: .black, location: 0), .init(color: .black, location: 0.55),
-                                             .init(color: .clear, location: 1)], startPoint: .top, endPoint: .bottom))
+                .overlay(Color.black.opacity(0.35))
                 .clipped()
         }
         .frame(width: width, alignment: .top)
         .allowsHitTesting(false)
     }
 
-    /// Размытие под информацией: начинается плавно у логотипа и идёт до самого низа блока.
+    /// Размытие под содержимым: начинается плавно у логотипа и идёт до самого низа страницы; лёгкое затемнение —
+    /// чтобы текст разделов читался на любом постере.
     private var frost: some View {
         Rectangle()
             .fill(.ultraThinMaterial)
+            .overlay(Color.black.opacity(0.25))
             .mask {
                 VStack(spacing: 0) {
                     LinearGradient(colors: [.clear, .black], startPoint: .top, endPoint: .bottom).frame(height: 150)
@@ -380,11 +370,6 @@ struct DetailsView: View {
                                     Label("Убрать из «Продолжить»", systemImage: "eye.slash")
                                 }
                             }
-                            if episode.overview.count > 300 {
-                                Button { fullEpisode = episode } label: {
-                                    Label("Описание целиком", systemImage: "text.alignleft")
-                                }
-                            }
                             if library.entry(item, episode).map({ $0.fraction < 0.9 }) ?? true {
                                 Button {
                                     library.record(item: item, episode: episode, position: 1, duration: 1, source: nil)
@@ -542,8 +527,10 @@ private struct EpisodePreview: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // Длинное описание — кадр ниже, чтобы тексту хватило места.
+            let long = episode.overview.count > 450
             CachedImage(path: episode.still, size: "w780", pixelWidth: 1000)
-                .frame(width: 340, height: 340 * 9 / 16)
+                .frame(width: 340, height: long ? 140 : 340 * 9 / 16)
                 .clipped()
             VStack(alignment: .leading, spacing: 6) {
                 Text("\(episode.code) · \(episode.title)").font(.aerial(.headline))
@@ -552,14 +539,13 @@ private struct EpisodePreview: View {
                     .filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(.aerial(.caption)).foregroundStyle(Theme.secondaryText)
                 if !episode.overview.isEmpty {
-                    // Ширина задана явно: окно предпросмотра меряет текст без ограничения, и длинное описание
-                    // выходило за края карточки.
-                    // Длинное — мельче и не больше 11 строк: окно предпросмотра выше экрана iOS обрезает снизу.
+                    // Описание целиком всегда: ширина задана явно (окно предпросмотра меряет текст без ограничения),
+                    // высота ограничена — не влезает, шрифт уменьшается (`minimumScaleFactor`), а не обрезается.
                     Text(episode.overview)
-                        .font(.aerial(episode.overview.count > 350 ? .footnote : .subheadline))
-                        .lineLimit(11)
-                        .frame(width: 308, alignment: .leading)
-                        .fixedSize(horizontal: false, vertical: true)
+                        .font(.aerial(.subheadline))
+                        .minimumScaleFactor(0.55)
+                        .frame(width: 308, alignment: .topLeading)
+                        .frame(maxHeight: 360, alignment: .topLeading)
                 }
             }
             .padding(.horizontal, 16)
