@@ -16,7 +16,7 @@ final class HLSServer: @unchecked Sendable {
 
     /// Запустить (один раз) и вернуть порт.
     func start() async throws -> UInt16 {
-        if let port = lock.withLock({ listener != nil && self.port > 0 ? self.port : nil }) { return port }
+        if let port = lock.withLock({ self.listener != nil && self.port > 0 ? self.port : nil }) { return port }
         let parameters = NWParameters.tcp
         parameters.requiredLocalEndpoint = .hostPort(host: "127.0.0.1", port: .any)
         parameters.allowLocalEndpointReuse = true
