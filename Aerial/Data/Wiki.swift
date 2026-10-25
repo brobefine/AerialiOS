@@ -12,7 +12,7 @@ struct WikiStory: Hashable, Sendable {
 enum Wiki {
     /// «История создания» — по-русски, иначе по-английски.
     static func story(_ item: VodItem) async -> WikiStory? {
-        await section(item, languages: ["ru", "en"], tag: "story", priority: WikiPolicy.storyPriority)
+        await section(item, languages: AppLanguage.english ? ["en", "ru"] : ["ru", "en"], tag: "story", priority: WikiPolicy.storyPriority)
     }
 
     /// Раздел «Сюжет» — опора для «Разбора фильма»: сначала английская статья, сюжет там обычно подробнее.

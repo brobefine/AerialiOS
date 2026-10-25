@@ -13,11 +13,11 @@ enum VodShelf: String, CaseIterable, Identifiable, Hashable, Sendable {
 
     var title: String {
         switch self {
-        case .all: "Всё"
-        case .movies: "Фильмы"
-        case .series: "Сериалы"
-        case .cartoons: "Мультфильмы"
-        case .cartoonSeries: "Мультсериалы"
+        case .all: L("Всё")
+        case .movies: L("Фильмы")
+        case .series: L("Сериалы")
+        case .cartoons: L("Мультфильмы")
+        case .cartoonSeries: L("Мультсериалы")
         }
     }
 
@@ -60,10 +60,10 @@ struct VodItem: Codable, Hashable, Identifiable, Sendable {
     }
     var kindLabel: String {
         switch (kind, isCartoon) {
-        case (.movie, false): "Фильм"
-        case (.movie, true): "Мультфильм"
-        case (.series, false): "Сериал"
-        case (.series, true): "Мультсериал"
+        case (.movie, false): L("Фильм")
+        case (.movie, true): L("Мультфильм")
+        case (.series, false): L("Сериал")
+        case (.series, true): L("Мультсериал")
         }
     }
 }

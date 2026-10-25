@@ -60,14 +60,14 @@ enum AI {
     static func find(_ query: String) async throws -> [AiTitle] {
         let q = String(query.trimmingCharacters(in: .whitespacesAndNewlines).prefix(500))
         guard q.count >= 3 else { return [] }
-        let text = try await cached("find2", ["ru", q.lowercased()], ttl: 7 * day) {
+        let text = try await cached("find2", [AppLanguage.english ? "en" : "ru", q.lowercased()], ttl: 7 * day) {
             try await generate("A viewer is trying to remember a movie or TV series and describes it from memory: \"\(q)\".\n" +
                 "Memory is unreliable: ANY detail in the description may be distorted, exaggerated, merged from another film or simply wrong " +
                 "(objects, body parts, numbers, names, places, order of events, genre). Do not require literal matches. " +
                 "Reason about the core of what they remember — the situation, who the characters are to each other, the turning point, " +
                 "the mood and genre feel — and find titles whose actual scenes or plot match that core best, even if several details differ. " +
                 "Never discard a candidate because one detail does not match. Prefer well-known titles only when they genuinely fit.\n" +
-                "Return up to 8 candidates, best match first, as a JSON array of objects {\"title\": title in Russian if it exists, else original, " +
+                "Return up to 8 candidates, best match first, as a JSON array of objects {\"title\": title in \(AppLanguage.ai) if it exists, else original, " +
                 "\"original\": original title, \"year\": release year as number, \"type\": \"movie\" or \"tv\"}. Only real, existing titles. " +
                 "If nothing plausible fits, return []. Output only the JSON array.", json: true)
         }
@@ -79,8 +79,8 @@ enum AI {
         let rows = reviews.map { String($0.trimmingCharacters(in: .whitespacesAndNewlines).prefix(1500)) }.filter { !$0.isEmpty }.prefix(15)
         guard rows.count >= 2 else { throw AiError.empty }
         let name = String(title.prefix(200))
-        return try await cached("summary2", ["ru", name] + rows, ttl: 30 * day) {
-            try await generate("Here are viewer reviews of \"\(name)\". Summarize what viewers think in Russian: 2–3 short sentences — " +
+        return try await cached("summary2", [AppLanguage.english ? "en" : "ru", name] + rows, ttl: 30 * day) {
+            try await generate("Here are viewer reviews of \"\(name)\". Summarize what viewers think in \(AppLanguage.ai): 2–3 short sentences — " +
                 "the overall verdict, what they praise, what they criticise. No spoilers, no quotes, no list markers, no intro phrase, " +
                 "no filler or generic phrases — only concrete points viewers actually make.\n\n" +
                 rows.enumerated().map { "Review \($0.offset + 1):\n\($0.element)" }.joined(separator: "\n\n"))
@@ -94,13 +94,13 @@ enum AI {
         let dis = disliked.map { String($0.prefix(120)) }.prefix(25)
         let ex = exclude.map { String($0.prefix(120)) }.prefix(60)
         let drop = abandoned.map { String($0.prefix(120)) }.prefix(10)
-        let text = try await cached("recommend4", ["ru", "movies or TV series", like.joined(separator: "|"), dis.joined(separator: "|"),
+        let text = try await cached("recommend4", [AppLanguage.english ? "en" : "ru", "movies or TV series", like.joined(separator: "|"), dis.joined(separator: "|"),
                                                    drop.joined(separator: "|"), ex.joined(separator: "|")], ttl: 12 * hour) {
             try await generate("A viewer liked: \(like.joined(separator: "; "))." +
                 (dis.isEmpty ? "" : " They did not like: \(dis.joined(separator: "; "))." ) + dropped(Array(drop)) + " \(plotHints)" +
                 " Suggest \(min(30, max(6, count))) movies or TV series they would probably enjoy, varied, not obvious sequels of the liked ones, " +
                 "and not in this list: \(ex.isEmpty ? "—" : ex.joined(separator: "; ")). " +
-                "Return a JSON array of objects {\"title\": title in Russian if it exists, else original, \"original\": original title, " +
+                "Return a JSON array of objects {\"title\": title in \(AppLanguage.ai) if it exists, else original, \"original\": original title, " +
                 "\"year\": release year as number, \"type\": \"movie\" or \"tv\"}. Only real, existing titles.", json: true, temperature: 0.7)
         }
         return titles(text)
@@ -113,7 +113,7 @@ enum AI {
         let dis = disliked.map { String($0.prefix(120)) }.prefix(25)
         let ex = exclude.map { String($0.prefix(120)) }.prefix(60)
         let drop = abandoned.map { String($0.prefix(120)) }.prefix(10)
-        let text = try await cached("collections6", ["ru", like.joined(separator: "|"), dis.joined(separator: "|"), drop.joined(separator: "|")],
+        let text = try await cached("collections6", [AppLanguage.english ? "en" : "ru", like.joined(separator: "|"), dis.joined(separator: "|"), drop.joined(separator: "|")],
                                     ttl: 24 * hour) {
             try await generate("A viewer liked: \(like.joined(separator: "; "))." +
                 (dis.isEmpty ? "" : " They did not like: \(dis.joined(separator: "; "))." ) + dropped(Array(drop)) + " \(plotHints)" +
@@ -134,8 +134,8 @@ enum AI {
                 "If a detail like a place (\"island\", \"space station\") is in the name, every film must actually have it; if you cannot find " +
                 "8 titles that fit exactly, make the name broader (e.g. \"an isolated group fighting to survive\") or return fewer titles. " +
                 "Do not add a title that only matches the mood.\n" +
-                "Return a JSON array [{\"title\": collection name in Russian (max 55 chars), \"why\": one short sentence in Russian, " +
-                "\"items\": [{\"title\": title in Russian if it exists, else original, \"original\": original title, \"year\": number, \"type\": \"movie\" or \"tv\"}]}].",
+                "Return a JSON array [{\"title\": collection name in \(AppLanguage.ai) (max 55 chars), \"why\": one short sentence in \(AppLanguage.ai), " +
+                "\"items\": [{\"title\": title in \(AppLanguage.ai) if it exists, else original, \"original\": original title, \"year\": number, \"type\": \"movie\" or \"tv\"}]}].",
                 json: true, temperature: 0.7, strong: true)
         }
         let parsed = parseJSON(text)
@@ -152,8 +152,8 @@ enum AI {
         return try await withThrowingTaskGroup(of: (Int, String).self) { group in
             for (index, part) in parts.enumerated() {
                 group.addTask {
-                    let out = try await cached("translate", ["ru", part], ttl: 30 * day) {
-                        try await generate("Translate the following \(what) into Russian. Keep the meaning, tone and paragraph breaks. " +
+                    let out = try await cached("translate", [AppLanguage.english ? "en" : "ru", part], ttl: 30 * day) {
+                        try await generate("Translate the following \(what) into \(AppLanguage.ai). Keep the meaning, tone and paragraph breaks. " +
                             "Output only the translation, without comments or quotes.\n\n\(part)")
                     }
                     return (index, out.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -201,7 +201,7 @@ enum AI {
         let franchise = details.collection.filter { $0.id != details.item.id }
             .map { "\(($0.originalTitle.isEmpty ? $0.title : $0.originalTitle).prefix(80)) (\($0.year))" }.prefix(15)
         // Ключ кэша сменён: прежние ответы могли содержать спойлеры.
-        let text = try await cached("relatives7", ["ru", title, String(year), kind, about, av.joined(separator: "|"), franchise.joined(separator: "|")],
+        let text = try await cached("relatives7", [AppLanguage.english ? "en" : "ru", title, String(year), kind, about, av.joined(separator: "|"), franchise.joined(separator: "|")],
                                     ttl: 30 * day) {
             try await generate("\(kind) \"\(title)\"\(year > 0 ? " (\(year))" : "").\(about)\n" +
                 "Step 1: name the 3–4 central themes, emotional experiences or questions of THIS specific work (from its plot above, not from the title alone).\n" +
@@ -219,9 +219,9 @@ enum AI {
                 "the plot connection is literal and obvious — never as a mood filler.\n" +
                 (av.isEmpty ? "" : "Do NOT suggest any of these — they were already suggested for many other titles: \(av.joined(separator: "; ")). " +
                     "Dig deeper: lesser-known but fitting works, other countries and decades.\n") +
-                "Return a JSON object {\"themes\": [short theme names in Russian], \"items\": [{\"title\": title in Russian if it exists, else original, " +
+                "Return a JSON object {\"themes\": [short theme names in \(AppLanguage.ai)], \"items\": [{\"title\": title in \(AppLanguage.ai) if it exists, else original, " +
                 "\"original\": original title, \"year\": release year as number, \"type\": \"movie\" or \"tv\", " +
-                "\"why\": the shared theme in Russian, one short phrase (max 70 chars)}]}. Only real, existing titles.\n" +
+                "\"why\": the shared theme in \(AppLanguage.ai), one short phrase (max 70 chars)}]}. Only real, existing titles.\n" +
                 SpoilerGuard.rules,
                 json: true, temperature: 0.6, strong: true)
         }
@@ -229,7 +229,7 @@ enum AI {
         // Спойлеры — по смыслу: проверка, переписывание отмеченных, повторная проверка ([SpoilerGuard]).
         let seed = "\(title)\(year > 0 ? " (\(year))" : "")"
         let pairs = picks.map { (title: $0.original.isEmpty ? $0.title : $0.original, why: $0.why) }
-        let checked = try? await cached("spoilers2", ["ru", seed] + pairs.map { "\($0.title)|\($0.why)" }, ttl: 30 * day) {
+        let checked = try? await cached("spoilers2", [AppLanguage.english ? "en" : "ru", seed] + pairs.map { "\($0.title)|\($0.why)" }, ttl: 30 * day) {
             try await generate(SpoilerGuard.checkPrompt(seed: seed, items: pairs), json: true, temperature: 0, strong: true)
         }
         let verdict = SpoilerGuard.parseVerdict(checked)
@@ -237,14 +237,14 @@ enum AI {
         var recheck: Set<Int>?
         if let verdict, !verdict.isEmpty {
             let flagged = verdict.sorted().filter { $0 < pairs.count }.map { (index: $0, title: pairs[$0].title, why: pairs[$0].why) }
-            let rewritten = try? await cached("spoilerfix1", ["ru", seed] + flagged.map { "\($0.index)|\($0.title)|\($0.why)" }, ttl: 30 * day) {
+            let rewritten = try? await cached("spoilerfix1", [AppLanguage.english ? "en" : "ru", seed] + flagged.map { "\($0.index)|\($0.title)|\($0.why)" }, ttl: 30 * day) {
                 try await generate(SpoilerGuard.rewritePrompt(seed: seed, items: flagged), json: true, temperature: 0.3, strong: true)
             }
             rewrites = SpoilerGuard.parseRewrites(rewritten)
             // Повторная проверка переписанного; номера — исходные.
             let fixed = rewrites.keys.sorted()
             let fixedPairs = fixed.map { (title: pairs[$0].title, why: rewrites[$0] ?? "") }
-            let rechecked = try? await cached("spoilers2", ["ru", seed] + fixedPairs.map { "\($0.title)|\($0.why)" }, ttl: 30 * day) {
+            let rechecked = try? await cached("spoilers2", [AppLanguage.english ? "en" : "ru", seed] + fixedPairs.map { "\($0.title)|\($0.why)" }, ttl: 30 * day) {
                 try await generate(SpoilerGuard.checkPrompt(seed: seed, items: fixedPairs), json: true, temperature: 0, strong: true)
             }
             let again = SpoilerGuard.parseVerdict(rechecked)
@@ -266,7 +266,7 @@ enum AI {
         let about = identity(details)
         let upTo = tv && season > 0 ? " up to and including season \(season)\(episode > 0 ? ", episode \(episode)" : "")" : ""
         let story = String(plot.trimmingCharacters(in: .whitespacesAndNewlines).prefix(6000))
-        let text = try await cached("recap5", ["ru", title, String(year), kind, about, upTo, String(story.count), String(story.prefix(200))],
+        let text = try await cached("recap5", [AppLanguage.english ? "en" : "ru", title, String(year), kind, about, upTo, String(story.count), String(story.prefix(200))],
                                     ttl: 30 * day) {
             try await generate("The \(kind) \"\(title)\"\(year > 0 ? " (\(year))" : "")\(upTo).\(about)\n" +
                 "Make sure you are describing THIS exact work identified above — not another work with the same or a similar name " +
@@ -276,7 +276,7 @@ enum AI {
                       "do not guess and do not substitute another work.\n"
                     : "Here is its plot from Wikipedia — treat it as the source of truth for events and names, do not contradict it, " +
                       "and do not add events that are not in it; use your own knowledge only for interpretation, motives and context:\n\"\"\"\n\(story)\n\"\"\"\n") +
-                "Write a post-viewing breakdown in Russian for someone who has just finished watching it. Spoilers are expected. " +
+                "Write a post-viewing breakdown in \(AppLanguage.ai) for someone who has just finished watching it. Spoilers are expected. " +
                 "Leave out details you are not sure about.\n" +
                 "Style: concise and specific, no filler. Every sentence must carry a concrete event, motive, detail or insight. " +
                 "No generic praise or evaluation (\"masterpiece\", \"brilliantly shows\"), no introductions or conclusions, no restating the same idea in other words, " +

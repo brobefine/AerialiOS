@@ -7,7 +7,7 @@ enum HTTPError: LocalizedError {
     var errorDescription: String? {
         switch self {
         case .status(let code): "HTTP \(code)"
-        case .invalidResponse: "Некорректный ответ сервера"
+        case .invalidResponse: L("Некорректный ответ сервера")
         }
     }
 }

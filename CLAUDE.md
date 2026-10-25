@@ -42,7 +42,9 @@
   встроенный TorrServer в фоне не останавливается, загрузки при возврате продолжаются); `RootView` — вкладки в нижней
   пилюле: «Главная», «Медиатека», «Настройки», «Поиск»; плеер показывает `Playback` через UIKit (`PlayerHostingController`,
   открывается альбомным, поворачивается и в книжную; закрыть — крестик или смахнуть вниз); `UITestHooks` — запуск из UI-тестов (`-uiTest`, `-smokeLink`).
-- `Core/` — `CrashGuard` (падения — сигналы и исключения в `logs/crash.log`; как кончился прошлый запуск — «в фоне без
+- `Core/` — `Localization` (`AppLanguage` — язык «как в системе»/русский/English, применяется при запуске; в тестах всегда
+  русский; `L("…")` — строка интерфейса: русский текст — ключ, перевод — `English.table`, подстановки `%@`; TMDb, даты и ИИ —
+  на том же языке), `English` (таблица перевода и формы множественного числа), `CrashGuard` (падения — сигналы и исключения в `logs/crash.log`; как кончился прошлый запуск — «в фоне без
   падения» значит выгрузила система), `Storage` (где данные; в LiveContainer документы бывают в общей папке группы — тогда
   база TorrServer во временной папке процесса), `BuildKeys` (ключи сборки из Info.plist), `Log` (журналы `Documents/logs`), `PerfMonitor` (`perf.log`: раз в 15 с
   ЦП, память, нагрев, заряд и что идёт; «ЗАТОР» — главный поток молчал > 250 мс; `logs/metrics/` — отчёты и диагностика MetricKit), `HTTP`, `DiskCache` (ответы TMDb: срок по виду запроса, при сбое — старый
@@ -114,7 +116,7 @@
 ## Данные на устройстве
 
 - UserDefaults: настройки (`parser.*`, `torrserver.*`, `tmdbProxy`, `taste.history`, `player.autoplayNext`, `mdblist.key`,
-  `mdblist.blocked`, `mdblist.shown`, `mdblist.sources`, `episodes.overviews`, `episodes.hideSpoilers`, `ui.posterSize`, `ui.actorPhoto`, `ui.titleLogos`, `releases.sort`, `releases.quality`, `search.recent`, `ai.*`, `opensubs.*`, `reviews.sort`), медиатека (`library.saved`, `library.entries`,
+  `mdblist.blocked`, `mdblist.shown`, `mdblist.sources`, `episodes.overviews`, `episodes.hideSpoilers`, `app.language`, `ui.posterSize`, `ui.actorPhoto`, `ui.titleLogos`, `releases.sort`, `releases.quality`, `search.recent`, `ai.*`, `opensubs.*`, `reviews.sort`), медиатека (`library.saved`, `library.entries`,
   `library.marks`, `library.followed`), друзья (`friends.*`), подбор (`taste.related`, `taste.relatedKey`, `taste.forYou.<раздел>`, `taste.ai*`), `feeds.fourK*`.
 - Caches: `api-cache/` (TMDb, MDBList, ИИ, Википедия, списки «Вселенных»), `images/` (картинки). Application Support: `downloads.json` — список загрузок.
 - Documents (видно в «Файлах» › На iPhone › Aerial): `logs/app.log`, `logs/mpv.log`, `logs/perf.log` (+ `.1` — прошлый запуск), `logs/metrics/` (MetricKit),

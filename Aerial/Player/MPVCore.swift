@@ -25,7 +25,7 @@ struct MPVTrack: Identifiable, Hashable, Sendable {
     var label: String {
         let language = Locale(identifier: "ru_RU").localizedString(forLanguageCode: lang).map { $0.capitalized } ?? lang.uppercased()
         let parts = [title, language.isEmpty ? "" : language, codec.uppercased()].filter { !$0.isEmpty }
-        return parts.isEmpty ? "Дорожка \(id)" : parts.joined(separator: " · ")
+        return parts.isEmpty ? L("Дорожка %@", "\(id)") : parts.joined(separator: " · ")
     }
 }
 

@@ -17,9 +17,9 @@ enum OpenSubtitles {
 
         var errorDescription: String? {
             switch self {
-            case .status(let code): "OpenSubtitles ответил \(code)"
-            case .limit: "Лимит скачиваний OpenSubtitles на сегодня исчерпан"
-            case .noLink: "OpenSubtitles не дал ссылку на файл"
+            case .status(let code): L("OpenSubtitles ответил %@", "\(code)")
+            case .limit: L("Лимит скачиваний OpenSubtitles на сегодня исчерпан")
+            case .noLink: L("OpenSubtitles не дал ссылку на файл")
             }
         }
     }

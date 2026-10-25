@@ -21,27 +21,27 @@ struct SettingsView: View {
         NavigationStack {
             List {
                 Section {
-                    category("Поиск раздач", "magnifyingglass", .blue) { parserSection }
+                    category(L("Поиск раздач"), "magnifyingglass", .blue) { parserSection }
                     category("TorrServer", "server.rack", .green) { serverSection }
-                    category("Плеер", "play.rectangle.fill", .orange) { playerSection; subtitlesSection }
+                    category(L("Плеер"), "play.rectangle.fill", .orange) { playerSection; subtitlesSection }
                 }
                 Section {
-                    category("Вид", "paintbrush.fill", .cyan) { appearanceSection }
-                    category("Рекомендации", "hand.thumbsup.fill", .pink) { tasteSection }
-                    category("Каталог и оценки", "film.stack", .indigo) { catalogueSection }
-                    category("ИИ", "sparkles", .purple) { aiSection }
+                    category(L("Вид"), "paintbrush.fill", .cyan) { appearanceSection }
+                    category(L("Рекомендации"), "hand.thumbsup.fill", .pink) { tasteSection }
+                    category(L("Каталог и оценки"), "film.stack", .indigo) { catalogueSection }
+                    category(L("ИИ"), "sparkles", .purple) { aiSection }
                     if Friends.shared.enabled {
-                        category("Вместе", "person.2.fill", .teal) { friendsSection }
+                        category(L("Вместе"), "person.2.fill", .teal) { friendsSection }
                     }
                 }
                 Section {
-                    category("Данные", "externaldrive.fill", .gray) { dataSection }
-                    category("О приложении", "info.circle.fill", .gray) { aboutSection }
+                    category(L("Данные"), "externaldrive.fill", .gray) { dataSection }
+                    category(L("О приложении"), "info.circle.fill", .gray) { aboutSection }
                 }
             }
-            .navigationTitle("Настройки")
+            .navigationTitle(L("Настройки"))
             .fileExporter(isPresented: $exporting, document: backupFile, contentType: .propertyList, defaultFilename: Backup.fileName) { result in
-                if case .success = result { backupNote = "Копия сохранена." }
+                if case .success = result { backupNote = L("Копия сохранена.") }
             }
             .fileImporter(isPresented: $importing, allowedContentTypes: [.propertyList, .data]) { result in
                 guard case .success(let url) = result else { return }
@@ -50,9 +50,9 @@ struct SettingsView: View {
                 do {
                     let count = try Backup.restore(Data(contentsOf: url))
                     library.reload()
-                    backupNote = "Восстановлено \(count) значений. Настройки применятся полностью после перезапуска Aerial."
+                    backupNote = L("Восстановлено %@ значений. Настройки применятся полностью после перезапуска Aerial.", "\(count)")
                 } catch {
-                    backupNote = "Это не копия Aerial для iPhone."
+                    backupNote = L("Это не копия Aerial для iPhone.")
                 }
             }
 
@@ -83,16 +83,16 @@ struct SettingsView: View {
                     }
                 }
             }
-            TextField("Свой адрес (JacRed или Jackett)", text: $settings.parserAddress)
+            TextField(L("Свой адрес (JacRed или Jackett)"), text: $settings.parserAddress)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .keyboardType(.URL)
-            SecureField("Ключ API (если нужен)", text: $settings.parserKey)
-            Toggle("Torrentio — зарубежные раздачи", isOn: $settings.torrentio)
+            SecureField(L("Ключ API (если нужен)"), text: $settings.parserKey)
+            Toggle(L("Torrentio — зарубежные раздачи"), isOn: $settings.torrentio)
         } header: {
-            Text("Поиск раздач")
+            Text(L("Поиск раздач"))
         } footer: {
-            Text("Зелёная точка — сервер отвечает. Torrentio ищет по номеру IMDb, русских озвучек там мало.")
+            Text(L("Зелёная точка — сервер отвечает. Torrentio ищет по номеру IMDb, русских озвучек там мало."))
         }
     }
 
@@ -104,53 +104,53 @@ struct SettingsView: View {
             }
             .pickerStyle(.segmented)
             if settings.serverMode == .embedded {
-                LabeledContent("Состояние", value: embeddedState)
-                Picker("Кэш в памяти", selection: $settings.cacheMB) {
-                    ForEach([128, 256, 512], id: \.self) { Text("\($0) МБ").tag($0) }
+                LabeledContent(L("Состояние"), value: embeddedState)
+                Picker(L("Кэш в памяти"), selection: $settings.cacheMB) {
+                    ForEach([128, 256, 512], id: \.self) { Text(L("%@ МБ", "\($0)")).tag($0) }
                 }
                 .onChange(of: settings.cacheMB) { _, value in
                     Task { await server.configure(cacheMB: value) }
                 }
             } else {
-                TextField("Адрес, например 192.168.1.10:8090", text: $settings.externalAddress)
+                TextField(L("Адрес, например 192.168.1.10:8090"), text: $settings.externalAddress)
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.URL)
-                Button("Проверить") { Task { await checkExternal() } }
+                Button(L("Проверить")) { Task { await checkExternal() } }
                 if let externalCheck { Text(externalCheck).font(.aerial(.footnote)).foregroundStyle(Theme.secondaryText) }
             }
         } header: {
             Text("TorrServer")
         } footer: {
             Text(settings.serverMode == .embedded
-                 ? "Встроенный работает, пока открыто приложение или идёт фильм. Раздача качается во время просмотра — по мобильной сети это трафик."
-                 : "TorrServer на телевизоре или компьютере в той же сети.")
+                 ? L("Встроенный работает, пока открыто приложение или идёт фильм. Раздача качается во время просмотра — по мобильной сети это трафик.")
+                 : L("TorrServer на телевизоре или компьютере в той же сети."))
         }
     }
 
     @ViewBuilder private var playerSection: some View {
         @Bindable var settings = settings
         Section {
-            Toggle("Описания серий", isOn: $settings.episodeOverviews)
-            Toggle("Скрывать спойлеры серий", isOn: $settings.hideSpoilers)
+            Toggle(L("Описания серий"), isOn: $settings.episodeOverviews)
+            Toggle(L("Скрывать спойлеры серий"), isOn: $settings.hideSpoilers)
         } header: {
-            Text("Серии")
+            Text(L("Серии"))
         } footer: {
-            Text("Спойлеры: у непросмотренных серий кадр размыт, а описание скрыто.")
+            Text(L("Спойлеры: у непросмотренных серий кадр размыт, а описание скрыто."))
         }
         Section {
-            Button("Сбросить фильтры и сортировку раздач") {
+            Button(L("Сбросить фильтры и сортировку раздач")) {
                 UserDefaults.standard.removeObject(forKey: "releases.sort")
                 UserDefaults.standard.removeObject(forKey: "releases.quality")
             }
-            Button("Очистить историю поиска") { UserDefaults.standard.removeObject(forKey: "search.recent") }
+            Button(L("Очистить историю поиска")) { UserDefaults.standard.removeObject(forKey: "search.recent") }
         }
         Section {
-            Toggle("Следующая серия автоматически", isOn: $settings.autoplayNext)
+            Toggle(L("Следующая серия автоматически"), isOn: $settings.autoplayNext)
         } header: {
-            Text("Плеер")
+            Text(L("Плеер"))
         } footer: {
-            Text("Серия кончилась — через 10 с начнётся следующая из той же раздачи. Заставку можно пропустить кнопкой, если её отметили зрители IntroDB или AniSkip. Скачанное (удерживайте раздачу — «Скачать») играет с телефона без сети и лежит в «Файлах» › Aerial › Downloads.")
+            Text(L("Серия кончилась — через 10 с начнётся следующая из той же раздачи. Заставку можно пропустить кнопкой, если её отметили зрители IntroDB или AniSkip. Скачанное (удерживайте раздачу — «Скачать») играет с телефона без сети и лежит в «Файлах» › Aerial › Downloads."))
         }
     }
 
@@ -158,68 +158,87 @@ struct SettingsView: View {
     @AppStorage("ui.actorPhoto") private var actorPhoto = "small"
     @AppStorage("ui.titleLogos") private var titleLogos = true
 
+    @AppStorage(AppLanguage.key) private var language = "system"
+    @State private var languageChanged = false
+
     @ViewBuilder private var appearanceSection: some View {
+        // Язык приложения, как на ТВ; применяется при следующем запуске ([AppLanguage]).
         Section {
-            Picker("Размер постеров", selection: $posterSize) {
-                Text("Обычные").tag("small")
-                Text("Крупные").tag("large")
+            Picker(L("Язык приложения"), selection: $language) {
+                Text(L("Как в системе")).tag("system")
+                Text("Русский").tag("ru")
+                Text("English").tag("en")
             }
-            Picker("Размер фото актёров", selection: $actorPhoto) {
-                Text("Обычные").tag("small")
-                Text("Крупные").tag("large")
+            .onChange(of: language) { languageChanged = true }
+            .alert(L("Перезапустите Aerial"), isPresented: $languageChanged) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(L("Язык сменится после перезапуска: закройте Aerial в переключателе приложений и откройте снова."))
             }
-            Toggle("Логотипы названий", isOn: $titleLogos)
         } footer: {
-            Text("Логотипы — название фильма надписью из TMDb вместо текста. Размеры применяются к открытым заново экранам.")
+            Text(L("Каталог, даты и ответы ИИ — тоже на этом языке."))
+        }
+        Section {
+            Picker(L("Размер постеров"), selection: $posterSize) {
+                Text(L("Обычные")).tag("small")
+                Text(L("Крупные")).tag("large")
+            }
+            Picker(L("Размер фото актёров"), selection: $actorPhoto) {
+                Text(L("Обычные")).tag("small")
+                Text(L("Крупные")).tag("large")
+            }
+            Toggle(L("Логотипы названий"), isOn: $titleLogos)
+        } footer: {
+            Text(L("Логотипы — название фильма надписью из TMDb вместо текста. Размеры применяются к открытым заново экранам."))
         }
     }
 
     @ViewBuilder private var tasteSection: some View {
         @Bindable var settings = settings
         Section {
-            Toggle("Учитывать историю просмотра", isOn: $settings.tasteHistory)
-            LabeledContent("Оценок", value: String(library.marks.count))
-            Button("Очистить «Продолжить»", role: .destructive) { library.clearContinue() }
+            Toggle(L("Учитывать историю просмотра"), isOn: $settings.tasteHistory)
+            LabeledContent(L("Оценок"), value: String(library.marks.count))
+            Button(L("Очистить «Продолжить»"), role: .destructive) { library.clearContinue() }
                 .disabled(library.continueWatching.isEmpty)
-            Button("Очистить историю просмотра", role: .destructive) { library.clearHistory() }
+            Button(L("Очистить историю просмотра"), role: .destructive) { library.clearHistory() }
                 .disabled(library.entries.isEmpty)
-            Button("Начать рекомендации с нуля", role: .destructive) {
+            Button(L("Начать рекомендации с нуля"), role: .destructive) {
                 library.clearHistory()
                 library.clearMarks()
                 taste.clearAI()
             }
-            Button("Сбросить оценки", role: .destructive) {
+            Button(L("Сбросить оценки"), role: .destructive) {
                 library.clearMarks()
                 taste.clearAI()
             }
                 .disabled(library.marks.isEmpty)
         } header: {
-            Text("Рекомендации")
+            Text(L("Рекомендации"))
         } footer: {
-            Text("«Вам понравится?» подбирается по оценкам «Нравится», «Обожаю» и «Не моё», «Моему списку» и просмотренному — вместе с похожими по TMDb.")
+            Text(L("«Вам понравится?» подбирается по оценкам «Нравится», «Обожаю» и «Не моё», «Моему списку» и просмотренному — вместе с похожими по TMDb."))
         }
     }
 
     @ViewBuilder private var catalogueSection: some View {
         @Bindable var settings = settings
         Section {
-            TextField("Прокси TMDb", text: $settings.tmdbProxy)
+            TextField(L("Прокси TMDb"), text: $settings.tmdbProxy)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
-            SecureField("Ключ MDBList (оценки IMDb, RT)", text: $settings.mdblistKey)
-            LabeledContent("Кэш ответов", value: Format.bytes(Int64(cacheBytes)))
-            Button("Очистить кэш", role: .destructive) {
+            SecureField(L("Ключ MDBList (оценки IMDb, RT)"), text: $settings.mdblistKey)
+            LabeledContent(L("Кэш ответов"), value: Format.bytes(Int64(cacheBytes)))
+            Button(L("Очистить кэш"), role: .destructive) {
                 DiskCache.api.clear()
                 ImageLoader.shared.clear()
                 cacheBytes = DiskCache.api.bytes
             }
         } header: {
-            Text("Каталог")
+            Text(L("Каталог"))
         } footer: {
-            Text("Если TMDb недоступен напрямую, запросы идут через этот Worker. Бесплатный ключ MDBList — на mdblist.com, в разделе Preferences: с ним на странице фильма видны оценки IMDb, Rotten Tomatoes и Metacritic.")
+            Text(L("Если TMDb недоступен напрямую, запросы идут через этот Worker. Бесплатный ключ MDBList — на mdblist.com, в разделе Preferences: с ним на странице фильма видны оценки IMDb, Rotten Tomatoes и Metacritic."))
         }
         Section {
-            Toggle("Показывать оценки MDBList", isOn: $settings.mdblistShown)
+            Toggle(L("Показывать оценки MDBList"), isOn: $settings.mdblistShown)
             if settings.mdblistShown {
                 ForEach(AppSettings.ratingCatalog, id: \.key) { source in
                     Toggle(isOn: Binding(get: { settings.ratingSources.contains(source.key) }, set: { on in
@@ -233,91 +252,91 @@ struct SettingsView: View {
                 }
             }
         } header: {
-            Text("Оценки")
+            Text(L("Оценки"))
         } footer: {
-            Text("TMDb всегда первым: оценка пользователей кинобазы из 10.")
+            Text(L("TMDb всегда первым: оценка пользователей кинобазы из 10."))
         }
     }
 
     @ViewBuilder private var aiSection: some View {
         @Bindable var settings = settings
         Section {
-            Toggle("ИИ включён", isOn: $settings.aiOn)
-            SecureField("Ключ Gemini (aistudio.google.com)", text: $settings.geminiKey)
-            SecureField("Ключ Groq (console.groq.com)", text: $settings.groqKey)
+            Toggle(L("ИИ включён"), isOn: $settings.aiOn)
+            SecureField(L("Ключ Gemini (aistudio.google.com)"), text: $settings.geminiKey)
+            SecureField(L("Ключ Groq (console.groq.com)"), text: $settings.groqKey)
             if settings.aiEnabled {
-                Toggle("Подборки по настроению на главной", isOn: $settings.aiMoodShelves)
-                Toggle("Сводка отзывов", isOn: $settings.summarizeReviews)
-                Toggle("Переводить отзывы сразу", isOn: $settings.translateReviews)
+                Toggle(L("Подборки по настроению на главной"), isOn: $settings.aiMoodShelves)
+                Toggle(L("Сводка отзывов"), isOn: $settings.summarizeReviews)
+                Toggle(L("Переводить отзывы сразу"), isOn: $settings.translateReviews)
             }
             if AI.regionBlocked {
-                Label("Google и Groq не обслуживают вашу страну — ИИ работает только через VPN.", systemImage: "exclamationmark.triangle")
+                Label(L("Google и Groq не обслуживают вашу страну — ИИ работает только через VPN."), systemImage: "exclamationmark.triangle")
                     .font(.aerial(.footnote)).foregroundStyle(.yellow)
             } else if let error = taste.aiError {
                 Text(error).font(.aerial(.footnote)).foregroundStyle(Theme.secondaryText)
             }
         } header: {
-            Text("ИИ")
+            Text(L("ИИ"))
         } footer: {
-            Text("Свои бесплатные ключи. ИИ ищет фильм по описанию своими словами, подбирает «Вам понравится?» и подборки по настроению, находит «Духовных родственников», делает «Разбор» после просмотра, сводит и переводит отзывы. Есть оба ключа — основной Gemini, Groq подхватывает при лимите.")
+            Text(L("Свои бесплатные ключи. ИИ ищет фильм по описанию своими словами, подбирает «Вам понравится?» и подборки по настроению, находит «Духовных родственников», делает «Разбор» после просмотра, сводит и переводит отзывы. Есть оба ключа — основной Gemini, Groq подхватывает при лимите."))
         }
     }
 
     @ViewBuilder private var subtitlesSection: some View {
         @Bindable var settings = settings
         Section {
-            SecureField("Ключ OpenSubtitles", text: $settings.openSubsKey)
-            TextField("Языки субтитров, например ru,en", text: $settings.subsLanguages)
+            SecureField(L("Ключ OpenSubtitles"), text: $settings.openSubsKey)
+            TextField(L("Языки субтитров, например ru,en"), text: $settings.subsLanguages)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
         } header: {
-            Text("Субтитры")
+            Text(L("Субтитры"))
         } footer: {
-            Text("С ключом (бесплатно: opensubtitles.com/consumers) в плеере появляется «Субтитры › Найти субтитры…». Без ключа — только субтитры из самой раздачи.")
+            Text(L("С ключом (бесплатно: opensubtitles.com/consumers) в плеере появляется «Субтитры › Найти субтитры…». Без ключа — только субтитры из самой раздачи."))
         }
     }
 
     @ViewBuilder private var friendsSection: some View {
         if Friends.shared.enabled {
             Section {
-                NavigationLink("Друзья и комнаты") { FriendsView() }
-                LabeledContent("Ваш код", value: Friends.shared.friendCode)
+                NavigationLink(L("Друзья и комнаты")) { FriendsView() }
+                LabeledContent(L("Ваш код"), value: Friends.shared.friendCode)
             } header: {
-                Text("Вместе")
+                Text(L("Вместе"))
             } footer: {
-                Text("Друзья видят, что вы смотрите, и могут войти в вашу комнату: пауза и перемотка — у всех сразу.")
+                Text(L("Друзья видят, что вы смотрите, и могут войти в вашу комнату: пауза и перемотка — у всех сразу."))
             }
         }
     }
 
     @ViewBuilder private var dataSection: some View {
         Section {
-            Button("Сохранить копию…") {
+            Button(L("Сохранить копию…")) {
                 if let data = try? Backup.export() {
                     backupFile = BackupFile(data: data)
                     exporting = true
                 }
             }
-            Button("Восстановить из копии…") { importing = true }
+            Button(L("Восстановить из копии…")) { importing = true }
             if let backupNote { Text(backupNote).font(.aerial(.footnote)).foregroundStyle(Theme.secondaryText) }
         } header: {
-            Text("Данные")
+            Text(L("Данные"))
         } footer: {
-            Text("Настройки, ключи, «Мой список», оценки, прогресс, подписки и друзья — одним файлом. Его можно сохранить в «Файлы» или iCloud и восстановить на другом iPhone.")
+            Text(L("Настройки, ключи, «Мой список», оценки, прогресс, подписки и друзья — одним файлом. Его можно сохранить в «Файлы» или iCloud и восстановить на другом iPhone."))
         }
     }
 
     @ViewBuilder private var aboutSection: some View {
         Section {
-            LabeledContent("Версия", value: version)
-            LabeledContent("Журналы", value: "Файлы › На iPhone › Aerial › logs")
+            LabeledContent(L("Версия"), value: version)
+            LabeledContent(L("Журналы"), value: L("Файлы › На iPhone › Aerial › logs"))
             // Где бы ни стояло приложение (и в LiveContainer, чья папка в «Файлах» может быть скрыта), журналы
             // отправляются отсюда: app, mpv, perf, отчёты MetricKit и журнал TorrServer.
             ShareLink(items: Self.logFiles()) {
-                Label("Поделиться журналами", systemImage: "square.and.arrow.up")
+                Label(L("Поделиться журналами"), systemImage: "square.and.arrow.up")
             }
         } header: {
-            Text("О приложении")
+            Text(L("О приложении"))
         }
     }
 
@@ -357,10 +376,10 @@ struct SettingsView: View {
 
     private var embeddedState: String {
         switch server.state {
-        case .stopped: "Остановлен"
-        case .starting: "Запускается…"
-        case .running(let version): "Работает · \(version)"
-        case .failed(let reason): "Ошибка: \(reason)"
+        case .stopped: L("Остановлен")
+        case .starting: L("Запускается…")
+        case .running(let version): L("Работает · %@", version)
+        case .failed(let reason): L("Ошибка: %@", reason)
         }
     }
 
@@ -379,15 +398,15 @@ struct SettingsView: View {
     }
 
     private func checkExternal() async {
-        externalCheck = "Проверяю…"
+        externalCheck = L("Проверяю…")
         guard let client = try? TorrServerClient(address: settings.externalAddress) else {
-            externalCheck = "Некорректный адрес"
+            externalCheck = L("Некорректный адрес")
             return
         }
         if let version = await client.echo() {
-            externalCheck = "Работает · \(version)"
+            externalCheck = L("Работает · %@", version)
         } else {
-            externalCheck = "Не отвечает"
+            externalCheck = L("Не отвечает")
         }
     }
 }

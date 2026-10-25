@@ -7,7 +7,7 @@ struct DownloadsShelf: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            ShelfHeader(title: "Загрузки")
+            ShelfHeader(title: L("Загрузки"))
             ScrollView(.horizontal) {
                 LazyHStack(alignment: .top, spacing: 12) {
                     ForEach(downloads.jobs) { job in
@@ -35,14 +35,14 @@ private struct DownloadMenu: View {
     var body: some View {
         if !downloads.complete(job) {
             if job.paused {
-                Button { downloads.pause(job, false) } label: { Label("Продолжить", systemImage: "arrow.down.circle") }
+                Button { downloads.pause(job, false) } label: { Label(L("Продолжить"), systemImage: "arrow.down.circle") }
             } else if job.failure != nil {
-                Button { downloads.pause(job, false) } label: { Label("Повторить", systemImage: "arrow.clockwise") }
+                Button { downloads.pause(job, false) } label: { Label(L("Повторить"), systemImage: "arrow.clockwise") }
             } else {
-                Button { downloads.pause(job, true) } label: { Label("Пауза", systemImage: "pause.circle") }
+                Button { downloads.pause(job, true) } label: { Label(L("Пауза"), systemImage: "pause.circle") }
             }
         }
-        Button(role: .destructive) { downloads.delete(job) } label: { Label("Удалить загрузку", systemImage: "trash") }
+        Button(role: .destructive) { downloads.delete(job) } label: { Label(L("Удалить загрузку"), systemImage: "trash") }
     }
 }
 
@@ -51,12 +51,12 @@ private struct DownloadMenu: View {
 private func downloadStatus(_ job: DownloadJob) -> String {
     let downloads = Downloads.shared
     let done = downloads.done[job.hash] ?? 0
-    if downloads.complete(job) { return "Готово · \(Format.bytes(job.totalBytes))" }
+    if downloads.complete(job) { return L("Готово · %@", Format.bytes(job.totalBytes)) }
     if let failure = job.failure { return failure }
-    let amount = "\(Format.bytes(done)) из \(Format.bytes(job.totalBytes))"
-    if job.paused { return "Пауза · \(amount)" }
-    if downloads.active == job.hash { return "\(amount) · \(Format.bytes(downloads.rate))/с" }
-    return "В очереди · \(amount)"
+    let amount = L("%@ из %@", Format.bytes(done), Format.bytes(job.totalBytes))
+    if job.paused { return L("Пауза · %@", amount) }
+    if downloads.active == job.hash { return L("%@ · %@/с", amount, Format.bytes(downloads.rate)) }
+    return L("В очереди · %@", amount)
 }
 
 private struct DownloadCard: View {
@@ -118,13 +118,13 @@ struct DownloadView: View {
                             Text(job.releaseTitle).font(.aerial(.footnote)).foregroundStyle(Theme.secondaryText)
                             Text(downloadStatus(job)).font(.aerial(.footnote, .semibold))
                         }
-                        NavigationLink(value: Route.details(job.item)) { Label("Страница", systemImage: "info.circle") }
+                        NavigationLink(value: Route.details(job.item)) { Label(L("Страница"), systemImage: "info.circle") }
                     }
-                    Section("Файлы") {
+                    Section(L("Файлы")) {
                         ForEach(job.files) { file in
                             row(job, file)
                                 .swipeActions {
-                                    Button(role: .destructive) { downloads.deleteFile(job, file) } label: { Label("Удалить", systemImage: "trash") }
+                                    Button(role: .destructive) { downloads.deleteFile(job, file) } label: { Label(L("Удалить"), systemImage: "trash") }
                                 }
                         }
                     }
@@ -136,7 +136,7 @@ struct DownloadView: View {
                 }
                 .navigationTitle(job.item.title)
             } else {
-                ContentUnavailableView("Загрузка удалена", systemImage: "arrow.down.circle")
+                ContentUnavailableView(L("Загрузка удалена"), systemImage: "arrow.down.circle")
             }
         }
         .scrollContentBackground(.hidden)
@@ -159,7 +159,7 @@ struct DownloadView: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(file.episode.map { "\($0.code) · \($0.title)" } ?? file.name)
                         .font(.aerial(.subheadline)).foregroundStyle(.white).lineLimit(2)
-                    Text(complete ? Format.bytes(file.bytes) : "\(Format.bytes(file.bytes)) · ещё не скачан")
+                    Text(complete ? Format.bytes(file.bytes) : L("%@ · ещё не скачан", Format.bytes(file.bytes)))
                         .font(.aerial(.caption)).foregroundStyle(Theme.secondaryText)
                     if let entry, entry.fraction > 0 {
                         ProgressView(value: entry.fraction).tint(.white)

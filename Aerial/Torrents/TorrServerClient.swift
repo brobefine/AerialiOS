@@ -23,11 +23,11 @@ enum TorrServerError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .invalidAddress: "Некорректный адрес TorrServer"
-        case .invalidLink: "Некорректная ссылка на раздачу"
-        case .noVideo: "В раздаче нет видеофайлов"
-        case .metadataTimeout: "Раздача не ответила: нет сидов или трекеры недоступны"
-        case .notRunning(let reason): "TorrServer не запущен: \(reason)"
+        case .invalidAddress: L("Некорректный адрес TorrServer")
+        case .invalidLink: L("Некорректная ссылка на раздачу")
+        case .noVideo: L("В раздаче нет видеофайлов")
+        case .metadataTimeout: L("Раздача не ответила: нет сидов или трекеры недоступны")
+        case .notRunning(let reason): L("TorrServer не запущен: %@", reason)
         }
     }
 }

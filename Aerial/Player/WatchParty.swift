@@ -120,7 +120,7 @@ final class WatchParty {
     func join(_ raw: String) {
         let clean = String(raw.uppercased().filter { Self.alphabet.contains($0) })
         guard (4...8).contains(clean.count) else {
-            error = "Неверный код"
+            error = L("Неверный код")
             return
         }
         hosting = false
@@ -305,14 +305,14 @@ final class WatchParty {
         connected = false
         let code = ((task.response as? HTTPURLResponse)?.statusCode) ?? 0
         if code == 403 {
-            error = "Комнаты недоступны (ключ)"
+            error = L("Комнаты недоступны (ключ)")
             return
         }
         if code == 429 {
-            error = "Комната заполнена"
+            error = L("Комната заполнена")
             return
         }
-        error = "Нет связи с комнатой, переподключаемся…"
+        error = L("Нет связи с комнатой, переподключаемся…")
         Task { [weak self] in
             try? await Task.sleep(for: .seconds(2))
             guard let self, gen == generation, task === socket else { return }
@@ -450,12 +450,12 @@ final class WatchParty {
     /// Подпись действия зрителя — в настоящем времени: род по имени не угадать.
     private static func eventText(_ object: [String: Any]) -> String? {
         switch object["kind"] as? String ?? "" {
-        case "join": "входит в комнату"
-        case "leave": "выходит из комнаты"
-        case "pause": "ставит на паузу"
-        case "play": "продолжает просмотр"
-        case "seek": "перематывает"
-        case "media": "включает " + String((object["title"] as? String ?? "").prefix(60))
+        case "join": L("входит в комнату")
+        case "leave": L("выходит из комнаты")
+        case "pause": L("ставит на паузу")
+        case "play": L("продолжает просмотр")
+        case "seek": L("перематывает")
+        case "media": L("включает ") + String((object["title"] as? String ?? "").prefix(60))
         default: nil
         }
     }

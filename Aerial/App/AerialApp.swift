@@ -81,10 +81,10 @@ struct RootView: View {
 
     var body: some View {
         TabView(selection: $tab) {
-            Tab("Главная", systemImage: "play.tv", value: AppTab.home) { HomeView() }
-            Tab("Медиатека", systemImage: "rectangle.stack", value: AppTab.library) { LibraryView() }
-            Tab("Настройки", systemImage: "gearshape", value: AppTab.settings) { SettingsView() }
-            Tab("Поиск", systemImage: "magnifyingglass", value: AppTab.search, role: .search) { SearchView() }
+            Tab(L("Главная"), systemImage: "play.tv", value: AppTab.home) { HomeView() }
+            Tab(L("Медиатека"), systemImage: "rectangle.stack", value: AppTab.library) { LibraryView() }
+            Tab(L("Настройки"), systemImage: "gearshape", value: AppTab.settings) { SettingsView() }
+            Tab(L("Поиск"), systemImage: "magnifyingglass", value: AppTab.search, role: .search) { SearchView() }
         }
         .tabViewStyle(.sidebarAdaptable)
         // Вошли в комнату не из плеера (код, комната друга) — фильм комнаты открывается сам.
@@ -111,7 +111,7 @@ enum UITestHooks {
 
     static func start(_ playback: Playback) {
         guard active, let link = UserDefaults.standard.string(forKey: "smokeLink"), !link.isEmpty else { return }
-        let item = VodItem(id: "smoke", remoteId: 0, kind: .movie, title: "Проверка воспроизведения")
+        let item = VodItem(id: "smoke", remoteId: 0, kind: .movie, title: L("Проверка воспроизведения"))
         // Плеер показывается поверх корневого контроллера — ждём, пока окно соберётся.
         Task {
             try? await Task.sleep(for: .seconds(1))

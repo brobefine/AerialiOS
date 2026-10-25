@@ -51,7 +51,7 @@ struct RatingRing: View {
                 .foregroundStyle(.white)
         }
         .frame(width: size, height: size)
-        .accessibilityLabel("Оценка \(String(format: "%.1f", value))")
+        .accessibilityLabel(L("Оценка %@", String(format: "%.1f", value)))
     }
 }
 
@@ -100,9 +100,9 @@ enum TasteLevel: Int, CaseIterable, Identifiable {
     var id: Int { rawValue }
     var title: String {
         switch self {
-        case .loved: "Обожаю"
-        case .liked: "Нравится"
-        case .rejected: "Не моё"
+        case .loved: L("Обожаю")
+        case .liked: L("Нравится")
+        case .rejected: L("Не моё")
         }
     }
     var symbol: String {
@@ -145,16 +145,16 @@ struct PosterMenu: View {
 
     var body: some View {
         Button { library.toggleSaved(item) } label: {
-            Label(library.isSaved(item) ? "Убрать из «Смотреть позже»" : "Смотреть позже",
+            Label(library.isSaved(item) ? L("Убрать из «Смотреть позже»") : L("Смотреть позже"),
                   systemImage: library.isSaved(item) ? "bookmark.fill" : "bookmark")
         }
         // Как на ТВ: сразу после «Смотреть позже» — убрать из «Продолжить».
         if let entry = library.latest(for: item), entry.resumable {
             Button(role: .destructive) { library.forget(entry) } label: {
-                Label("Убрать из «Продолжить»", systemImage: "xmark")
+                Label(L("Убрать из «Продолжить»"), systemImage: "xmark")
             }
         }
-        Section("Оценка") { TasteMenuItems(item: item) }
+        Section(L("Оценка")) { TasteMenuItems(item: item) }
     }
 }
 
@@ -307,7 +307,7 @@ struct ContinueShelf: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            ShelfHeader(title: "Продолжить просмотр")
+            ShelfHeader(title: L("Продолжить просмотр"))
             ScrollView(.horizontal) {
                 LazyHStack(alignment: .top, spacing: 12) {
                     ForEach(entries) { entry in
@@ -316,9 +316,9 @@ struct ContinueShelf: View {
                         }
                         .buttonStyle(.plain)
                         .contextMenu {
-                            NavigationLink(value: Route.details(entry.item)) { Label("Открыть страницу", systemImage: "info.circle") }
+                            NavigationLink(value: Route.details(entry.item)) { Label(L("Открыть страницу"), systemImage: "info.circle") }
                             Button(role: .destructive) { library.forget(entry) } label: {
-                                Label("Убрать из «Продолжить»", systemImage: "xmark")
+                                Label(L("Убрать из «Продолжить»"), systemImage: "xmark")
                             }
                         }
                     }

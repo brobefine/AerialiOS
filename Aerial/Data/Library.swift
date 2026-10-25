@@ -27,7 +27,7 @@ struct WatchEntry: Codable, Hashable, Identifiable, Sendable {
     var remaining: String {
         guard duration > 0 else { return "" }
         let minutes = Int((duration - position) / 60)
-        return minutes > 0 ? "Осталось \(Format.runtime(minutes: minutes))" : "Почти досмотрено"
+        return minutes > 0 ? L("Осталось %@", Format.runtime(minutes: minutes)) : L("Почти досмотрено")
     }
 }
 

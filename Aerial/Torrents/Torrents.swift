@@ -44,8 +44,8 @@ final class EmbeddedTorrServer {
                 try? await Task.sleep(for: .milliseconds(200))
             }
             Log.note("TORRSERVER", "запущен, но не отвечает после сна")
-            state = .failed("сервер не отвечает — перезапустите приложение")
-            throw TorrServerError.notRunning("сервер не отвечает")
+            state = .failed(L("сервер не отвечает — перезапустите приложение"))
+            throw TorrServerError.notRunning(L("сервер не отвечает"))
         }
         if let starting {
             await starting.value
@@ -81,7 +81,7 @@ final class EmbeddedTorrServer {
         }
         guard let version else {
             Log.note("TORRSERVER", "не ответил на /echo за 10 с")
-            state = .failed("сервер не отвечает")
+            state = .failed(L("сервер не отвечает"))
             return
         }
         await configure(cacheMB: cacheMB)

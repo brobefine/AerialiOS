@@ -25,7 +25,7 @@ struct TorrentsView: View {
         List {
             Section {
                 HStack {
-                    TextField("Магнет-ссылка или адрес .torrent", text: $link)
+                    TextField(L("Магнет-ссылка или адрес .torrent"), text: $link)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(.URL)
@@ -33,12 +33,12 @@ struct TorrentsView: View {
                     if adding {
                         ProgressView()
                     } else {
-                        Button("Добавить", action: add)
+                        Button(L("Добавить"), action: add)
                             .disabled(!TorrServerClient.validLink(link))
                     }
                 }
             } header: {
-                Text("Добавить торрент")
+                Text(L("Добавить торрент"))
             }
             Section {
                 ForEach(torrents, id: \.hash) { info in
@@ -46,7 +46,7 @@ struct TorrentsView: View {
                         HStack(spacing: 12) {
                             VStack(alignment: .leading, spacing: 3) {
                                 Text(info.title).font(.aerial(.subheadline)).foregroundStyle(.white).lineLimit(2)
-                                Text(info.files.isEmpty ? "Метаданные ещё не получены"
+                                Text(info.files.isEmpty ? L("Метаданные ещё не получены")
                                      : "\(info.files.count) \(Format.plural(info.files.count, "видеофайл", "видеофайла", "видеофайлов")) · \(Format.bytes(info.files.reduce(0) { $0 + $1.bytes }))")
                                     .font(.aerial(.caption)).foregroundStyle(Theme.secondaryText)
                             }
@@ -65,15 +65,15 @@ struct TorrentsView: View {
                     }
                 }
             } header: {
-                Text("В TorrServer")
+                Text(L("В TorrServer"))
             } footer: {
-                Text("Здесь раздачи, которые уже открывались. Смахните влево, чтобы удалить.")
+                Text(L("Здесь раздачи, которые уже открывались. Смахните влево, чтобы удалить."))
             }
         }
         .overlay {
             if loading && torrents.isEmpty { ProgressView() }
         }
-        .navigationTitle("Торренты")
+        .navigationTitle(L("Торренты"))
         .navigationBarTitleDisplayMode(.inline)
         .refreshable { await load() }
         .task { await load() }
@@ -89,7 +89,7 @@ struct TorrentsView: View {
                 self.picking = nil
             }
         }
-        .alert("Не удалось", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
+        .alert(L("Не удалось"), isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(failure ?? "")

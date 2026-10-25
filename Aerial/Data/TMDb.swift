@@ -36,7 +36,7 @@ final class TMDb: @unchecked Sendable {
     /// Ответ `path` с параметрами; повтор — из [DiskCache] в пределах `ttl`, сеть упала — прежний ответ.
     func request(_ path: String, _ params: [String: String] = [:], localize: Bool = true, ttl: TimeInterval) async throws -> Data {
         var all = ["include_adult": "false"]
-        if localize { all["language"] = "ru-RU" }
+        if localize { all["language"] = AppLanguage.tmdb }
         all.merge(params) { $1 }
         let key = "tmdb:\(path)?" + all.sorted { $0.key < $1.key }.map { "\($0.key)=\($0.value)" }.joined(separator: "&")
         if let cached = DiskCache.api.get(key, ttl: ttl) { return cached }

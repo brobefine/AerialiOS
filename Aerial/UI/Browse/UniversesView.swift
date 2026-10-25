@@ -9,10 +9,10 @@ enum Universe: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var title: String {
         switch self {
-        case .movies: "Фильмы"
-        case .series: "Сериалы"
-        case .cartoons: "Мультфильмы"
-        case .cartoonSeries: "Мультсериалы"
+        case .movies: L("Фильмы")
+        case .series: L("Сериалы")
+        case .cartoons: L("Мультфильмы")
+        case .cartoonSeries: L("Мультсериалы")
         }
     }
     var kind: VodKind { self == .movies || self == .cartoons ? .movie : .series }
@@ -86,13 +86,13 @@ struct UniversesView: View {
                 }
             }
             .padding(20)
-            Text("Самые известные работы каждого раздела — стеной постеров. Сведите пальцы, чтобы отдалить, разведите — чтобы рассмотреть; касание — карточка.")
+            Text(L("Самые известные работы каждого раздела — стеной постеров. Сведите пальцы, чтобы отдалить, разведите — чтобы рассмотреть; касание — карточка."))
                 .font(.aerial(.footnote))
                 .foregroundStyle(Theme.secondaryText)
                 .padding(.horizontal, 24)
         }
         .background(Color(hex: 0x050507))
-        .navigationTitle("Вселенные")
+        .navigationTitle(L("Вселенные"))
         .navigationBarTitleDisplayMode(.inline)
         .onAppear { spin = true }
     }
@@ -152,10 +152,10 @@ struct WallView: View {
             if let atlas, !films.isEmpty {
                 WallScroll(atlas: atlas, films: films) { selected = $0 }.ignoresSafeArea(edges: .bottom)
             } else if failed {
-                ContentUnavailableView("Стена не загрузилась", systemImage: "wifi.exclamationmark",
-                                       description: Text("Проверьте сеть и откройте снова."))
+                ContentUnavailableView(L("Стена не загрузилась"), systemImage: "wifi.exclamationmark",
+                                       description: Text(L("Проверьте сеть и откройте снова.")))
             } else {
-                ProgressView("Собираю вселенную…").tint(.white)
+                ProgressView(L("Собираю вселенную…")).tint(.white)
             }
             if let selected {
                 WallCard(item: selected) { self.selected = nil }
@@ -194,7 +194,7 @@ private struct WallCard: View {
                     .font(.aerial(.caption)).foregroundStyle(Theme.secondaryText)
                 Text(item.overview).font(.aerial(.caption)).foregroundStyle(.white.opacity(0.8)).lineLimit(3)
                 NavigationLink(value: Route.details(item)) {
-                    Text("Открыть").font(.aerial(.subheadline, .semibold)).foregroundStyle(.black)
+                    Text(L("Открыть")).font(.aerial(.subheadline, .semibold)).foregroundStyle(.black)
                         .padding(.horizontal, 16).frame(height: 34).background(.white, in: Capsule())
                 }
                 .buttonStyle(.plain)

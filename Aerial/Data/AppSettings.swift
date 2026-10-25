@@ -7,7 +7,7 @@ final class AppSettings {
     enum ServerMode: String, CaseIterable, Identifiable {
         case embedded, external
         var id: String { rawValue }
-        var title: String { self == .embedded ? "Встроенный" : "Внешний" }
+        var title: String { self == .embedded ? L("Встроенный") : L("Внешний") }
     }
 
     struct ParserServer: Identifiable, Sendable {
@@ -61,10 +61,10 @@ final class AppSettings {
     }
 
     static let ratingCatalog: [RatingSource] = [
-        RatingSource(key: "imdb", title: "IMDb", about: "Народный выбор. Взвешенная оценка зрителей со всего мира по 10-балльной шкале."),
-        RatingSource(key: "tomatoes", title: "Rotten Tomatoes", about: "Процент положительных оценок: 🍅 — кинокритики, 🍿 — обычные зрители."),
-        RatingSource(key: "metacritic", title: "Metacritic", about: "Оценка критиков: средневзвешенное рецензий ведущих изданий из 100."),
-        RatingSource(key: "letterboxd", title: "Letterboxd", about: "Выбор синефилов. Оценка сообщества любителей кино по 5-балльной шкале."),
+        RatingSource(key: "imdb", title: "IMDb", about: L("Народный выбор. Взвешенная оценка зрителей со всего мира по 10-балльной шкале.")),
+        RatingSource(key: "tomatoes", title: "Rotten Tomatoes", about: L("Процент положительных оценок: 🍅 — кинокритики, 🍿 — обычные зрители.")),
+        RatingSource(key: "metacritic", title: "Metacritic", about: L("Оценка критиков: средневзвешенное рецензий ведущих изданий из 100.")),
+        RatingSource(key: "letterboxd", title: "Letterboxd", about: L("Выбор синефилов. Оценка сообщества любителей кино по 5-балльной шкале.")),
     ]
 
     // MARK: ИИ и сервисы

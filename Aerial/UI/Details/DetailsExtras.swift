@@ -30,7 +30,7 @@ struct RelativesSection: View {
             if !items.isEmpty || loading || failure != nil {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 6) {
-                        ShelfHeader(title: "Духовные родственники")
+                        ShelfHeader(title: L("Духовные родственники"))
                         Image(systemName: "sparkles").foregroundStyle(Theme.accent)
                     }
                     if let failure, items.isEmpty {
@@ -38,7 +38,7 @@ struct RelativesSection: View {
                     } else if items.isEmpty {
                         HStack(spacing: 8) {
                             ProgressView().tint(.white)
-                            Text("ИИ подбирает фильмы по темам…").font(.aerial(.footnote)).foregroundStyle(Theme.secondaryText)
+                            Text(L("ИИ подбирает фильмы по темам…")).font(.aerial(.footnote)).foregroundStyle(Theme.secondaryText)
                         }
                         .padding(.horizontal, 16)
                     } else {
@@ -149,16 +149,16 @@ struct RecapButton: View {
                 Image(systemName: unlocked ? "text.book.closed" : "lock")
             }
             .buttonStyle(CircleGlassButtonStyle(tint: tint))
-            .accessibilityLabel(details.item.kind == .series ? "Разбор сериала" : "Разбор фильма")
+            .accessibilityLabel(details.item.kind == .series ? L("Разбор сериала") : L("Разбор фильма"))
             .sheet(isPresented: $open) {
                 RecapSheet(details: details, season: latest?.episode?.season ?? 0, episode: latest?.episode?.number ?? 0)
             }
-            .alert(details.item.kind == .series ? "Разбор сериала" : "Разбор фильма", isPresented: $lockedNote) {
-                Button("Понятно", role: .cancel) {}
+            .alert(details.item.kind == .series ? L("Разбор сериала") : L("Разбор фильма"), isPresented: $lockedNote) {
+                Button(L("Понятно"), role: .cancel) {}
             } message: {
                 Text(details.item.kind == .series
-                     ? "Откроется, когда вы посмотрите хотя бы одну серию, — разбор будет до неё: в нём спойлеры."
-                     : "Откроется после просмотра фильма — в нём спойлеры.")
+                     ? L("Откроется, когда вы посмотрите хотя бы одну серию, — разбор будет до неё: в нём спойлеры.")
+                     : L("Откроется после просмотра фильма — в нём спойлеры."))
             }
         }
     }
@@ -180,7 +180,7 @@ private struct RecapSheet: View {
                     if sections.isEmpty && message == nil {
                         HStack(spacing: 10) {
                             ProgressView().tint(.white)
-                            Text("ИИ разбирает \(details.item.kind == .series ? "сериал" : "фильм")…").foregroundStyle(Theme.secondaryText)
+                            Text(details.item.kind == .series ? L("ИИ разбирает сериал…") : L("ИИ разбирает фильм…")).foregroundStyle(Theme.secondaryText)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.top, 40)
@@ -200,7 +200,7 @@ private struct RecapSheet: View {
             // Без своего фона — лист на системном жидком стекле.
             .navigationTitle(details.item.title)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Готово") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { dismiss() } } }
         }
         .task { await load() }
     }
@@ -213,7 +213,7 @@ private struct RecapSheet: View {
             if let found = try await AI.recap(details, season: season, episode: episode, plot: plot) {
                 sections = found
             } else {
-                message = "ИИ не знает именно эту работу достаточно хорошо — разбора нет, чтобы не пересказывать другую."
+                message = L("ИИ не знает именно эту работу достаточно хорошо — разбора нет, чтобы не пересказывать другую.")
             }
         } catch {
             if !HTTP.isCancellation(error) { message = AI.failure(error) }
@@ -247,13 +247,13 @@ struct ReviewsSection: View {
             if !reviews.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
-                        ShelfHeader(title: "Отзывы · \(reviews.count)")
+                        ShelfHeader(title: L("Отзывы · %@", "\(reviews.count)"))
                         Spacer()
                         Menu {
-                            Picker("Порядок", selection: $sort) {
-                                Text("Сначала с высокой оценкой").tag("rating")
-                                Text("Сначала новые").tag("new")
-                                Text("Сначала подробные").tag("long")
+                            Picker(L("Порядок"), selection: $sort) {
+                                Text(L("Сначала с высокой оценкой")).tag("rating")
+                                Text(L("Сначала новые")).tag("new")
+                                Text(L("Сначала подробные")).tag("long")
                             }
                         } label: {
                             Image(systemName: "arrow.up.arrow.down").font(.aerial(.subheadline, .semibold))
@@ -269,7 +269,7 @@ struct ReviewsSection: View {
                     } else if summaryPending {
                         HStack(spacing: 8) {
                             ProgressView().tint(.white)
-                            Text("ИИ читает отзывы…").font(.aerial(.footnote)).foregroundStyle(Theme.secondaryText)
+                            Text(L("ИИ читает отзывы…")).font(.aerial(.footnote)).foregroundStyle(Theme.secondaryText)
                         }
                         .padding(.horizontal, 16)
                     }
@@ -337,7 +337,7 @@ private struct ReviewSheet: View {
                         Spacer()
                         if review.rating > 0 { RatingRing(value: review.rating, size: 34) }
                     }
-                    if translating { HStack(spacing: 8) { ProgressView().tint(.white); Text("Перевожу…").foregroundStyle(Theme.secondaryText) } }
+                    if translating { HStack(spacing: 8) { ProgressView().tint(.white); Text(L("Перевожу…")).foregroundStyle(Theme.secondaryText) } }
                     if let failure { Text(failure).font(.aerial(.footnote)).foregroundStyle(Theme.secondaryText) }
                     Text(showOriginal ? review.text : translated ?? review.text).font(.aerial(.body)).textSelection(.enabled)
                 }
@@ -345,13 +345,13 @@ private struct ReviewSheet: View {
             }
             // Без своего фона — лист на системном жидком стекле.
             .scrollContentBackground(.hidden)
-            .navigationTitle("Отзыв")
+            .navigationTitle(L("Отзыв"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .confirmationAction) { Button("Готово") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { dismiss() } }
                 if AI.enabled && AI.needsTranslation(review.text) {
                     ToolbarItem(placement: .topBarLeading) {
-                        Button(translated == nil || showOriginal ? "Перевести" : "Оригинал") {
+                        Button(translated == nil || showOriginal ? L("Перевести") : L("Оригинал")) {
                             if translated == nil { Task { await runTranslation() } } else { showOriginal.toggle() }
                         }
                         .disabled(translating)
@@ -388,7 +388,7 @@ struct WikiStorySection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            ShelfHeader(title: "Интересные факты")
+            ShelfHeader(title: L("Интересные факты"))
             VStack(alignment: .leading, spacing: 10) {
                 if let story {
                     Text(story.text)
@@ -397,15 +397,15 @@ struct WikiStorySection: View {
                         .lineLimit(expanded ? nil : 8)
                         .onTapGesture { withAnimation(.easeOut) { expanded.toggle() } }
                     HStack {
-                        if !expanded { Button("Ещё") { withAnimation(.easeOut) { expanded = true } }.font(.aerial(.subheadline, .semibold)) }
+                        if !expanded { Button(L("Ещё")) { withAnimation(.easeOut) { expanded = true } }.font(.aerial(.subheadline, .semibold)) }
                         Spacer()
                         Button { openURL(story.source) } label: {
-                            Label("Википедия · \(story.heading)", systemImage: "book").font(.aerial(.caption))
+                            Label(L("Википедия · %@", story.heading), systemImage: "book").font(.aerial(.caption))
                         }
                         .foregroundStyle(Theme.secondaryText)
                     }
                 } else {
-                    Text(loading ? "Загружаем интересные факты…" : "История создания пока недоступна в Википедии")
+                    Text(loading ? L("Загружаем интересные факты…") : L("История создания пока недоступна в Википедии"))
                         .font(.aerial(.subheadline))
                         .foregroundStyle(Theme.secondaryText)
                 }

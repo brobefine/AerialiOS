@@ -157,7 +157,7 @@ struct DetailsView: View {
             }
             overview
             if failed && details == nil {
-                Button("Повторить") { Task { await load() } }.buttonStyle(.bordered)
+                Button(L("Повторить")) { Task { await load() } }.buttonStyle(.bordered)
             }
         }
         .padding(.horizontal, 20)
@@ -238,7 +238,7 @@ struct DetailsView: View {
                     .foregroundStyle(.white.opacity(0.92))
                     .fixedSize(horizontal: false, vertical: true)
                 if paragraphs.count > 1 && !expanded {
-                    Button("Ещё") { withAnimation(.easeOut) { expanded = true } }
+                    Button(L("Ещё")) { withAnimation(.easeOut) { expanded = true } }
                         .font(.aerial(.subheadline, .semibold))
                 }
             }
@@ -253,7 +253,7 @@ struct DetailsView: View {
         HStack(spacing: 12) {
             if let latest, latest.resumable, latest.source != nil {
                 Button { playback.resume(latest) } label: {
-                    WatchLabel(title: "Продолжить",
+                    WatchLabel(title: L("Продолжить"),
                                detail: [latest.episode?.code, latest.remaining].compactMap { $0 }.filter { !$0.isEmpty }
                                    .joined(separator: " · "))
                 }
@@ -263,28 +263,28 @@ struct DetailsView: View {
                     Image(systemName: "list.bullet")
                 }
                 .buttonStyle(CircleGlassButtonStyle(tint: accent))
-                .accessibilityLabel("Другая раздача")
+                .accessibilityLabel(L("Другая раздача"))
             } else if item.kind == .movie {
                 NavigationLink(value: Route.releases(item, nil, runtime: details?.runtimeMinutes ?? 0)) {
-                    WatchLabel(title: "Смотреть")
+                    WatchLabel(title: L("Смотреть"))
                 }
                 .buttonStyle(PrimaryButtonStyle(fill: accent))
                 .accessibilityIdentifier("details-watch")
             } else if let episode = latest?.episode ?? episodes.first {
                 // Серия под «Смотреть» — только когда сериал уже начинали, как на ТВ.
                 NavigationLink(value: Route.releases(item, episode, runtime: episode.runtimeMinutes)) {
-                    WatchLabel(title: "Смотреть", detail: latest?.episode == nil ? "" : "\(episode.code) · \(episode.title)")
+                    WatchLabel(title: L("Смотреть"), detail: latest?.episode == nil ? "" : "\(episode.code) · \(episode.title)")
                 }
                 .buttonStyle(PrimaryButtonStyle(fill: accent))
                 .accessibilityIdentifier("details-watch")
             } else {
-                WatchLabel(title: "Смотреть").opacity(0.5)
+                WatchLabel(title: L("Смотреть")).opacity(0.5)
                     .frame(maxWidth: .infinity).frame(height: 52).background(.white.opacity(0.3), in: Capsule())
             }
             if let trailer {
                 Button { trailerOpen = true } label: { Image(systemName: "play.rectangle") }
                     .buttonStyle(CircleGlassButtonStyle(tint: accent))
-                    .accessibilityLabel("Трейлер")
+                    .accessibilityLabel(L("Трейлер"))
             }
             if let details { RecapButton(details: details, tint: accent) }
             // «Мой список», как на ТВ: одна кнопка — «Смотреть позже» и оценка. Значок — выставленная оценка, иначе
@@ -301,7 +301,7 @@ struct DetailsView: View {
                     }
                     .glass(in: Circle(), tint: marked ? nil : accent?.opacity(0.55))
             }
-            .accessibilityLabel("Мой список")
+            .accessibilityLabel(L("Мой список"))
             .accessibilityIdentifier("details-rate")
         }
     }
@@ -318,10 +318,10 @@ struct DetailsView: View {
                 ReviewsSection(item: details.item)
                 WikiStorySection(item: details.item)
                 if !details.collection.isEmpty { PosterShelf(title: details.collectionTitle, items: details.collection) }
-                if !details.related.isEmpty { PosterShelf(title: "Похожие", items: details.related) }
+                if !details.related.isEmpty { PosterShelf(title: L("Похожие"), items: details.related) }
                 RelativesSection(details: details)
                 if let studio = details.studios.first, !details.studioFilms.isEmpty {
-                    PosterShelf(title: "Ещё от студии \(studio.name)", items: details.studioFilms,
+                    PosterShelf(title: L("Ещё от студии %@", studio.name), items: details.studioFilms,
                                 seeAll: .section(studio.section(item.kind), .all))
                 }
                 if !details.facts.isEmpty { factsSection(details) }
@@ -334,15 +334,15 @@ struct DetailsView: View {
     private func episodesSection(_ details: VodDetails) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Text("Серии").font(.aerial(.title3, .bold))
+                Text(L("Серии")).font(.aerial(.title3, .bold))
                 Spacer()
                 Menu {
                     ForEach(details.seasons, id: \.self) { number in
-                        Button("Сезон \(number)") { season = number }
+                        Button(L("Сезон %@", "\(number)")) { season = number }
                     }
                 } label: {
                     HStack(spacing: 4) {
-                        Text("Сезон \(season)")
+                        Text(L("Сезон %@", "\(season)"))
                         Image(systemName: "chevron.up.chevron.down").font(.aerial(.caption))
                     }
                     .font(.aerial(.subheadline, .semibold))
@@ -367,14 +367,14 @@ struct DetailsView: View {
                         .contextMenu {
                             if let entry = library.entry(item, episode), entry.fraction > 0 {
                                 Button(role: .destructive) { library.forget(entry) } label: {
-                                    Label("Убрать из «Продолжить»", systemImage: "eye.slash")
+                                    Label(L("Убрать из «Продолжить»"), systemImage: "eye.slash")
                                 }
                             }
                             if library.entry(item, episode).map({ $0.fraction < 0.9 }) ?? true {
                                 Button {
                                     library.record(item: item, episode: episode, position: 1, duration: 1, source: nil)
                                 } label: {
-                                    Label("Отметить просмотренной", systemImage: "checkmark.circle")
+                                    Label(L("Отметить просмотренной"), systemImage: "checkmark.circle")
                                 }
                             }
                         } preview: {
@@ -395,7 +395,7 @@ struct DetailsView: View {
         var seen = Set<Int>()
         let people = (details.cast + details.directors).filter { seen.insert($0.id).inserted }
         return VStack(alignment: .leading, spacing: 10) {
-            ShelfHeader(title: "Актёры и съёмочная группа")
+            ShelfHeader(title: L("Актёры и съёмочная группа"))
             ScrollView(.horizontal) {
                 LazyHStack(alignment: .top, spacing: 14) {
                     ForEach(people) { person in
@@ -406,7 +406,7 @@ struct DetailsView: View {
                             // фильмография — касанием.
                             .contextMenu {
                                 Button { library.toggleFollow(person) } label: {
-                                    Label(library.isFollowed(person) ? "Вы подписаны" : "Подписаться",
+                                    Label(library.isFollowed(person) ? L("Вы подписаны") : L("Подписаться"),
                                           systemImage: library.isFollowed(person) ? "checkmark.circle.fill" : "person.badge.plus")
                                 }
                             } preview: {
@@ -422,7 +422,7 @@ struct DetailsView: View {
 
     private func factsSection(_ details: VodDetails) -> some View {
         VStack(alignment: .leading, spacing: 10) {
-            ShelfHeader(title: "Сведения")
+            ShelfHeader(title: L("Сведения"))
             VStack(alignment: .leading, spacing: 12) {
                 ForEach(details.facts, id: \.label) { fact in
                     VStack(alignment: .leading, spacing: 2) {
@@ -497,7 +497,7 @@ private struct EpisodeCard: View {
                     .font(.aerial(.caption2)).foregroundStyle(.white.opacity(0.7))
                 // Нет описания — нет и пустого места под ним.
                 if overviews && (spoiler || !episode.overview.isEmpty) {
-                    Text(spoiler ? "Описание скрыто, чтобы не было спойлеров" : episode.overview)
+                    Text(spoiler ? L("Описание скрыто, чтобы не было спойлеров") : episode.overview)
                         .font(.aerial(.caption)).foregroundStyle(.white.opacity(spoiler ? 0.5 : 0.85))
                         .lineLimit(3, reservesSpace: true)
                 }
@@ -586,7 +586,7 @@ private struct PersonPreview: View {
                     if !person.role.isEmpty { Text(person.role).font(.aerial(.caption)).foregroundStyle(Theme.secondaryText) }
                 }
             }
-            Text(info.map { $0.biography.isEmpty ? "Биографии на TMDb нет." : $0.biography } ?? "Загружаем…")
+            Text(info.map { $0.biography.isEmpty ? L("Биографии на TMDb нет.") : $0.biography } ?? L("Загружаем…"))
                 .font(.aerial(.subheadline))
                 .lineLimit(12)
                 .frame(width: 304, alignment: .leading)

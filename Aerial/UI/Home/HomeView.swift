@@ -129,7 +129,7 @@ private struct ShelfPage: View {
                 let continuing = library.continueWatching.filter { shelf.accepts($0.item) }
                 if !continuing.isEmpty { ContinueShelf(entries: continuing) }
                 if !forYou.isEmpty {
-                    PosterShelf(title: "Вам понравится?", items: forYou)
+                    PosterShelf(title: L("Вам понравится?"), items: forYou)
                 }
                 if settings.aiMoodShelves && AI.enabled {
                     ForEach(taste.aiShelves) { row in
@@ -138,9 +138,9 @@ private struct ShelfPage: View {
                     }
                 }
                 let fourK = feeds.fourK.filter(shelf.accepts)
-                if fourK.count >= 3 { PosterShelf(title: "Вышли в 4K", items: fourK) }
+                if fourK.count >= 3 { PosterShelf(title: L("Вышли в 4K"), items: fourK) }
                 ForEach(because) { row in
-                    PosterShelf(title: "Потому что вам понравилось «\(row.seed.title)»", items: row.items)
+                    PosterShelf(title: L("Потому что вам понравилось «%@»", row.seed.title), items: row.items)
                 }
                 let upcoming = feeds.upcoming.filter { shelf.accepts($0.item) }
                 if !upcoming.isEmpty && (shelf == .all || shelf == .series || shelf == .cartoonSeries) {
@@ -148,13 +148,13 @@ private struct ShelfPage: View {
                 }
                 let followed = feeds.followed.filter(shelf.accepts)
                 if !followed.isEmpty {
-                    PosterShelf(title: "Новое с вашими актёрами", items: followed)
+                    PosterShelf(title: L("Новое с вашими актёрами"), items: followed)
                 }
                 if model.failed {
                     ContentUnavailableView {
-                        Label("Каталог не загрузился", systemImage: "wifi.exclamationmark")
+                        Label(L("Каталог не загрузился"), systemImage: "wifi.exclamationmark")
                     } description: {
-                        Text(TMDb.shared.configured ? "Проверьте сеть и потяните вниз, чтобы повторить." : "В сборке нет ключа TMDb.")
+                        Text(TMDb.shared.configured ? L("Проверьте сеть и потяните вниз, чтобы повторить.") : L("В сборке нет ключа TMDb."))
                     }
                 }
                 ForEach(model.rows) { row in
@@ -202,7 +202,7 @@ struct ShelfPicker: View {
                     }
                     // «Вселенные» — тоже раздел главной, как пункт «Кинотека › Вселенные» на ТВ.
                     NavigationLink(value: Route.universes) {
-                        Label("Вселенные", systemImage: "circle.hexagongrid")
+                        Label(L("Вселенные"), systemImage: "circle.hexagongrid")
                             .font(.aerial(.subheadline, .semibold))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 16)
@@ -282,7 +282,7 @@ struct UpcomingShelf: View {
     var body: some View {
         let width = Theme.landscapeWidth(sizeClass)
         VStack(alignment: .leading, spacing: 10) {
-            ShelfHeader(title: "Скоро новые серии")
+            ShelfHeader(title: L("Скоро новые серии"))
             ScrollView(.horizontal) {
                 LazyHStack(alignment: .top, spacing: 12) {
                     ForEach(episodes) { episode in
@@ -330,9 +330,9 @@ struct UpcomingShelf: View {
         guard let date = ISO8601DateFormatter.day.date(from: String(iso.prefix(10))) else { return iso }
         let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: .now), to: calendar.startOfDay(for: date)).day ?? 0
         switch days {
-        case ..<1: return "Сегодня"
-        case 1: return "Завтра"
-        default: return "Через \(days) \(Format.plural(days, "день", "дня", "дней"))"
+        case ..<1: return L("Сегодня")
+        case 1: return L("Завтра")
+        default: return L("Через %@ %@", "\(days)", Format.plural(days, "день", "дня", "дней"))
         }
     }
 }

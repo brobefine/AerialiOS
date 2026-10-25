@@ -127,7 +127,7 @@ final class Downloads {
     /// Поставить файлы раздачи в загрузку. Вернёт текст ошибки или nil — загрузка пошла. Та же раздача — файлы
     /// добавляются к прежним.
     func add(item: VodItem, link: String, releaseTitle: String, info: TorrentInfo, files: [DownloadFile]) -> String? {
-        guard !files.isEmpty else { return "В раздаче нет видеофайлов" }
+        guard !files.isEmpty else { return L("В раздаче нет видеофайлов") }
         var job = jobs.first { $0.hash == info.hash } ?? DownloadJob(
             hash: info.hash, item: item, link: link, releaseTitle: releaseTitle,
             folder: Self.safe(item.title + (item.year.isEmpty ? "" : " (\(item.year))")), files: [], added: .now)
@@ -136,7 +136,7 @@ final class Downloads {
         let free = (try? Self.root.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey]))?
             .volumeAvailableCapacityForImportantUsage ?? .max
         if needed > free {
-            return String(format: "Не хватает места: нужно %@, свободно %@", Format.bytes(needed), Format.bytes(free))
+            return String(format: L("Не хватает места: нужно %@, свободно %@"), Format.bytes(needed), Format.bytes(free))
         }
         job.files = (job.files + fresh).sorted { $0.path.localizedStandardCompare($1.path) == .orderedAscending }
         job.paused = false
@@ -253,7 +253,7 @@ final class Downloads {
                 // Сон iOS рвёт соединение с сервером — это не ошибка: при возврате загрузка продолжится.
                 let asleep = UIApplication.shared.applicationState == .background
                 Log.note("ЗАГРУЗКА", "\(job.item.title): \(error.localizedDescription)\(asleep ? " (в фоне)" : "")")
-                update(job.hash) { $0.failure = asleep ? "Прервано в фоне" : "Загрузка прервалась: \(error.localizedDescription)" }
+                update(job.hash) { $0.failure = asleep ? L("Прервано в фоне") : L("Загрузка прервалась: %@", error.localizedDescription) }
                 if asleep { break }
             }
         }
@@ -311,7 +311,7 @@ enum DownloadError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .truncated(let written, let size): "файл оборвался: \(written >> 20) из \(size >> 20) МБ"
+        case .truncated(let written, let size): L("файл оборвался: %@ из %@ МБ", "\(written >> 20)", "\(size >> 20)")
         case .status(let code): "HTTP \(code)"
         }
     }

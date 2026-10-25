@@ -52,9 +52,9 @@ struct SearchView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     if trimmed.isEmpty && !recent.isEmpty {
                         HStack {
-                            Text("Недавние").font(.aerial(.title3, .bold))
+                            Text(L("Недавние")).font(.aerial(.title3, .bold))
                             Spacer()
-                            Button("Очистить") { recentRaw = "" }.font(.aerial(.subheadline))
+                            Button(L("Очистить")) { recentRaw = "" }.font(.aerial(.subheadline))
                         }
                         .padding(.horizontal, 16)
                         ScrollView(.horizontal) {
@@ -69,12 +69,12 @@ struct SearchView: View {
                         .padding(.bottom, 8)
                     }
                     if trimmed.isEmpty && !popular.isEmpty {
-                        Text("Популярно сейчас").font(.aerial(.title3, .bold)).padding(.horizontal, 16)
+                        Text(L("Популярно сейчас")).font(.aerial(.title3, .bold)).padding(.horizontal, 16)
                     }
                     if !trimmed.isEmpty && (aiThinking || !aiPicked.isEmpty || aiNote != nil) {
                         HStack(spacing: 8) {
                             Image(systemName: "sparkles").foregroundStyle(Theme.accent)
-                            Text(aiThinking ? "ИИ ищет по описанию…" : aiNote ?? "Первые \(aiPicked.count) — найдены ИИ по описанию")
+                            Text(aiThinking ? L("ИИ ищет по описанию…") : aiNote ?? L("Первые %@ — найдены ИИ по описанию", "\(aiPicked.count)"))
                                 .font(.aerial(.footnote))
                                 .foregroundStyle(Theme.secondaryText)
                             if aiThinking { ProgressView().controlSize(.small).tint(.white) }
@@ -93,8 +93,8 @@ struct SearchView: View {
                     ContentUnavailableView.search(text: trimmed)
                 }
             }
-            .navigationTitle("Поиск")
-            .searchable(text: $query, prompt: "Фильмы и сериалы")
+            .navigationTitle(L("Поиск"))
+            .searchable(text: $query, prompt: L("Фильмы и сериалы"))
             .searchSuggestions {
                 ForEach(suggestions, id: \.self) { text in
                     Label(text, systemImage: recent.contains(text) ? "clock.arrow.circlepath" : "magnifyingglass")
@@ -133,7 +133,7 @@ struct SearchView: View {
                         var seen = Set<String>()
                         results = (picks + found).filter { seen.insert($0.id).inserted }
                     case .failure(let error)?:
-                        aiNote = "Поиск по описанию не сработал. " + AI.failure(error)
+                        aiNote = L("Поиск по описанию не сработал. ") + AI.failure(error)
                     case nil:
                         break
                     }
@@ -235,7 +235,7 @@ struct PersonView: View {
                     VStack(alignment: .leading, spacing: 6) {
                         Text(info?.name ?? person.name).font(.aerial(.title2, .bold))
                         if let info {
-                            if !info.birthday.isEmpty { Text("Дата рождения: \(Format.date(info.birthday))").font(.aerial(.subheadline)) }
+                            if !info.birthday.isEmpty { Text(L("Дата рождения: %@", Format.date(info.birthday))).font(.aerial(.subheadline)) }
                             if !info.place.isEmpty { Text(info.place).font(.aerial(.subheadline)).foregroundStyle(Theme.secondaryText) }
                         }
                     }
@@ -271,7 +271,7 @@ struct PersonView: View {
                 Button { library.toggleFollow(person) } label: {
                     Image(systemName: library.isFollowed(person) ? "bell.fill" : "bell")
                 }
-                .accessibilityLabel(library.isFollowed(person) ? "Отписаться" : "Подписаться")
+                .accessibilityLabel(library.isFollowed(person) ? L("Отписаться") : L("Подписаться"))
             }
         }
         .task { if info == nil { info = try? await Catalogue.shared.person(person) } }
@@ -291,21 +291,21 @@ struct LibraryView: View {
                     if !Downloads.shared.jobs.isEmpty { DownloadsShelf() }
                     if !library.saved.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {
-                            ShelfHeader(title: "Смотреть позже")
+                            ShelfHeader(title: L("Смотреть позже"))
                             PosterGrid(items: library.saved)
                         }
                     }
                     let liked = library.likedItems
                     if !liked.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {
-                            ShelfHeader(title: "Нравится")
+                            ShelfHeader(title: L("Нравится"))
                             PosterGrid(items: liked)
                         }
                     }
                     // «История», как на ТВ: всё открытое и досмотренное, свежее первым.
                     let history = library.progressByItem.values.sorted { $0.updated > $1.updated }.map(\.item)
                     if !history.isEmpty {
-                        PosterShelf(title: "История", items: history)
+                        PosterShelf(title: L("История"), items: history)
                     }
                 }
                 .padding(.vertical, 12)
@@ -313,24 +313,24 @@ struct LibraryView: View {
             .background(Theme.background)
             .overlay {
                 if library.saved.isEmpty && library.continueWatching.isEmpty && library.likedItems.isEmpty && Downloads.shared.jobs.isEmpty {
-                    ContentUnavailableView("Здесь пока пусто", systemImage: "rectangle.stack",
-                                           description: Text("Добавляйте фильмы кнопкой «+», а начатое появится в «Продолжить»."))
+                    ContentUnavailableView(L("Здесь пока пусто"), systemImage: "rectangle.stack",
+                                           description: Text(L("Добавляйте фильмы кнопкой «+», а начатое появится в «Продолжить».")))
                 }
             }
-            .navigationTitle("Медиатека")
+            .navigationTitle(L("Медиатека"))
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink(value: Route.torrents) { Image(systemName: "arrow.down.doc") }
-                        .accessibilityLabel("Торренты")
+                        .accessibilityLabel(L("Торренты"))
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink(value: Route.universes) { Image(systemName: "circle.grid.2x2") }
-                        .accessibilityLabel("Вселенные")
+                        .accessibilityLabel(L("Вселенные"))
                 }
                 if Friends.shared.enabled {
                     ToolbarItem(placement: .topBarTrailing) {
                         NavigationLink(value: Route.friends) { Image(systemName: "person.2") }
-                            .accessibilityLabel("Друзья")
+                            .accessibilityLabel(L("Друзья"))
                     }
                 }
             }

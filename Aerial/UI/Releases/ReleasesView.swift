@@ -53,7 +53,7 @@ struct ReleasesView: View {
         var id: String { release.id }
     }
 
-    private static let all = "Все"
+    private static let all = L("Все")
     private static let qualities = ["4K", "1080p", "720p", "SD"]
 
     /// Страницы фильтра: «Все» и те качества, что есть в выдаче.
@@ -137,50 +137,50 @@ struct ReleasesView: View {
                     let voices = Dictionary(grouping: infos.values.flatMap(\.audio), by: { $0 })
                         .sorted { $0.value.count > $1.value.count }.map(\.key)
                     if !voices.isEmpty {
-                        Picker("Перевод", selection: $voiceFilter) {
-                            Text("Любой").tag("")
+                        Picker(L("Перевод"), selection: $voiceFilter) {
+                            Text(L("Любой")).tag("")
                             ForEach(voices, id: \.self) { Text($0).tag($0) }
                         }
                         .pickerStyle(.menu)
                     }
                     let languages = [ReleaseFacts.ru, ReleaseFacts.uk, ReleaseFacts.en].filter { code in facts.values.contains { $0.languages.contains(code) } }
                     if !languages.isEmpty {
-                        Picker("Язык", selection: $languageFilter) {
-                            Text("Любой").tag("")
+                        Picker(L("Язык"), selection: $languageFilter) {
+                            Text(L("Любой")).tag("")
                             ForEach(languages, id: \.self) { Text(ReleaseFacts.languageTitle($0)).tag($0) }
                         }
                         .pickerStyle(.menu)
                     }
                     let seasons = Array(Set(infos.values.compactMap(\.season))).sorted()
                     if !seasons.isEmpty {
-                        Picker("Сезон", selection: $seasonFilter) {
-                            Text("Любой").tag("")
+                        Picker(L("Сезон"), selection: $seasonFilter) {
+                            Text(L("Любой")).tag("")
                             ForEach(seasons, id: \.self) { Text($0).tag($0) }
                         }
                         .pickerStyle(.menu)
                     }
                     let years = Array(Set(facts.values.map(\.year).filter { !$0.isEmpty })).sorted(by: >)
                     if years.count > 1 {
-                        Picker("Год", selection: $yearFilter) {
-                            Text("Любой").tag("")
+                        Picker(L("Год"), selection: $yearFilter) {
+                            Text(L("Любой")).tag("")
                             ForEach(years, id: \.self) { Text($0).tag($0) }
                         }
                         .pickerStyle(.menu)
                     }
                     let trackers = Array(Set(facts.values.flatMap(\.trackers))).sorted()
                     if trackers.count > 1 {
-                        Picker("Трекер", selection: $trackerFilter) {
-                            Text("Любой").tag("")
+                        Picker(L("Трекер"), selection: $trackerFilter) {
+                            Text(L("Любой")).tag("")
                             ForEach(trackers, id: \.self) { Text($0).tag($0) }
                         }
                         .pickerStyle(.menu)
                     }
                     Toggle("HDR", isOn: $hdrOnly)
                     Toggle("Dolby Vision", isOn: $dvOnly)
-                    Toggle("С субтитрами", isOn: $subsOnly)
+                    Toggle(L("С субтитрами"), isOn: $subsOnly)
                     if facts.values.contains(where: \.threeD) { Toggle("3D", isOn: $threeDOnly) }
                     if filtersActive {
-                        Button("Сбросить фильтры", role: .destructive) {
+                        Button(L("Сбросить фильтры"), role: .destructive) {
                             voiceFilter = ""; trackerFilter = ""; hdrOnly = false; dvOnly = false; subsOnly = false
                             languageFilter = ""; seasonFilter = ""; yearFilter = ""; threeDOnly = false
                         }
@@ -188,12 +188,12 @@ struct ReleasesView: View {
                 } label: {
                     Image(systemName: filtersActive ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
                 }
-                .accessibilityLabel("Фильтры")
+                .accessibilityLabel(L("Фильтры"))
             }
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
-                    Picker("Сортировка", selection: $sort) {
-                        ForEach(Sort.allCases) { Text($0.rawValue).tag($0) }
+                    Picker(L("Сортировка"), selection: $sort) {
+                        ForEach(Sort.allCases) { Text(L($0.rawValue)).tag($0) }
                     }
                 } label: {
                     Image(systemName: "arrow.up.arrow.down")
@@ -202,10 +202,10 @@ struct ReleasesView: View {
         }
         .overlay {
             if loading {
-                ProgressView("Ищу раздачи…").tint(.white)
+                ProgressView(L("Ищу раздачи…")).tint(.white)
             } else if releases.isEmpty {
-                ContentUnavailableView("Раздач не нашлось", systemImage: "magnifyingglass",
-                                       description: Text("Попробуйте другой сервер поиска в настройках."))
+                ContentUnavailableView(L("Раздач не нашлось"), systemImage: "magnifyingglass",
+                                       description: Text(L("Попробуйте другой сервер поиска в настройках.")))
             }
         }
         .task { await search() }
@@ -223,12 +223,12 @@ struct ReleasesView: View {
                 self.picking = nil
             }
         }
-        .alert("Не удалось открыть раздачу", isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
+        .alert(L("Не удалось открыть раздачу"), isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(failure ?? "")
         }
-        .alert("Загрузка", isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })) {
+        .alert(L("Загрузка"), isPresented: Binding(get: { notice != nil }, set: { if !$0 { notice = nil } })) {
             Button("OK", role: .cancel) {}
         } message: {
             Text(notice ?? "")
@@ -247,7 +247,7 @@ struct ReleasesView: View {
                                 .background(.white, in: Circle())
                                 .foregroundStyle(.black)
                             VStack(alignment: .leading, spacing: 3) {
-                                Text("Продолжить с \(Format.clock(entry.position))").font(.aerial(.headline))
+                                Text(L("Продолжить с %@", Format.clock(entry.position))).font(.aerial(.headline))
                                 Text(source.releaseTitle).font(.aerial(.caption)).foregroundStyle(Theme.secondaryText).lineLimit(2)
                             }
                             Spacer(minLength: 0)
@@ -258,7 +258,7 @@ struct ReleasesView: View {
                     .buttonStyle(.plain)
                 }
                 if !list.isEmpty {
-                    Text("\(list.count) \(Format.plural(list.count, "раздача", "раздачи", "раздач")) · удерживайте, чтобы скачать")
+                    Text(L("%@ %@ · удерживайте, чтобы скачать", "\(list.count)", Format.plural(list.count, "раздача", "раздачи", "раздач")))
                         .font(.aerial(.footnote, .semibold))
                         .foregroundStyle(Theme.secondaryText)
                         .padding(.horizontal, 4)
@@ -272,11 +272,11 @@ struct ReleasesView: View {
                     .accessibilityIdentifier("release")
                     .contextMenu {
                         Button { download(release, all: false) } label: {
-                            Label(episode == nil ? "Скачать" : "Скачать серию", systemImage: "arrow.down.circle")
+                            Label(episode == nil ? L("Скачать") : L("Скачать серию"), systemImage: "arrow.down.circle")
                         }
                         if item.kind == .series {
                             Button { download(release, all: true) } label: {
-                                Label("Скачать все серии раздачи", systemImage: "square.and.arrow.down.on.square")
+                                Label(L("Скачать все серии раздачи"), systemImage: "square.and.arrow.down.on.square")
                             }
                         }
                     }
@@ -332,7 +332,7 @@ struct ReleasesView: View {
                             ?? (episode == nil ? info.files.max(by: { $0.bytes < $1.bytes }) : nil) {
                     chosen = [file]
                 } else {
-                    notice = "В раздаче не нашёлся файл серии \(episode?.code ?? ""). Можно скачать все серии раздачи."
+                    notice = L("В раздаче не нашёлся файл серии %@. Можно скачать все серии раздачи.", episode?.code ?? "")
                     return
                 }
                 var seasons: [Int: [VodEpisode]] = [:]
@@ -345,14 +345,14 @@ struct ReleasesView: View {
                     var meta: VodEpisode?
                     if let place = EpisodeMatch.coordinates(file.path) {
                         meta = seasons[place.season]?.first { $0.number == place.episode }
-                            ?? VodEpisode(season: place.season, number: place.episode, title: "Серия \(place.episode)")
+                            ?? VodEpisode(season: place.season, number: place.episode, title: L("Серия %@", "\(place.episode)"))
                     } else if !all {
                         meta = episode
                     }
                     return DownloadFile(index: file.index, path: file.path, bytes: file.bytes, episode: meta)
                 }
                 notice = Downloads.shared.add(item: item, link: release.link, releaseTitle: release.title, info: info, files: files)
-                    ?? "Загрузка началась — она в Медиатеке. Качается, пока приложение открыто."
+                    ?? L("Загрузка началась — она в Медиатеке. Качается, пока приложение открыто.")
             } catch {
                 if !HTTP.isCancellation(error) { failure = error.localizedDescription }
             }
@@ -489,15 +489,15 @@ struct WatchSheet: View {
 
     private func meta(_ place: Placed) -> VodEpisode {
         titles[place.season]?.first { $0.number == place.number }
-            ?? VodEpisode(season: place.season, number: place.number, title: "Серия \(place.number)")
+            ?? VodEpisode(season: place.season, number: place.number, title: L("Серия %@", "\(place.number)"))
     }
 
     var body: some View {
         NavigationStack {
             Form {
                 if voices.count > 1 {
-                    Picker("Озвучка", selection: $voice) {
-                        Text("Как в раздаче").tag("")
+                    Picker(L("Озвучка"), selection: $voice) {
+                        Text(L("Как в раздаче")).tag("")
                         ForEach(voices, id: \.self) { Text($0).tag($0) }
                     }
                     .pickerStyle(.menu)
@@ -505,11 +505,11 @@ struct WatchSheet: View {
                 if series {
                     Section {
                         if seasons.count > 1 {
-                            Picker("Сезон", selection: $season) {
-                                ForEach(seasons, id: \.self) { Text("Сезон \($0)").tag($0) }
+                            Picker(L("Сезон"), selection: $season) {
+                                ForEach(seasons, id: \.self) { Text(L("Сезон %@", "\($0)")).tag($0) }
                             }
                         }
-                        Picker("Серия", selection: $fileIndex) {
+                        Picker(L("Серия"), selection: $fileIndex) {
                             ForEach(placed.filter { $0.season == season }) { place in
                                 Text("\(place.number). \(meta(place).title)").tag(place.file.index)
                             }
@@ -517,8 +517,8 @@ struct WatchSheet: View {
                         .pickerStyle(.menu)
                     }
                 } else if files.count > 1 {
-                    Section("Файл") {
-                        Picker("Файл", selection: $fileIndex) {
+                    Section(L("Файл")) {
+                        Picker(L("Файл"), selection: $fileIndex) {
                             ForEach(files) { file in
                                 VStack(alignment: .leading) {
                                     Text(file.name).lineLimit(2)
@@ -533,7 +533,7 @@ struct WatchSheet: View {
                 }
                 Section {
                     Button(action: play) {
-                        Label("Смотреть", systemImage: "play.fill")
+                        Label(L("Смотреть"), systemImage: "play.fill")
                     }
                     .buttonStyle(PrimaryButtonStyle())
                     .listRowBackground(Color.clear)
@@ -542,7 +542,7 @@ struct WatchSheet: View {
                 }
             }
             .scrollContentBackground(.hidden)
-            .navigationTitle("Смотреть")
+            .navigationTitle(L("Смотреть"))
             .navigationBarTitleDisplayMode(.inline)
         }
         .presentationDetents([.medium, .large])

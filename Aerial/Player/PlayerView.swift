@@ -96,9 +96,9 @@ struct PlayerView: View {
             VStack {
                 HStack(spacing: 12) {
                     Image(systemName: "hand.wave.fill").foregroundStyle(Theme.accent)
-                    Text("\(from) хочет смотреть вместе").font(.aerial(.subheadline, .semibold)).lineLimit(2)
+                    Text(L("%@ хочет смотреть вместе", from)).font(.aerial(.subheadline, .semibold)).lineLimit(2)
                     if !WatchParty.shared.active && model.partyMedia != nil {
-                        Button("Открыть комнату") {
+                        Button(L("Открыть комнату")) {
                             model.hostParty()
                             Friends.shared.knockFrom = nil
                             partyOpen = true
@@ -133,7 +133,7 @@ struct PlayerView: View {
                         model.skipSegment()
                         scheduleHide()
                     } label: {
-                        Label(skip.kind == .recap ? "Пропустить «Ранее в сериале»" : "Пропустить заставку", systemImage: "forward.end.fill")
+                        Label(skip.kind == .recap ? L("Пропустить «Ранее в сериале»") : L("Пропустить заставку"), systemImage: "forward.end.fill")
                             .font(.aerial(.subheadline, .semibold))
                             .foregroundStyle(.black)
                             .padding(.horizontal, 18)
@@ -154,7 +154,7 @@ struct PlayerView: View {
     private func nextCard(_ next: PlaybackRequest) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Далее").font(.aerial(.caption, .semibold)).foregroundStyle(Theme.secondaryText)
+                Text(L("Далее")).font(.aerial(.caption, .semibold)).foregroundStyle(Theme.secondaryText)
                 Spacer()
                 Button {
                     nextDismissed = true
@@ -163,15 +163,15 @@ struct PlayerView: View {
                     Image(systemName: "xmark").font(.aerial(.caption, .bold)).foregroundStyle(.white.opacity(0.8))
                         .frame(width: 28, height: 28)
                 }
-                .accessibilityLabel("Скрыть")
+                .accessibilityLabel(L("Скрыть"))
             }
             if let episode = next.episode {
                 Text("\(episode.code) · \(episode.title)").font(.aerial(.headline)).foregroundStyle(.white).lineLimit(2)
             }
             if model.finished && settings.autoplayNext {
-                Text("Начнётся через \(countdown) с").font(.aerial(.caption)).foregroundStyle(Theme.secondaryText)
+                Text(L("Начнётся через %@ с", "\(countdown)")).font(.aerial(.caption)).foregroundStyle(Theme.secondaryText)
             }
-            Button { playNext() } label: { Label("Смотреть", systemImage: "play.fill") }
+            Button { playNext() } label: { Label(L("Смотреть"), systemImage: "play.fill") }
                 .buttonStyle(PrimaryButtonStyle())
                 .accessibilityIdentifier("player-next")
         }
@@ -205,12 +205,12 @@ struct PlayerView: View {
         case .connecting(let text):
             PreparingView(text: text, progress: nil, peers: model.peers, speed: model.speed)
         case .preloading(let value):
-            PreparingView(text: "Подготовка к просмотру", progress: value, peers: model.peers, speed: model.speed)
+            PreparingView(text: L("Подготовка к просмотру"), progress: value, peers: model.peers, speed: model.speed)
         case .failed(let message):
             VStack(spacing: 16) {
                 Image(systemName: "exclamationmark.triangle.fill").font(.aerial(.largeTitle)).foregroundStyle(.yellow)
                 Text(message).multilineTextAlignment(.center).foregroundStyle(.white)
-                Button("Закрыть") { dismiss() }.buttonStyle(PrimaryButtonStyle()).frame(maxWidth: 220)
+                Button(L("Закрыть")) { dismiss() }.buttonStyle(PrimaryButtonStyle()).frame(maxWidth: 220)
             }
             .padding(32)
         case .playing:
@@ -224,7 +224,7 @@ struct PlayerView: View {
         }
     }
 
-    private var rate: String { "\(Format.bytes(model.speed))/с · пиров: \(model.peers)" }
+    private var rate: String { L("%@/с · пиров: %@", Format.bytes(model.speed), "\(model.peers)") }
 
     // MARK: Панель
 
@@ -235,15 +235,15 @@ struct PlayerView: View {
             HStack(spacing: 12) {
                 Button { dismiss() } label: { Image(systemName: "xmark") }
                     .buttonStyle(CircleGlassButtonStyle(size: 44, tint: accent))
-                    .accessibilityLabel("Закрыть")
+                    .accessibilityLabel(L("Закрыть"))
                     .accessibilityIdentifier("player-close")
                 Spacer()
                 HStack(spacing: 4) {
                     if WatchParty.shared.enabled && model.partyMedia != nil {
-                        barButton(WatchParty.shared.active ? "person.2.fill" : "person.2", label: "Смотреть вместе") { partyOpen = true }
+                        barButton(WatchParty.shared.active ? "person.2.fill" : "person.2", label: L("Смотреть вместе")) { partyOpen = true }
                     }
                     if let pip = model.pipURL {
-                        barButton("pip.enter", label: "Картинка в картинке") {
+                        barButton("pip.enter", label: L("Картинка в картинке")) {
                             let position = model.position
                             let request = model.request
                             model.stop()
@@ -252,7 +252,7 @@ struct PlayerView: View {
                         }
                     }
                     if model.next != nil {
-                        barButton("forward.end.fill", label: "Следующая серия") { playNext() }
+                        barButton("forward.end.fill", label: L("Следующая серия")) { playNext() }
                     }
                     if model.phase == .playing { tracksMenu }
                 }
@@ -349,28 +349,28 @@ struct PlayerView: View {
 
     private var tracksMenu: some View {
         Menu {
-            Section("Звук") {
+            Section(L("Звук")) {
                 ForEach(model.audioTracks) { track in
                     Button { model.selectAudio(track) } label: { choice(track.label, track.selected) }
                 }
             }
-            Section("Скорость") {
-                Picker("Скорость", selection: Binding(get: { model.rate }, set: { model.setRate($0) })) {
+            Section(L("Скорость")) {
+                Picker(L("Скорость"), selection: Binding(get: { model.rate }, set: { model.setRate($0) })) {
                     ForEach([0.5, 0.75, 1, 1.25, 1.5, 2], id: \.self) { value in
-                        Text(value == 1 ? "Обычная" : String(format: "%g×", value)).tag(value)
+                        Text(value == 1 ? L("Обычная") : String(format: "%g×", value)).tag(value)
                     }
                 }
                 .pickerStyle(.menu)
             }
-            Section("Субтитры") {
+            Section(L("Субтитры")) {
                 Button { model.selectSubtitle(nil) } label: {
-                    choice("Выключены", !model.subtitleTracks.contains(where: \.selected))
+                    choice(L("Выключены"), !model.subtitleTracks.contains(where: \.selected))
                 }
                 ForEach(model.subtitleTracks) { track in
                     Button { model.selectSubtitle(track) } label: { choice(track.label, track.selected) }
                 }
                 if !settings.openSubsKey.isEmpty {
-                    Button { findingSubtitles = true } label: { Label("Найти субтитры…", systemImage: "magnifyingglass") }
+                    Button { findingSubtitles = true } label: { Label(L("Найти субтитры…"), systemImage: "magnifyingglass") }
                 }
             }
         } label: {
@@ -380,7 +380,7 @@ struct PlayerView: View {
                 .frame(width: 42, height: 42)
                 .contentShape(Rectangle())
         }
-        .accessibilityLabel("Звук, субтитры и скорость")
+        .accessibilityLabel(L("Звук, субтитры и скорость"))
     }
 
     @ViewBuilder
@@ -428,7 +428,7 @@ private struct PreparingView: View {
                 Text(text)
             }
             if peers > 0 || speed > 0 {
-                Text("\(Format.bytes(speed))/с · пиров: \(peers)")
+                Text(L("%@/с · пиров: %@", Format.bytes(speed), "\(peers)"))
                     .font(.aerial(.footnote).monospacedDigit())
                     .foregroundStyle(Theme.secondaryText)
             }
@@ -552,7 +552,7 @@ private struct SubtitleSearch: View {
                                 .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 6))
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(result.release).font(.aerial(.subheadline)).foregroundStyle(.white).lineLimit(2)
-                                Text("Скачиваний: \(result.downloads)").font(.aerial(.caption2)).foregroundStyle(Theme.secondaryText)
+                                Text(L("Скачиваний: %@", "\(result.downloads)")).font(.aerial(.caption2)).foregroundStyle(Theme.secondaryText)
                             }
                             Spacer(minLength: 0)
                             if busy == result.fileId { ProgressView() }
@@ -562,12 +562,12 @@ private struct SubtitleSearch: View {
                 }
             }
             .overlay {
-                if loading { ProgressView("Ищу на OpenSubtitles…") }
-                else if results.isEmpty && failure == nil { ContentUnavailableView("Субтитров не нашлось", systemImage: "captions.bubble") }
+                if loading { ProgressView(L("Ищу на OpenSubtitles…")) }
+                else if results.isEmpty && failure == nil { ContentUnavailableView(L("Субтитров не нашлось"), systemImage: "captions.bubble") }
             }
-            .navigationTitle(episode.map { "Субтитры · \($0.code)" } ?? "Субтитры")
+            .navigationTitle(episode.map { L("Субтитры · %@", $0.code) } ?? L("Субтитры"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Отмена") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .cancellationAction) { Button(L("Отмена")) { dismiss() } } }
         }
         .task {
             do {

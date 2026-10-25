@@ -40,6 +40,9 @@ targets:
       properties:
         CFBundleDisplayName: Aerial
         CFBundleDevelopmentRegion: ru
+        # Английский интерфейс — своей таблицей (Core/English.swift); список — чтобы системные окна шли на языке телефона.
+        CFBundleLocalizations: [ru, en]
+        CFBundleAllowMixedLocalizations: true
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         UILaunchScreen:

@@ -165,11 +165,12 @@ enum Format {
     static func runtime(minutes: Int) -> String {
         guard minutes > 0 else { return "" }
         let h = minutes / 60, m = minutes % 60
-        if h == 0 { return "\(m) мин" }
-        return m == 0 ? "\(h) ч" : "\(h) ч \(m) мин"
+        if h == 0 { return L("%@ мин", "\(m)") }
+        return m == 0 ? L("%@ ч", "\(h)") : L("%@ ч %@ мин", "\(h)", "\(m)")
     }
 
     static func plural(_ n: Int, _ one: String, _ few: String, _ many: String) -> String {
+        if AppLanguage.english, let forms = English.plural[one] { return n == 1 ? forms.0 : forms.1 }
         let mod100 = n % 100, mod10 = n % 10
         if (11...14).contains(mod100) { return many }
         if mod10 == 1 { return one }
@@ -194,8 +195,8 @@ enum Format {
 
     private static let longDay: DateFormatter = {
         let out = DateFormatter()
-        out.locale = Locale(identifier: "ru_RU")
-        out.dateFormat = "d MMMM yyyy"
+        out.locale = AppLanguage.locale
+        out.dateFormat = AppLanguage.english ? "MMMM d, yyyy" : "d MMMM yyyy"
         return out
     }()
 }

@@ -12,29 +12,29 @@ final class Catalogue: Sendable {
     /// Ряды раздела. Набор и названия — как `sections()` ТВ; «В тренде сегодня» — с номерами топ-10.
     static func sections(for shelf: VodShelf) -> [CinemaSection] {
         let tomorrow = ISO8601DateFormatter.day.string(from: .now.addingTimeInterval(24 * 3600))
-        let trending = CinemaSection(id: "trending", title: "В тренде сегодня", path: "trending/movie/day", kind: .movie, ranked: true)
-        let trendingWeek = CinemaSection(id: "trending-week", title: "В тренде за неделю", path: "trending/movie/week", kind: .movie)
-        let popular = CinemaSection(id: "popular", title: "Популярное", path: "movie/popular", kind: .movie)
-        let new = CinemaSection(id: "new", title: "Сейчас в кино", path: "movie/now_playing", kind: .movie)
-        let soon = CinemaSection(id: "soon", title: "Скоро в кино", path: "discover/movie", kind: .movie,
+        let trending = CinemaSection(id: "trending", title: L("В тренде сегодня"), path: "trending/movie/day", kind: .movie, ranked: true)
+        let trendingWeek = CinemaSection(id: "trending-week", title: L("В тренде за неделю"), path: "trending/movie/week", kind: .movie)
+        let popular = CinemaSection(id: "popular", title: L("Популярное"), path: "movie/popular", kind: .movie)
+        let new = CinemaSection(id: "new", title: L("Сейчас в кино"), path: "movie/now_playing", kind: .movie)
+        let soon = CinemaSection(id: "soon", title: L("Скоро в кино"), path: "discover/movie", kind: .movie,
                                  params: ["primary_release_date.gte": tomorrow, "sort_by": "popularity.desc"])
-        let top = CinemaSection(id: "top", title: "Высокие оценки", path: "movie/top_rated", kind: .movie)
-        let seriesTrending = CinemaSection(id: "series-trending", title: "Сериалы в тренде сегодня", path: "trending/tv/day", kind: .series)
-        let series = CinemaSection(id: "series", title: "Популярные сериалы", path: "tv/popular", kind: .series)
-        let seriesToday = CinemaSection(id: "series-today", title: "Новые серии сегодня", path: "tv/airing_today", kind: .series)
-        let onAir = CinemaSection(id: "air", title: "Сериалы в эфире", path: "tv/on_the_air", kind: .series)
-        let seriesTop = CinemaSection(id: "series-top", title: "Лучшие сериалы", path: "tv/top_rated", kind: .series)
-        let seriesSoon = CinemaSection(id: "series-soon", title: "Скоро премьера", path: "discover/tv", kind: .series,
+        let top = CinemaSection(id: "top", title: L("Высокие оценки"), path: "movie/top_rated", kind: .movie)
+        let seriesTrending = CinemaSection(id: "series-trending", title: L("Сериалы в тренде сегодня"), path: "trending/tv/day", kind: .series)
+        let series = CinemaSection(id: "series", title: L("Популярные сериалы"), path: "tv/popular", kind: .series)
+        let seriesToday = CinemaSection(id: "series-today", title: L("Новые серии сегодня"), path: "tv/airing_today", kind: .series)
+        let onAir = CinemaSection(id: "air", title: L("Сериалы в эфире"), path: "tv/on_the_air", kind: .series)
+        let seriesTop = CinemaSection(id: "series-top", title: L("Лучшие сериалы"), path: "tv/top_rated", kind: .series)
+        let seriesSoon = CinemaSection(id: "series-soon", title: L("Скоро премьера"), path: "discover/tv", kind: .series,
                                        params: ["first_air_date.gte": tomorrow, "sort_by": "popularity.desc"])
-        let cartoons = CinemaSection(id: "cartoons", title: "Популярные мультфильмы", path: "discover/movie", kind: .movie,
+        let cartoons = CinemaSection(id: "cartoons", title: L("Популярные мультфильмы"), path: "discover/movie", kind: .movie,
                                      params: ["with_genres": "16", "sort_by": "popularity.desc"])
-        let cartoonsNew = CinemaSection(id: "cartoons-new", title: "Новые мультфильмы", path: "discover/movie", kind: .movie,
+        let cartoonsNew = CinemaSection(id: "cartoons-new", title: L("Новые мультфильмы"), path: "discover/movie", kind: .movie,
                                         params: ["with_genres": "16", "sort_by": "primary_release_date.desc", "vote_count.gte": "30"])
-        let cartoonSeries = CinemaSection(id: "cartoon-series", title: "Популярные мультсериалы", path: "discover/tv", kind: .series,
+        let cartoonSeries = CinemaSection(id: "cartoon-series", title: L("Популярные мультсериалы"), path: "discover/tv", kind: .series,
                                           params: ["with_genres": "16", "sort_by": "popularity.desc"])
-        let cartoonSeriesNew = CinemaSection(id: "cartoon-series-new", title: "Новые мультсериалы", path: "discover/tv", kind: .series,
+        let cartoonSeriesNew = CinemaSection(id: "cartoon-series-new", title: L("Новые мультсериалы"), path: "discover/tv", kind: .series,
                                              params: ["with_genres": "16", "sort_by": "first_air_date.desc", "vote_count.gte": "30"])
-        let cartoonSeriesTop = CinemaSection(id: "cartoon-series-top", title: "Лучшие мультсериалы", path: "discover/tv", kind: .series,
+        let cartoonSeriesTop = CinemaSection(id: "cartoon-series-top", title: L("Лучшие мультсериалы"), path: "discover/tv", kind: .series,
                                              params: ["with_genres": "16", "sort_by": "vote_average.desc", "vote_count.gte": "300"])
         switch shelf {
         case .all: return [trending, seriesTrending, new, popular, series, top, seriesTop, soon, cartoons]
@@ -98,11 +98,11 @@ final class Catalogue: Sendable {
         }
         let creators = (body.createdBy ?? []).compactMap { person -> VodPerson? in
             guard let id = person.id, let name = person.name else { return nil }
-            return VodPerson(id: id, name: name, role: "Автор", photo: person.profilePath ?? "")
+            return VodPerson(id: id, name: name, role: L("Автор"), photo: person.profilePath ?? "")
         }
         let directors = (body.credits?.crew ?? []).filter { $0.job == "Director" }.compactMap { person -> VodPerson? in
             guard let id = person.id, let name = person.name else { return nil }
-            return VodPerson(id: id, name: name, role: "Режиссёр", photo: person.profilePath ?? "")
+            return VodPerson(id: id, name: name, role: L("Режиссёр"), photo: person.profilePath ?? "")
         }
         var seenPeople = Set<Int>()
         details.directors = (creators + directors).filter { seenPeople.insert($0.id).inserted }
@@ -111,11 +111,11 @@ final class Catalogue: Sendable {
             details.seasons = (body.seasons ?? []).filter { ($0.episodeCount ?? 0) > 0 && ($0.seasonNumber ?? 0) > 0 }
                 .compactMap(\.seasonNumber).sorted()
             details.status = switch body.status ?? "" {
-            case "Returning Series": "Продолжается"
-            case "Ended": "Завершён"
-            case "Canceled", "Cancelled": "Отменён"
-            case "In Production": "В производстве"
-            case "Planned": "Анонсирован"
+            case "Returning Series": L("Продолжается")
+            case "Ended": L("Завершён")
+            case "Canceled", "Cancelled": L("Отменён")
+            case "In Production": L("В производстве")
+            case "Planned": L("Анонсирован")
             default: ""
             }
             if ["Ended", "Canceled", "Cancelled"].contains(body.status ?? "") {
@@ -130,7 +130,7 @@ final class Catalogue: Sendable {
                 func date(_ title: TMDbTitle) -> String { (title.releaseDate ?? "").isEmpty ? "9999" : title.releaseDate ?? "9999" }
                 let films = rows.sorted { date($0) < date($1) }.compactMap { $0.item(kind: .movie, genres: names) }
                 if films.count > 1 {
-                    details.collectionTitle = parts.name ?? "Франшиза"
+                    details.collectionTitle = parts.name ?? L("Франшиза")
                     details.collection = films
                 }
             }
@@ -153,7 +153,7 @@ final class Catalogue: Sendable {
         let body = try await tmdb.decode(TMDbSeason.self, "tv/\(item.remoteId)/season/\(number)", ttl: DiskCache.day)
         return (body.episodes ?? []).compactMap { episode in
             guard let index = episode.episodeNumber, index > 0 else { return nil }
-            return VodEpisode(season: episode.seasonNumber ?? number, number: index, title: episode.name ?? "Серия \(index)",
+            return VodEpisode(season: episode.seasonNumber ?? number, number: index, title: episode.name ?? L("Серия %@", "\(index)"),
                               overview: episode.overview ?? "", still: episode.stillPath ?? "", airDate: episode.airDate ?? "",
                               runtimeMinutes: episode.runtime ?? 0)
         }
@@ -282,12 +282,12 @@ final class Catalogue: Sendable {
             biography = (try? await tmdb.decode(TMDbPerson.self, "person/\(person.id)", ["language": "en-US"], ttl: 7 * DiskCache.day))?.biography ?? ""
         }
         // Биография не по-русски — переводит ИИ, как на ТВ (`ReviewTranslator`); перевод кэшируется на месяц.
-        if AI.enabled, !biography.isEmpty, !Self.cyrillic.matches(String(biography.prefix(300))),
+        if AI.enabled, !AppLanguage.english, !biography.isEmpty, !Self.cyrillic.matches(String(biography.prefix(300))),
            let russian = try? await AI.translate(biography, what: "biography of a film actor or director"), !russian.isEmpty {
             biography = russian
         }
         let credits = try await tmdb.decode(TMDbCredits.self, "person/\(person.id)/combined_credits", ttl: 7 * DiskCache.day)
-        let directing = person.role == "Режиссёр" || body.knownForDepartment == "Directing"
+        let directing = person.role == L("Режиссёр") || body.knownForDepartment == "Directing"
         let rows = directing ? (credits.crew ?? []).filter { $0.job == "Director" } : (credits.cast ?? [])
         let works = try await items(rows, kind: nil).sorted { $0.releaseDate > $1.releaseDate }
         return VodPersonInfo(id: person.id, name: body.name ?? person.name, photo: body.profilePath ?? person.photo,
@@ -359,18 +359,18 @@ final class Catalogue: Sendable {
         func add(_ label: String, _ value: String?) {
             if let value, !value.isEmpty { facts.append(VodFact(label: label, value: value)) }
         }
-        add("Оригинальное название", kind == .movie ? body.originalTitle : body.originalName)
-        add("Премьера", (kind == .movie ? body.releaseDate : body.firstAirDate).map(Format.date))
-        add("Страны", countries.joined(separator: ", "))
-        add("Студии", (body.productionCompanies ?? []).compactMap(\.name).prefix(4).joined(separator: ", "))
+        add(L("Оригинальное название"), kind == .movie ? body.originalTitle : body.originalName)
+        add(L("Премьера"), (kind == .movie ? body.releaseDate : body.firstAirDate).map(Format.date))
+        add(L("Страны"), countries.joined(separator: ", "))
+        add(L("Студии"), (body.productionCompanies ?? []).compactMap(\.name).prefix(4).joined(separator: ", "))
         let money = NumberFormatter()
         money.numberStyle = .decimal
         money.groupingSeparator = " "
-        if let budget = body.budget, budget > 0 { add("Бюджет", "$" + (money.string(from: NSNumber(value: budget)) ?? "\(budget)")) }
-        if let revenue = body.revenue, revenue > 0 { add("Сборы", "$" + (money.string(from: NSNumber(value: revenue)) ?? "\(revenue)")) }
+        if let budget = body.budget, budget > 0 { add(L("Бюджет"), "$" + (money.string(from: NSNumber(value: budget)) ?? "\(budget)")) }
+        if let revenue = body.revenue, revenue > 0 { add(L("Сборы"), "$" + (money.string(from: NSNumber(value: revenue)) ?? "\(revenue)")) }
         if kind == .series {
-            if let seasons = body.numberOfSeasons, seasons > 0 { add("Сезонов", String(seasons)) }
-            if let episodes = body.numberOfEpisodes, episodes > 0 { add("Серий", String(episodes)) }
+            if let seasons = body.numberOfSeasons, seasons > 0 { add(L("Сезонов"), String(seasons)) }
+            if let episodes = body.numberOfEpisodes, episodes > 0 { add(L("Серий"), String(episodes)) }
         }
         return facts
     }

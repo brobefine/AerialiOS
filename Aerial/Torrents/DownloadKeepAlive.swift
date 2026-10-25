@@ -53,7 +53,7 @@ final class DownloadKeepAlive {
     func end() {
         if shownPlate, let job {
             let finished = Downloads.shared.complete(Downloads.shared.jobs.first { $0.hash == job.hash } ?? job)
-            publish(final: finished ? "Загружено · можно смотреть без сети" : "Загрузка на паузе · откройте Aerial, чтобы продолжить")
+            publish(final: finished ? L("Загружено · можно смотреть без сети") : L("Загрузка на паузе · откройте Aerial, чтобы продолжить"))
         }
         job = nil
         stop(keepInfo: true)
@@ -183,12 +183,12 @@ final class DownloadKeepAlive {
         let duration = rate > 0 ? total / speed : max(lastDuration, 100)
         lastDuration = duration
         let left = rate > 0 ? Format.runtime(minutes: max(1, Int(total * (1 - fraction) / speed / 60))) : ""
-        let status = final ?? (paused ? "На паузе · \(Int(fraction * 100)) %"
-            : "\(Int(fraction * 100)) % · \(Format.bytes(rate))/с" + (left.isEmpty ? "" : " · осталось \(left)"))
+        let status = final ?? (paused ? L("На паузе · %@ %", "\(Int(fraction * 100))")
+            : L("%@ % · %@/с", "\(Int(fraction * 100))", Format.bytes(rate)) + (left.isEmpty ? "" : " · " + L("осталось %@", left)))
         var info: [String: Any] = [
-            MPMediaItemPropertyTitle: final == nil ? "Загрузка: \(job.item.title)" : job.item.title,
+            MPMediaItemPropertyTitle: final == nil ? L("Загрузка: %@", job.item.title) : job.item.title,
             MPMediaItemPropertyArtist: status,
-            MPMediaItemPropertyAlbumTitle: "Aerial · загрузки",
+            MPMediaItemPropertyAlbumTitle: L("Aerial · загрузки"),
             MPMediaItemPropertyPlaybackDuration: duration,
             MPNowPlayingInfoPropertyElapsedPlaybackTime: (final == nil ? fraction : 1) * duration,
             MPNowPlayingInfoPropertyPlaybackRate: paused || final != nil ? 0.0 : 1.0,

@@ -56,9 +56,9 @@ struct PartySheet: View {
             }
             .scrollContentBackground(.hidden)
             .background(Theme.background)
-            .navigationTitle("Смотреть вместе")
+            .navigationTitle(L("Смотреть вместе"))
             .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Готово") { dismiss() } } }
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button(L("Готово")) { dismiss() } } }
         }
         .presentationDetents([.medium, .large])
     }
@@ -69,16 +69,16 @@ struct PartySheet: View {
                 Button {
                     model.hostParty()
                 } label: {
-                    Label("Создать комнату с этим фильмом", systemImage: "person.2.badge.plus")
+                    Label(L("Создать комнату с этим фильмом"), systemImage: "person.2.badge.plus")
                 }
             } footer: {
-                Text("Видео не передаётся: у каждого раздача качается своим TorrServer, через комнату идут только пауза, перемотка, чат и реакции.")
+                Text(L("Видео не передаётся: у каждого раздача качается своим TorrServer, через комнату идут только пауза, перемотка, чат и реакции."))
             }
-            Section("Войти по коду") {
-                TextField("Код комнаты", text: $joinCode)
+            Section(L("Войти по коду")) {
+                TextField(L("Код комнаты"), text: $joinCode)
                     .textInputAutocapitalization(.characters)
                     .autocorrectionDisabled()
-                Button("Войти") { party.join(joinCode) }.disabled(joinCode.count < 4)
+                Button(L("Войти")) { party.join(joinCode) }.disabled(joinCode.count < 4)
                 if let error = party.error { Text(error).foregroundStyle(.red) }
             }
         }
@@ -89,21 +89,21 @@ struct PartySheet: View {
             Section {
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Комната").font(.aerial(.caption)).foregroundStyle(Theme.secondaryText)
+                        Text(L("Комната")).font(.aerial(.caption)).foregroundStyle(Theme.secondaryText)
                         Text(code).font(.system(.title, design: .monospaced).weight(.bold)).textSelection(.enabled)
                     }
                     Spacer()
-                    ShareLink(item: "Смотрим вместе в Aerial — код комнаты \(code)") { Image(systemName: "square.and.arrow.up") }
+                    ShareLink(item: L("Смотрим вместе в Aerial — код комнаты %@", code)) { Image(systemName: "square.and.arrow.up") }
                 }
-                LabeledContent("Связь", value: status)
+                LabeledContent(L("Связь"), value: status)
                 if let room = party.room, !room.members.isEmpty {
-                    LabeledContent("Зрители", value: room.members.joined(separator: ", "))
+                    LabeledContent(L("Зрители"), value: room.members.joined(separator: ", "))
                 }
                 if party.media != nil && !model.partyFile {
-                    Text("Комната смотрит другой файл — плеер переключится на него.").font(.aerial(.footnote)).foregroundStyle(Theme.secondaryText)
+                    Text(L("Комната смотрит другой файл — плеер переключится на него.")).font(.aerial(.footnote)).foregroundStyle(Theme.secondaryText)
                 }
             }
-            Section("Реакции") {
+            Section(L("Реакции")) {
                 ScrollView(.horizontal) {
                     HStack(spacing: 10) {
                         ForEach(Self.emoji, id: \.self) { emoji in
@@ -113,21 +113,21 @@ struct PartySheet: View {
                 }
                 .scrollIndicators(.hidden)
             }
-            Section("Чат") {
+            Section(L("Чат")) {
                 ForEach(party.chat.suffix(50)) { note in
                     VStack(alignment: .leading, spacing: 2) {
-                        Text(note.mine ? "Вы" : note.from).font(.aerial(.caption, .semibold))
+                        Text(note.mine ? L("Вы") : note.from).font(.aerial(.caption, .semibold))
                             .foregroundStyle(note.mine ? Theme.accent : Theme.secondaryText)
                         Text(note.text).font(.aerial(.subheadline))
                     }
                 }
                 HStack {
-                    TextField("Сообщение", text: $message).onSubmit(sendMessage)
+                    TextField(L("Сообщение"), text: $message).onSubmit(sendMessage)
                     Button(action: sendMessage) { Image(systemName: "paperplane.fill") }.disabled(message.isEmpty)
                 }
             }
             Section {
-                Button("Выйти из комнаты", role: .destructive) {
+                Button(L("Выйти из комнаты"), role: .destructive) {
                     party.leave()
                     Friends.shared.watching = FriendWatching(title: model.request.item.title, sub: model.request.episode?.code ?? "",
                                                              poster: model.request.item.poster)
@@ -138,8 +138,8 @@ struct PartySheet: View {
 
     private var status: String {
         if let error = party.error, !party.connected { return error }
-        guard party.connected else { return "Подключаюсь…" }
-        return party.rttMs >= 0 ? "Есть · пинг \(party.rttMs) мс" : "Есть"
+        guard party.connected else { return L("Подключаюсь…") }
+        return party.rttMs >= 0 ? L("Есть · пинг %@ мс", "\(party.rttMs)") : L("Есть")
     }
 
     private func sendMessage() {
@@ -161,16 +161,16 @@ struct FriendsView: View {
     var body: some View {
         Form {
             Section {
-                LabeledContent("Ваш код") {
+                LabeledContent(L("Ваш код")) {
                     Text(friends.friendCode).font(.system(.title3, design: .monospaced).weight(.bold)).textSelection(.enabled)
                 }
-                ShareLink(item: "Мой код в Aerial: \(friends.friendCode)") { Label("Отправить код", systemImage: "square.and.arrow.up") }
+                ShareLink(item: L("Мой код в Aerial: %@", friends.friendCode)) { Label(L("Отправить код"), systemImage: "square.and.arrow.up") }
             } footer: {
-                Text("Друзья добавляются по кодам. Видно, кто в сети и что смотрит; в открытую комнату можно войти сразу.")
+                Text(L("Друзья добавляются по кодам. Видно, кто в сети и что смотрит; в открытую комнату можно войти сразу."))
             }
-            Section("Друзья") {
+            Section(L("Друзья")) {
                 if friends.friends.isEmpty && friends.codes.isEmpty {
-                    Text("Пока никого").foregroundStyle(Theme.secondaryText)
+                    Text(L("Пока никого")).foregroundStyle(Theme.secondaryText)
                 }
                 ForEach(friends.friends) { friend in
                     VStack(alignment: .leading, spacing: 4) {
@@ -179,9 +179,9 @@ struct FriendsView: View {
                             Text(friends.label(friend)).font(.aerial(.headline))
                             Spacer()
                             if friend.online {
-                                Button("Постучаться") {
+                                Button(L("Постучаться")) {
                                     friends.knock(friend.code)
-                                    note = "\(friends.label(friend)) увидит, что вы хотите смотреть вместе."
+                                    note = L("%@ увидит, что вы хотите смотреть вместе.", friends.label(friend))
                                 }
                                 .font(.aerial(.caption))
                                 .buttonStyle(.bordered)
@@ -191,73 +191,73 @@ struct FriendsView: View {
                             Text([watching.title, watching.sub].filter { !$0.isEmpty }.joined(separator: " · "))
                                 .font(.aerial(.caption)).foregroundStyle(Theme.secondaryText)
                             if !watching.room.isEmpty {
-                                Button("Войти в комнату \(watching.room)") { WatchParty.shared.join(watching.room) }
+                                Button(L("Войти в комнату %@", watching.room)) { WatchParty.shared.join(watching.room) }
                                     .font(.aerial(.caption, .semibold))
                             }
                         }
                     }
-                    .swipeActions { Button("Удалить", role: .destructive) { friends.remove(friend.code) } }
+                    .swipeActions { Button(L("Удалить"), role: .destructive) { friends.remove(friend.code) } }
                 }
                 ForEach(friends.codes.filter { code in !friends.friends.contains { $0.code == code } }, id: \.self) { code in
                     Text(code).font(.system(.body, design: .monospaced)).foregroundStyle(Theme.secondaryText)
-                        .swipeActions { Button("Удалить", role: .destructive) { friends.remove(code) } }
+                        .swipeActions { Button(L("Удалить"), role: .destructive) { friends.remove(code) } }
                 }
             }
-            Section("Добавить друга") {
-                TextField("Код друга (6 символов)", text: $newCode)
+            Section(L("Добавить друга")) {
+                TextField(L("Код друга (6 символов)"), text: $newCode)
                     .textInputAutocapitalization(.characters)
                     .autocorrectionDisabled()
-                TextField("Имя (необязательно)", text: $newName)
-                Button("Добавить") {
+                TextField(L("Имя (необязательно)"), text: $newName)
+                Button(L("Добавить")) {
                     if friends.add(newCode, name: newName) {
                         newCode = ""
                         newName = ""
                     } else {
-                        note = "Код не подошёл: нужно 6 символов, и не свой."
+                        note = L("Код не подошёл: нужно 6 символов, и не свой.")
                     }
                 }
                 .disabled(newCode.count < 6)
             }
             Section {
                 ForEach(Array(friends.devices.enumerated()), id: \.offset) { _, device in
-                    LabeledContent(device.name, value: device.online ? "в сети" : "не в сети")
+                    LabeledContent(device.name, value: device.online ? L("в сети") : L("не в сети"))
                 }
                 if let linkPin {
-                    LabeledContent("PIN для другого устройства", value: linkPin)
+                    LabeledContent(L("PIN для другого устройства"), value: linkPin)
                 } else {
-                    Button("Добавить своё устройство") { Task { linkPin = await friends.newLinkPin() ?? "сервер недоступен" } }
+                    Button(L("Добавить своё устройство")) { Task { linkPin = await friends.newLinkPin() ?? L("сервер недоступен") } }
                 }
                 HStack {
-                    TextField("PIN с другого устройства", text: $joinPin).keyboardType(.numberPad)
-                    Button("Войти") {
-                        Task { note = await friends.joinAccount(joinPin) ? "Устройство в аккаунте." : "PIN не подошёл." }
+                    TextField(L("PIN с другого устройства"), text: $joinPin).keyboardType(.numberPad)
+                    Button(L("Войти")) {
+                        Task { note = await friends.joinAccount(joinPin) ? L("Устройство в аккаунте.") : L("PIN не подошёл.") }
                     }
                     .disabled(joinPin.count < 4)
                 }
                 if friends.account != friends.myCode {
-                    Button("Отвязать это устройство", role: .destructive) { Task { _ = await friends.leaveAccount() } }
+                    Button(L("Отвязать это устройство"), role: .destructive) { Task { _ = await friends.leaveAccount() } }
                 }
             } header: {
-                Text("Мои устройства")
+                Text(L("Мои устройства"))
             } footer: {
-                Text("Телефон, ТВ и компьютер можно объединить: у них будет общий код и общий список друзей.")
+                Text(L("Телефон, ТВ и компьютер можно объединить: у них будет общий код и общий список друзей."))
             }
-            Section("Комната") {
-                TextField("Код комнаты", text: Binding(get: { joinRoom }, set: { joinRoom = $0 }))
+            Section(L("Комната")) {
+                TextField(L("Код комнаты"), text: Binding(get: { joinRoom }, set: { joinRoom = $0 }))
                     .textInputAutocapitalization(.characters)
                     .autocorrectionDisabled()
-                Button("Войти в комнату") { WatchParty.shared.join(joinRoom) }.disabled(joinRoom.count < 4)
+                Button(L("Войти в комнату")) { WatchParty.shared.join(joinRoom) }.disabled(joinRoom.count < 4)
                 if WatchParty.shared.active {
-                    LabeledContent("Вы в комнате", value: WatchParty.shared.code ?? "")
-                    if WatchParty.shared.media == nil { Text("Жду фильм от комнаты…").font(.aerial(.footnote)).foregroundStyle(Theme.secondaryText) }
+                    LabeledContent(L("Вы в комнате"), value: WatchParty.shared.code ?? "")
+                    if WatchParty.shared.media == nil { Text(L("Жду фильм от комнаты…")).font(.aerial(.footnote)).foregroundStyle(Theme.secondaryText) }
                 }
             }
         }
         .scrollContentBackground(.hidden)
         .background(Theme.background)
-        .navigationTitle("Друзья")
+        .navigationTitle(L("Друзья"))
         .navigationBarTitleDisplayMode(.inline)
-        .alert("Друзья", isPresented: Binding(get: { note != nil }, set: { if !$0 { note = nil } })) {
+        .alert(L("Друзья"), isPresented: Binding(get: { note != nil }, set: { if !$0 { note = nil } })) {
             Button("OK", role: .cancel) {}
         } message: { Text(note ?? "") }
         .refreshable { friends.refreshNow() }

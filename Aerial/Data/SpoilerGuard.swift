@@ -15,7 +15,7 @@ enum SpoilerGuard {
         "between two works is a spoiler, describe a safe premise-level link instead."
 
     /// Когда безопасной формулировки нет.
-    static let fallback = "Близки по настроению и темам"
+    static var fallback: String { L("Близки по настроению и темам") }
 
     static func checkPrompt(seed: String, items: [(title: String, why: String)]) -> String {
         let list = items.enumerated().map { "\($0.offset): \"\($0.element.title)\" — \($0.element.why)" }.joined(separator: "\n")
@@ -29,7 +29,7 @@ enum SpoilerGuard {
     static func rewritePrompt(seed: String, items: [(index: Int, title: String, why: String)]) -> String {
         let list = items.map { "\($0.index): \"\($0.title)\" — \($0.why)" }.joined(separator: "\n")
         return "Each line links the work \"\(seed)\" to another work, but the phrase gives away a plot secret. Rewrite every phrase " +
-            "in Russian (max 70 chars) so it still names a real, specific link between the two works, but only through their " +
+            "in \(AppLanguage.ai) (max 70 chars) so it still names a real, specific link between the two works, but only through their " +
             "premise, setting, mood or central question as known from the official synopses. " + rules + "\n" + list +
             "\nReturn JSON {\"items\": [{\"i\": line number, \"why\": new phrase}]}."
     }

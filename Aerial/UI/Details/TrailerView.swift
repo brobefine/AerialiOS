@@ -15,7 +15,7 @@ struct TrailerView: View {
             Button { dismiss() } label: { Image(systemName: "xmark") }
                 .buttonStyle(CircleGlassButtonStyle(size: 44))
                 .padding(16)
-                .accessibilityLabel("Закрыть")
+                .accessibilityLabel(L("Закрыть"))
         }
         .statusBarHidden(true)
     }

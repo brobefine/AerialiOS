@@ -32,13 +32,13 @@ struct PlaybackRequest: Identifiable {
                            kind: series > 0 ? .series : .movie, title: media.title, poster: media.poster, backdrop: media.backdrop,
                            releaseDate: media.year)
         let episode = media.episode > 0
-            ? VodEpisode(season: media.season, number: media.episode, title: "Серия \(media.episode)") : nil
+            ? VodEpisode(season: media.season, number: media.episode, title: L("Серия %@", "\(media.episode)")) : nil
         return PlaybackRequest(item: item, episode: episode, link: "magnet:?xt=urn:btih:\(media.hash)", fileIndex: media.file,
                                releaseTitle: media.title, startAt: position, record: series > 0)
     }
     var subtitle: String {
         guard let episode else { return item.year }
-        return "Сезон \(episode.season), серия \(episode.number) · \(episode.title)"
+        return L("Сезон %@, серия %@ · %@", "\(episode.season)", "\(episode.number)", episode.title)
     }
 }
 
@@ -176,7 +176,7 @@ final class PlayerModel {
 
     let request: PlaybackRequest
     let layer = MPVMetalLayer()
-    private(set) var phase: Phase = .connecting("Запускаю TorrServer…")
+    private(set) var phase: Phase = .connecting(L("Запускаю TorrServer…"))
     private(set) var position: Double = 0
     private(set) var duration: Double = 0
     private(set) var paused = false
@@ -246,10 +246,10 @@ final class PlayerModel {
             } else {
                 let client = try await Torrents.client(settings)
                 self.client = client
-                phase = .connecting("Получаю раздачу…")
+                phase = .connecting(L("Получаю раздачу…"))
                 let poster = TMDbImage.urls(request.item.poster, "w342").first?.absoluteString ?? ""
                 var info = try await client.add(link: request.link, title: request.item.title, poster: poster)
-                phase = .connecting("Жду список файлов…")
+                phase = .connecting(L("Жду список файлов…"))
                 info = try await client.awaitFiles(info)
                 let chosen = request.fileIndex.flatMap { index in info.files.first { $0.index == index } }
                     ?? EpisodeMatch.pick(info.files, episode: request.episode)
@@ -444,7 +444,7 @@ final class PlayerModel {
         guard let found else { return }
         let episodes = request.item.remoteId > 0 ? (try? await Catalogue.shared.season(request.item, found.season)) ?? [] : []
         let meta = episodes.first { $0.number == found.number }
-            ?? VodEpisode(season: found.season, number: found.number, title: "Серия \(found.number)")
+            ?? VodEpisode(season: found.season, number: found.number, title: L("Серия %@", "\(found.number)"))
         next = PlaybackRequest(item: request.item, episode: meta, link: request.link, fileIndex: found.file.index,
                                releaseTitle: request.releaseTitle, runtimeMinutes: meta.runtimeMinutes, record: request.record)
     }
@@ -496,7 +496,7 @@ final class PlayerModel {
             subtitleTracks = tracks.filter { $0.type == "sub" }
         case .ended(let error):
             if let error {
-                phase = .failed("Не удалось воспроизвести: \(error)")
+                phase = .failed(L("Не удалось воспроизвести: %@", "\(error)"))
             } else {
                 position = max(position, duration)
                 save(force: true)
