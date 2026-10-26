@@ -29,6 +29,43 @@ extension View {
     }
 }
 
+/// Картинка с прогрессивным размытием вниз (`ProgressiveBlur`): кадр серии или постер и его размытое продолжение —
+/// одна готовая картинка из кэша, посчитанная в фоне. Пока не готова — чёткая картинка. Рисует и саму картинку: её низ
+/// теряет фокус вместе с продолжением.
+struct MirrorBackdrop: View {
+    let path: String
+    let size: String
+    let pixelWidth: Int
+    let width: CGFloat
+    /// Высота картинки над подписью.
+    let height: CGFloat
+
+    @Environment(\.displayScale) private var scale
+    @State private var baked: UIImage?
+
+    var body: some View {
+        let key = ProgressiveBlur.key(path, width, height)
+        ZStack(alignment: .top) {
+            if let image = baked ?? ProgressiveBlur.cached(key) {
+                Image(uiImage: image).resizable().frame(width: width, height: height * 2)
+            } else {
+                CachedImage(path: path, size: size, pixelWidth: pixelWidth).frame(width: width, height: height).clipped()
+            }
+        }
+        .frame(width: width, height: height * 2, alignment: .top)
+        .clipped()
+        .allowsHitTesting(false)
+        .task(id: key) {
+            guard ProgressiveBlur.cached(key) == nil,
+                  let source = await ImageLoader.shared.image(TMDbImage.urls(path, size), pixelWidth: pixelWidth) else { return }
+            let (w, h, s) = (width, height, scale)
+            baked = await Task.detached(priority: .utility) {
+                ProgressiveBlur.make(source, width: w, height: h, scale: s, key: key)
+            }.value
+        }
+    }
+}
+
 /// Кольцо оценки TMDb с цветом по доле — как `RatingRing` ТВ.
 struct RatingRing: View {
     let value: Double
@@ -55,41 +92,94 @@ struct RatingRing: View {
     }
 }
 
-/// Постер 2:3. Без ширины — тянется по ячейке сетки.
+/// Постер 2:3. Без ширины — тянется по ячейке сетки. Название и строка «год · Сериал» — на самом постере, как на ТВ
+/// и ПК (`posterInfo`): низ постера прогрессивно размыт (`ProgressiveBlur`), значок сериала — наверху слева на тёмной плашке.
 struct PosterCard: View {
     let item: VodItem
     var width: CGFloat?
-    var showTitle = false
+    /// Сведения на постере; без них — только картинка.
+    var info = true
+    /// Картинку рисует подложка (`MirrorBackdrop`, постер с продолжением вниз): здесь — только сведения, без своего размытия.
+    var artwork = true
     /// Скругление только сверху: под постером продолжается карточка (описание «Духовных родственников»).
     var squareBottom = false
 
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Color.clear
-                .aspectRatio(2.0 / 3.0, contentMode: .fit)
-                .overlay { CachedImage(path: item.poster, size: "w342", pixelWidth: 420) }
-                .overlay {
-                    if item.poster.isEmpty {
-                        Text(item.title).font(.aerial(.caption, .semibold)).multilineTextAlignment(.center).padding(8)
-                    }
+        Color.clear
+            .aspectRatio(2.0 / 3.0, contentMode: .fit)
+            .overlay { if artwork { CachedImage(path: item.poster, size: "w342", pixelWidth: 420) } }
+            .overlay { if info && !item.poster.isEmpty { infoBand } }
+            .overlay {
+                if item.poster.isEmpty {
+                    Text(item.title).font(.aerial(.caption, .semibold)).multilineTextAlignment(.center).padding(8)
                 }
-                .background(Theme.card)
-                .clipShape(UnevenRoundedRectangle(topLeadingRadius: 10, bottomLeadingRadius: squareBottom ? 0 : 10,
-                                                  bottomTrailingRadius: squareBottom ? 0 : 10, topTrailingRadius: 10,
-                                                  style: .continuous))
-                .overlay(alignment: .bottomTrailing) {
-                    if item.rating > 0 && item.votes >= 10 { RatingRing(value: item.rating, size: 26).padding(5) }
+            }
+            .overlay(alignment: .topLeading) {
+                if info && item.kind == .series {
+                    Image(systemName: "tv").font(.system(size: 11, weight: .semibold)).foregroundStyle(.white)
+                        .frame(width: 28, height: 24).background(.black.opacity(0.75), in: RoundedRectangle(cornerRadius: 6)).padding(6)
                 }
-            if showTitle {
-                Text(item.title).font(.aerial(.footnote, .medium)).lineLimit(1)
-                Text([item.year, item.kindLabel].filter { !$0.isEmpty }.joined(separator: " · "))
-                    .font(.aerial(.caption2)).foregroundStyle(Theme.secondaryText).lineLimit(1)
+            }
+            .background(artwork ? Theme.card : .clear)
+            .clipShape(UnevenRoundedRectangle(topLeadingRadius: 10, bottomLeadingRadius: squareBottom ? 0 : 10,
+                                              bottomTrailingRadius: squareBottom ? 0 : 10, topTrailingRadius: 10,
+                                              style: .continuous))
+            .overlay(alignment: info ? .topTrailing : .bottomTrailing) {
+                if item.rating > 0 && item.votes >= 10 { RatingRing(value: item.rating, size: 26).padding(5) }
+            }
+            .frame(width: width)
+            .contentShape(Rectangle())
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel(item.title)
+    }
+
+    /// Размытый низ постера, затухающий вверх (плавно, полная сила к 70 % полосы — как `VodFrost.drawFading`), и подписи.
+    private var infoBand: some View {
+        GeometryReader { geometry in
+            let height = geometry.size.height
+            ZStack(alignment: .bottomLeading) {
+                // Низ постера — то же прогрессивное размытие, что у серий (`ProgressiveBlur`, без продолжения вниз).
+                if artwork { PosterProgressive(path: item.poster, width: geometry.size.width, height: height) }
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(item.title).font(.aerial(.footnote, .semibold)).lineLimit(1)
+                    let meta = [item.year, item.kind == .series ? L("Сериал") : ""].filter { !$0.isEmpty }.joined(separator: " · ")
+                    if !meta.isEmpty { Text(meta).font(.aerial(.caption2)).foregroundStyle(.white.opacity(0.85)).lineLimit(1) }
+                }
+                .foregroundStyle(.white)
+                .padding(.horizontal, 10)
+                .padding(.bottom, 9)
             }
         }
-        .frame(width: width)
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(item.title)
+        .allowsHitTesting(false)
+    }
+}
+
+/// Постер с прогрессивно размытым низом (`ProgressiveBlur`, `mirror: false`) — готовой картинкой из кэша, посчитанной в
+/// фоне; пока не готова — ничего (под ней чёткий постер).
+private struct PosterProgressive: View {
+    let path: String
+    let width: CGFloat
+    let height: CGFloat
+
+    @Environment(\.displayScale) private var scale
+    @State private var baked: UIImage?
+
+    var body: some View {
+        let key = ProgressiveBlur.key("poster|" + path, width, height)
+        ZStack {
+            if let image = baked ?? ProgressiveBlur.cached(key) {
+                Image(uiImage: image).resizable().frame(width: width, height: height)
+            }
+        }
+        .task(id: key) {
+            guard width > 0, ProgressiveBlur.cached(key) == nil,
+                  let source = await ImageLoader.shared.image(TMDbImage.urls(path, "w342"), pixelWidth: 420) else { return }
+            let (w, h, s) = (width, height, scale)
+            baked = await Task.detached(priority: .utility) {
+                ProgressiveBlur.make(source, width: w, height: h, scale: s, key: key, mirror: false)
+            }.value
+        }
     }
 }
 

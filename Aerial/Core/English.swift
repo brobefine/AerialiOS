@@ -116,13 +116,11 @@ enum English {
         // Компоненты и страница фильма
         "Обожаю": "Love", "Не моё": "Not for me", "Убрать из «Смотреть позже»": "Remove from Watch later",
         "Убрать из «Продолжить»": "Remove from Continue", "Оценка": "Rating", "Оценка %@": "Rating %@",
-        "Продолжить просмотр": "Continue watching", "Открыть страницу": "Open page", "Духовные родственники": "Kindred spirits",
-        "Близки по настроению и темам": "Close in mood and themes", "Проверяю, нет ли спойлеров…": "Checking for spoilers…",
+        "Продолжить просмотр": "Continue watching", "Открыть страницу": "Open page", "Духовные родственники": "Kindred spirits", "Тоже: %@": "Also: %@",
         "ИИ подбирает фильмы по темам…": "AI is matching films by theme…", "Разбор сериала": "Series breakdown",
         "Разбор фильма": "Film breakdown", "Понятно": "OK",
-        "Откроется, когда вы посмотрите хотя бы одну серию, — разбор будет до неё: в нём спойлеры.":
-            "Unlocks once you've watched at least one episode — the breakdown goes up to it: it has spoilers.",
-        "Откроется после просмотра фильма — в нём спойлеры.": "Unlocks after you watch the film — it has spoilers.",
+        "В разборе спойлеры: весь сюжет сериала и концовка.": "It has spoilers: the whole story of the series and its ending.",
+        "В разборе спойлеры: весь сюжет фильма и концовка.": "It has spoilers: the whole plot of the film and its ending.",
         "ИИ разбирает сериал…": "AI is breaking down the series…", "ИИ разбирает фильм…": "AI is breaking down the film…",
         "ИИ не знает именно эту работу достаточно хорошо — разбора нет, чтобы не пересказывать другую.":
             "AI doesn't know this particular title well enough — no breakdown, so as not to retell a different one.",
@@ -134,7 +132,7 @@ enum English {
         "Википедия · %@": "Wikipedia · %@",
         "Другая раздача": "Another torrent", "Трейлер": "Trailer", "Мой список": "My list", "Похожие": "Similar", "Серии": "Episodes",
         "Отметить просмотренной": "Mark as watched", "Актёры и съёмочная группа": "Cast and crew", "Вы подписаны": "Following",
-        "Сведения": "Details", "Описание скрыто, чтобы не было спойлеров": "Description hidden to avoid spoilers",
+        "Сведения": "Details",
         "Биографии на TMDb нет.": "No biography on TMDb.", "Загружаем…": "Loading…", "Ещё от студии %@": "More from %@",
         // Главная
         "Вам понравится?": "Do you like it?", "Вышли в 4K": "Out in 4K", "Новое с вашими актёрами": "New with your actors",
@@ -167,8 +165,7 @@ enum English {
         "Встроенный работает, пока открыто приложение или идёт фильм. Раздача качается во время просмотра — по мобильной сети это трафик.":
             "The built-in server runs while the app is open or a film plays. It downloads while you watch — on cellular that's data usage.",
         "TorrServer на телевизоре или компьютере в той же сети.": "TorrServer on a TV or computer on the same network.",
-        "Описания серий": "Episode descriptions", "Скрывать спойлеры серий": "Hide episode spoilers",
-        "Спойлеры: у непросмотренных серий кадр размыт, а описание скрыто.": "Spoilers: unwatched episodes have a blurred still and hidden description.",
+        "Описания серий": "Episode descriptions",
         "Сбросить фильтры и сортировку раздач": "Reset torrent filters and sorting", "Очистить историю поиска": "Clear search history",
         "Следующая серия автоматически": "Play next episode automatically",
         "Системный плеер": "System player",

@@ -6,134 +6,159 @@ import SwiftUI
 /// Работа и чем она связана с открытой («why» от ИИ).
 struct Relative: Identifiable {
     var item: VodItem
+    /// Чем похожи — подпись из `RelativeCriteria` («Саундтрек и звук · психология»).
     var why: String
-    /// «Чем связан» ещё проверяется на спойлеры — текст не показан.
-    var checking = false
     var id: String { item.id }
 }
 
-/// «Духовные родственники»: связанные темой, настроением, вопросами — не жанром. Что ИИ уже советовал трём и более
-/// разным фильмам, идёт в «не предлагать» и отсеивается (против «ленивых» повторов одного канона).
+/// Подборка «Духовных родственников» по одной стороне фильма (или общий ряд, если подборок по сторонам не набралось).
+struct RelativeRow: Identifiable {
+    let id: String
+    let title: String
+    let items: [Relative]
+}
+
+/// «Духовные родственники» (как на ТВ): подборки по сторонам фильма — «Тоже: давящий звуковой дизайн», «Тоже: психология на
+/// грани»… Кандидаты — рекомендации TMDb, работы с её ключевыми словами и хиты жанра (`Catalogue.byKeywords`), идеи ИИ и второй
+/// круг (рекомендации к лучшим); ИИ ставит им профили (`AI.profiles`), отбор — `RelativeRanker`. Под постером — метки самого
+/// фильма (`RelativeShades`), первая — со стороны подборки.
 struct RelativesSection: View {
     let details: VodDetails
 
     @Environment(Library.self) private var library
     @Environment(\.horizontalSizeClass) private var sizeClass
-    @State private var items: [Relative] = []
+    @State private var rows: [RelativeRow] = []
     @State private var failure: String?
     @State private var loading = false
 
     private static let logKey = "ai.relativeLog"
 
     var body: some View {
-        // Не `Group`: у пустого `Group` модификаторы не срабатывают — `.task` не запускался, и раздел
-        // (отзывы, «Духовные родственники») не загружался никогда.
-        VStack(alignment: .leading, spacing: 0) {
-            if !items.isEmpty || loading || failure != nil {
+        // Не `Group`: у пустого `Group` модификаторы не срабатывают — `.task` не запускался.
+        VStack(alignment: .leading, spacing: 18) {
+            if rows.isEmpty && (loading || failure != nil) {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(spacing: 6) {
                         ShelfHeader(title: L("Духовные родственники"))
                         Image(systemName: "sparkles").foregroundStyle(Theme.accent)
                     }
-                    if let failure, items.isEmpty {
+                    if let failure {
                         Text(failure).font(.aerial(.footnote)).foregroundStyle(Theme.secondaryText).padding(.horizontal, 16)
-                    } else if items.isEmpty {
+                    } else {
                         HStack(spacing: 8) {
                             ProgressView().tint(.white)
                             Text(L("ИИ подбирает фильмы по темам…")).font(.aerial(.footnote)).foregroundStyle(Theme.secondaryText)
                         }
                         .padding(.horizontal, 16)
-                    } else {
-                        let width = Theme.posterWidth(sizeClass)
-                        ScrollView(.horizontal) {
-                            LazyHStack(alignment: .top, spacing: 12) {
-                                ForEach(items) { row in
-                                    NavigationLink(value: Route.details(row.item)) {
-                                        // Чем связан — под постером в его зеркальном размытии, как описание серии.
-                                        VStack(alignment: .leading, spacing: 0) {
-                                            // Высота постера задана: в ряду без неё он ужимался по высоте и выходил
-                                            // уже подписи под ним.
-                                            PosterCard(item: row.item, width: width, squareBottom: true)
-                                                .frame(width: width, height: width * 1.5)
-                                            Text(row.checking ? L("Проверяю, нет ли спойлеров…") : row.why)
-                                                .font(.aerial(.caption2))
-                                                .foregroundStyle(.white.opacity(row.checking ? 0.5 : 0.85))
-                                                .lineLimit(4, reservesSpace: true)
-                                                .padding(8)
-                                                .frame(width: width, alignment: .leading)
-                                                .background(alignment: .top) {
-                                                    CachedImage(path: row.item.poster, size: "w185", pixelWidth: 200)
-                                                        .frame(width: width, height: width * 1.5)
-                                                        .clipped()
-                                                        .scaleEffect(x: 1, y: -1)
-                                                        .blur(radius: 18, opaque: true)
-                                                        .overlay(Color.black.opacity(0.3))
-                                                }
-                                                .clipped()
-                                        }
-                                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                    }
-                                    .buttonStyle(.plain)
-                                    // Удержание — весь текст «чем связан» и обычное меню: «Смотреть позже», оценка.
-                                    .contextMenu { PosterMenu(item: row.item) } preview: { RelativePreview(row: row) }
-                                }
-                            }
-                        }
-                        .contentMargins(.horizontal, 16, for: .scrollContent)
-                        .scrollIndicators(.hidden)
                     }
+                }
+            }
+            ForEach(rows) { row in
+                VStack(alignment: .leading, spacing: 10) {
+                    ShelfHeader(title: row.title)
+                    shelf(row.items)
                 }
             }
         }
         .task(id: details.item.id) { await load() }
     }
 
+    private func shelf(_ items: [Relative]) -> some View {
+        let width = Theme.posterWidth(sizeClass)
+        return ScrollView(.horizontal) {
+            LazyHStack(alignment: .top, spacing: 12) {
+                ForEach(items) { row in
+                    NavigationLink(value: Route.details(row.item)) {
+                        // Метки — под постером в его прогрессивном размытии (`MirrorBackdrop`).
+                        VStack(alignment: .leading, spacing: 0) {
+                            PosterCard(item: row.item, width: width, artwork: false, squareBottom: true)
+                                .frame(width: width, height: width * 1.5)
+                            Text(row.why)
+                                .font(.aerial(.caption2))
+                                .foregroundStyle(.white.opacity(0.85))
+                                .lineLimit(4)
+                                .padding(8)
+                                .frame(width: width, alignment: .leading)
+                        }
+                        .background(alignment: .top) {
+                            MirrorBackdrop(path: row.item.poster, size: "w342", pixelWidth: 420, width: width, height: width * 1.5)
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                    }
+                    .buttonStyle(.plain)
+                    .contextMenu { PosterMenu(item: row.item) } preview: { RelativePreview(row: row) }
+                }
+            }
+        }
+        .contentMargins(.horizontal, 16, for: .scrollContent)
+        .scrollIndicators(.hidden)
+    }
+
     private func load() async {
-        guard AI.enabled, items.isEmpty else { return }
+        guard AI.enabled, rows.isEmpty else { return }
         loading = true
         defer { loading = false }
         let log = UserDefaults.standard.dictionary(forKey: Self.logKey) as? [String: [String]] ?? [:]
         var counts: [String: Int] = [:]
         for titles in log.values { for title in titles { counts[title, default: 0] += 1 } }
-        let overused = Set(counts.filter { $0.value >= 3 }.keys)
+        let seed = details.item
+        let franchise = Set(details.collection.map(\.id))
+        let rejected = library.rejected
         // Сбой — ещё одна попытка через 5 с; отказ по стране повтором не лечится.
         for attempt in 0..<2 {
             if attempt > 0 { try? await Task.sleep(for: .seconds(5)) }
             do {
                 let started = Date()
-                let picks = try await AI.relatives(details, avoid: Array(overused.prefix(40)))
-                Log.note("ИИ", String(format: "родственники «%@»: подбор %.1f с", details.item.title, Date().timeIntervalSince(started)))
-                let franchise = Set(details.collection.map(\.id))
-                let rejected = library.rejected
-                var found: [Relative] = []
-                var seen = Set<String>()
-                let resolved = await Taste.resolve(picks)
-                for item in resolved where item.id != details.item.id && !rejected.contains(item.id) && !franchise.contains(item.id)
-                    && seen.insert(item.id).inserted {
-                    let why = picks.first { SearchText.normalized($0.title) == SearchText.normalized(item.title)
-                        || SearchText.normalized($0.original) == SearchText.normalized(item.originalTitle) }?.why ?? ""
-                    // Непроверенный текст не хранится вовсе — ни в ряду, ни в предпросмотре.
-                    found.append(Relative(item: item, why: "", checking: !why.isEmpty))
+                async let ideas = AI.relativeIdeas(details)
+                async let keywords = Catalogue.shared.byKeywords(seed)
+                let fromIdeas = await Taste.resolve(try await ideas)
+                var seen = Set<String>([seed.id])
+                func fresh(_ list: [VodItem]) -> [VodItem] {
+                    list.filter { $0.id.hasPrefix("tmdb:") && !rejected.contains($0.id) && !franchise.contains($0.id) && seen.insert($0.id).inserted }
                 }
-                let fresh = found.filter { !overused.contains($0.item.title) }
-                if fresh.count >= 5 { found = fresh }
+                var pool = Array(fresh(fromIdeas + details.related + (await keywords)).prefix(220))
+                var profiles = await AI.profiles([seed] + pool)
+                guard let seedProfile = profiles[seed.id] else { throw AiError.bad }
+                func candidates() -> [RelativeRanker.Candidate] {
+                    pool.map { RelativeRanker.Candidate(id: $0.id, profile: profiles[$0.id] ?? [:], votes: $0.votes, overused: counts[$0.title] ?? 0) }
+                }
+                // Второй круг — рекомендации TMDb к пяти лучшим: связи, которых нет ни у самой работы, ни по её словам.
+                let first = RelativeRanker.rank(seedProfile, candidates(), count: 5)
+                let byId = Dictionary(pool.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+                var more: [VodItem] = []
+                for pick in first {
+                    if let item = byId[pick.id], let recs = try? await Catalogue.shared.recommendations(item) {
+                        more += fresh(recs.filter { $0.votes >= 150 })
+                    }
+                }
+                more = Array(more.prefix(60))
+                if !more.isEmpty {
+                    profiles.merge(await AI.profiles(more)) { $1 }
+                    pool += more
+                }
+                let all = Dictionary(pool.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
+                let english = AppLanguage.english
+                var found = RelativeRanker.sides(seedProfile, candidates()).map { group, picks in
+                    let name = RelativeCriteria.groups.first { $0.key == group }?.ru ?? group
+                    return RelativeRow(id: group, title: L("Тоже: %@", name), items: picks.compactMap { pick in
+                        all[pick.id].map { Relative(item: $0, why: RelativeShades.label($0.id, profiles[$0.id] ?? [:], english: english, prefer: group)) }
+                    })
+                }
+                if found.isEmpty {
+                    let general = RelativeRanker.rank(seedProfile, candidates()).compactMap { pick in
+                        all[pick.id].map { Relative(item: $0, why: RelativeShades.label($0.id, profiles[$0.id] ?? [:], english: english)) }
+                    }
+                    if !general.isEmpty { found = [RelativeRow(id: "all", title: L("Духовные родственники"), items: general)] }
+                }
+                Log.note("ИИ", String(format: "родственники «%@»: кандидатов %d, подборок %d, %.1f с", seed.title, pool.count, found.count,
+                                      Date().timeIntervalSince(started)))
                 guard !found.isEmpty else { continue }
                 var updated = log
-                updated[details.item.id] = found.map(\.item.title)
-                if updated.count > 60, let first = updated.keys.sorted().first { updated[first] = nil }
+                updated[seed.id] = found.flatMap { $0.items.map(\.item.title) }
+                if updated.count > 60, let firstKey = updated.keys.sorted().first { updated[firstKey] = nil }
                 UserDefaults.standard.set(updated, forKey: Self.logKey)
-                // Фильмы — сразу; «чем связан» — после проверки на спойлеры.
-                items = found
+                rows = found
                 failure = nil
-                let safe = await AI.safeWhys(details, picks)
-                items = items.map { relative in
-                    var updated = relative
-                    let match = zip(picks, safe).first { SearchText.normalized($0.0.title) == SearchText.normalized(relative.item.title)
-                        || SearchText.normalized($0.0.original) == SearchText.normalized(relative.item.originalTitle) }
-                    updated.why = match?.1.why ?? ""
-                    updated.checking = false
-                    return updated
-                }
                 return
             } catch {
                 if HTTP.isCancellation(error) { return }
@@ -144,38 +169,38 @@ struct RelativesSection: View {
     }
 }
 
-/// «Разбор» круглой кнопкой в ряду с «Смотреть», как на ТВ. Закрыт до просмотра — касание объясняет, когда откроется.
+/// «Разбор» круглой кнопкой в ряду с «Смотреть», как на ТВ: всей работы целиком. Не посмотрели — сначала
+/// предупреждение о спойлерах.
 struct RecapButton: View {
     let details: VodDetails
     var tint: Color?
 
     @Environment(Library.self) private var library
     @State private var open = false
-    @State private var lockedNote = false
+    @State private var spoilerNote = false
 
-    private var latest: WatchEntry? { library.latest(for: details.item) }
-
-    private var unlocked: Bool {
-        if details.item.kind == .series { return latest?.episode != nil }
+    private var watched: Bool {
+        if details.item.kind == .series { return library.latest(for: details.item)?.episode != nil }
         return (library.entry(details.item)?.fraction ?? 0) >= 0.98
     }
 
     var body: some View {
         if AI.enabled {
-            Button { if unlocked { open = true } else { lockedNote = true } } label: {
-                Image(systemName: unlocked ? "text.book.closed" : "lock")
+            Button { if watched { open = true } else { spoilerNote = true } } label: {
+                Image(systemName: "text.book.closed")
             }
             .buttonStyle(CircleGlassButtonStyle(tint: tint))
             .accessibilityLabel(details.item.kind == .series ? L("Разбор сериала") : L("Разбор фильма"))
             .sheet(isPresented: $open) {
-                RecapSheet(details: details, season: latest?.episode?.season ?? 0, episode: latest?.episode?.number ?? 0)
+                RecapSheet(details: details)
             }
-            .alert(details.item.kind == .series ? L("Разбор сериала") : L("Разбор фильма"), isPresented: $lockedNote) {
-                Button(L("Понятно"), role: .cancel) {}
+            .alert(details.item.kind == .series ? L("Разбор сериала") : L("Разбор фильма"), isPresented: $spoilerNote) {
+                Button(L("Открыть")) { open = true }
+                Button(L("Отмена"), role: .cancel) {}
             } message: {
                 Text(details.item.kind == .series
-                     ? L("Откроется, когда вы посмотрите хотя бы одну серию, — разбор будет до неё: в нём спойлеры.")
-                     : L("Откроется после просмотра фильма — в нём спойлеры."))
+                     ? L("В разборе спойлеры: весь сюжет сериала и концовка.")
+                     : L("В разборе спойлеры: весь сюжет фильма и концовка."))
             }
         }
     }
@@ -183,8 +208,6 @@ struct RecapButton: View {
 
 private struct RecapSheet: View {
     let details: VodDetails
-    let season: Int
-    let episode: Int
 
     @Environment(\.dismiss) private var dismiss
     @State private var sections: [AiSection] = []
@@ -224,10 +247,10 @@ private struct RecapSheet: View {
 
     private func load() async {
         do {
-            // Опора — раздел «Сюжет» Википедии; только у фильмов: у сериалов там сюжет всех сезонов — спойлеры.
+            // Опора — раздел «Сюжет» Википедии; только у фильмов: у сериалов он часто по сезонам и неполный.
             var plot = ""
             if details.item.kind == .movie { plot = await Wiki.plot(details.item)?.text ?? "" }
-            if let found = try await AI.recap(details, season: season, episode: episode, plot: plot) {
+            if let found = try await AI.recap(details, plot: plot) {
                 sections = found
             } else {
                 message = L("ИИ не знает именно эту работу достаточно хорошо — разбора нет, чтобы не пересказывать другую.")
@@ -452,7 +475,7 @@ private struct RelativePreview: View {
                 Text(row.item.title).font(.aerial(.headline))
                 Text([row.item.year, row.item.kindLabel].filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(.aerial(.caption)).foregroundStyle(Theme.secondaryText)
-                Text(row.checking ? L("Проверяю, нет ли спойлеров…") : row.why)
+                Text(row.why)
                     .font(.aerial(.subheadline))
                     .frame(width: 186, alignment: .leading)
                     .fixedSize(horizontal: false, vertical: true)

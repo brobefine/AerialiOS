@@ -81,10 +81,9 @@ struct TorrentsView: View {
             afterSheet?()
             afterSheet = nil
         }) { picking in
-            WatchSheet(item: picking.item, info: picking.info, voices: [], episode: nil) { file, episode, voice in
-                var request = PlaybackRequest(item: picking.item, episode: episode, link: "magnet:?xt=urn:btih:\(picking.info.hash)",
+            WatchSheet(item: picking.item, info: picking.info, episode: nil) { file, episode in
+                let request = PlaybackRequest(item: picking.item, episode: episode, link: "magnet:?xt=urn:btih:\(picking.info.hash)",
                                               fileIndex: file.index, releaseTitle: picking.info.title)
-                request.voice = voice
                 afterSheet = { playback.play(request) }
                 self.picking = nil
             }

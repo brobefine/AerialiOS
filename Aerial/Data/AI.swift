@@ -88,17 +88,17 @@ enum AI {
     }
 
     /// Что ещё может понравиться: по любимым (с завязкой сюжета в [скобках]) и отвергнутым, без уже известного.
-    static func recommend(liked: [String], disliked: [String], exclude: [String], abandoned: [String] = [], count: Int = 24) async throws -> [AiTitle] {
+    static func recommend(liked: [String], disliked: [String], exclude: [String], abandoned: [String] = [], count: Int = 36) async throws -> [AiTitle] {
         let like = liked.map { String($0.prefix(400)) }.prefix(25)
         guard !like.isEmpty else { return [] }
         let dis = disliked.map { String($0.prefix(120)) }.prefix(25)
         let ex = exclude.map { String($0.prefix(120)) }.prefix(60)
         let drop = abandoned.map { String($0.prefix(120)) }.prefix(10)
-        let text = try await cached("recommend4", [AppLanguage.english ? "en" : "ru", "movies or TV series", like.joined(separator: "|"), dis.joined(separator: "|"),
+        let text = try await cached("recommend5", [AppLanguage.english ? "en" : "ru", "movies or TV series", like.joined(separator: "|"), dis.joined(separator: "|"),
                                                    drop.joined(separator: "|"), ex.joined(separator: "|")], ttl: 12 * hour) {
             try await generate("A viewer liked: \(like.joined(separator: "; "))." +
                 (dis.isEmpty ? "" : " They did not like: \(dis.joined(separator: "; "))." ) + dropped(Array(drop)) + " \(plotHints)" +
-                " Suggest \(min(30, max(6, count))) movies or TV series they would probably enjoy, varied, not obvious sequels of the liked ones, " +
+                " Suggest \(min(40, max(6, count))) movies or TV series they would probably enjoy, varied, not obvious sequels of the liked ones, " +
                 "and not in this list: \(ex.isEmpty ? "—" : ex.joined(separator: "; ")). " +
                 "Return a JSON array of objects {\"title\": title in \(AppLanguage.ai) if it exists, else original, \"original\": original title, " +
                 "\"year\": release year as number, \"type\": \"movie\" or \"tv\"}. Only real, existing titles.", json: true, temperature: 0.7)
@@ -113,7 +113,7 @@ enum AI {
         let dis = disliked.map { String($0.prefix(120)) }.prefix(25)
         let ex = exclude.map { String($0.prefix(120)) }.prefix(60)
         let drop = abandoned.map { String($0.prefix(120)) }.prefix(10)
-        let text = try await cached("collections6", [AppLanguage.english ? "en" : "ru", like.joined(separator: "|"), dis.joined(separator: "|"), drop.joined(separator: "|")],
+        let text = try await cached("collections7", [AppLanguage.english ? "en" : "ru", like.joined(separator: "|"), dis.joined(separator: "|"), drop.joined(separator: "|")],
                                     ttl: 24 * hour) {
             try await generate("A viewer liked: \(like.joined(separator: "; "))." +
                 (dis.isEmpty ? "" : " They did not like: \(dis.joined(separator: "; "))." ) + dropped(Array(drop)) + " \(plotHints)" +
@@ -125,14 +125,14 @@ enum AI {
                 "deliberately cross genres and tones: horror next to family comedy, drama or fantasy, as long as the mechanism matches literally " +
                 "(illustration only: for a horror about a wish that comes true with a terrible price — 16 Wishes, Bruce Almighty, Click, Bedazzled; " +
                 "do not reuse this example unless such a liked title is really there). " +
-                "Each collection: 10 real titles they probably have not seen, not in this list: \(ex.isEmpty ? "—" : ex.joined(separator: "; ")).\n" +
+                "Each collection: 15 real titles they probably have not seen, not in this list: \(ex.isEmpty ? "—" : ex.joined(separator: "; ")).\n" +
                 "Pick the titles a well-read film critic would name FIRST for each collection: the most iconic, beloved and best-rated ones, " +
                 "then less obvious gems. When a collection is about a country, era or culture, include that country's own films and TV series " +
                 "(for Soviet or Russian life — Russian productions such as series by STS, TNT, Channel One, Russia-1, KinoPoisk), not only foreign ones. " +
                 "Every title must fit the collection's time period and setting literally (a story set today does not belong to \"the 1970s\").\n" +
                 "STRICT: every title must match EVERY concrete detail of its collection name (setting, situation, mechanism). " +
                 "If a detail like a place (\"island\", \"space station\") is in the name, every film must actually have it; if you cannot find " +
-                "8 titles that fit exactly, make the name broader (e.g. \"an isolated group fighting to survive\") or return fewer titles. " +
+                "12 titles that fit exactly, make the name broader (e.g. \"an isolated group fighting to survive\") or return fewer titles. " +
                 "Do not add a title that only matches the mood.\n" +
                 "Return a JSON array [{\"title\": collection name in \(AppLanguage.ai) (max 55 chars), \"why\": one short sentence in \(AppLanguage.ai), " +
                 "\"items\": [{\"title\": title in \(AppLanguage.ai) if it exists, else original, \"original\": original title, \"year\": number, \"type\": \"movie\" or \"tv\"}]}].",
@@ -190,93 +190,117 @@ enum AI {
         String((details.item.originalTitle.isEmpty ? details.item.title : details.item.originalTitle).prefix(200))
     }
 
-    /// «Духовные родственники»: связанные темами этой работы, а не жанром; `why` — общая тема.
-    static func relatives(_ details: VodDetails, avoid: [String] = []) async throws -> [AiTitle] {
+    /// Идеи для «Духовных родственников» (как `AiClient.relativeIdeas` ТВ): 25 работ, родственных по ремеслу и ощущению.
+    /// Только кандидаты — кто попадёт в подборки, решают профили (`profiles`, `RelativeRanker`). Без запретов на хиты.
+    static func relativeIdeas(_ details: VodDetails) async throws -> [AiTitle] {
         let title = titleOf(details)
         let year = Int(details.item.year) ?? 0
-        let tv = details.item.kind == .series
-        let kind = tv ? "TV series" : "film"
+        let kind = details.item.kind == .series ? "TV series" : "film"
         let about = identity(details)
-        let av = avoid.map { String($0.prefix(80)) }.filter { !$0.isEmpty }.prefix(40)
         let franchise = details.collection.filter { $0.id != details.item.id }
             .map { "\(($0.originalTitle.isEmpty ? $0.title : $0.originalTitle).prefix(80)) (\($0.year))" }.prefix(15)
-        // Ключ кэша сменён: прежние ответы могли содержать спойлеры.
-        let text = try await cached("relatives7", [AppLanguage.english ? "en" : "ru", title, String(year), kind, about, av.joined(separator: "|"), franchise.joined(separator: "|")],
+        let text = try await cached("relideas2", [AppLanguage.english ? "en" : "ru", title, String(year), kind, about, franchise.joined(separator: "|")],
                                     ttl: 30 * day) {
             try await generate("\(kind) \"\(title)\"\(year > 0 ? " (\(year))" : "").\(about)\n" +
-                "Step 1: name the 3–4 central themes, emotional experiences or questions of THIS specific work (from its plot above, not from the title alone).\n" +
-                "Step 2: list 10 \"spiritual relatives\" — films or TV series that share those themes or that emotional experience, " +
-                "NOT simply the same genre, setting or franchise. They may be from completely different genres and eras. " +
-                "Each one must connect to at least one of the themes from step 1 through something CONCRETE in this work's plot or situation, " +
-                "not through generic notions like \"loss\", \"meaning\" or \"faith\" alone. Avoid go-to picks you would suggest for almost any thoughtful film " +
-                "(the usual acclaimed prestige TV series about grief and mystery) unless the connection to THIS plot is specific and strong. " +
-                (tv ? "" : "Since this is a film, include at most 2 TV series. ") + "No sequels, prequels, remakes or other parts of its franchise" +
-                (franchise.isEmpty ? "" : " (its franchise: \(franchise.joined(separator: "; ")))") + ".\n" +
-                "Work like a film critic curating a festival sidebar: privately brainstorm about 25 candidates, then keep the 10 whose link to THIS " +
-                "plot is the most specific and surprising. Diversity rules: at most 3 titles from the same decade, at least 2 not in English, " +
-                "at most 2 titles that are on everyone's \"best of\" lists. The \"default canon\" (e.g. The Leftovers, Lost, Dark, Twin Peaks, Arrival, " +
-                "Interstellar, Eternal Sunshine of the Spotless Mind, Black Mirror, The Truman Show, Donnie Darko, Westworld) is allowed only if " +
-                "the plot connection is literal and obvious — never as a mood filler.\n" +
-                (av.isEmpty ? "" : "Do NOT suggest any of these — they were already suggested for many other titles: \(av.joined(separator: "; ")). " +
-                    "Dig deeper: lesser-known but fitting works, other countries and decades.\n") +
-                "Return a JSON object {\"themes\": [short theme names in \(AppLanguage.ai)], \"items\": [{\"title\": title in \(AppLanguage.ai) if it exists, else original, " +
-                "\"original\": original title, \"year\": release year as number, \"type\": \"movie\" or \"tv\", " +
-                "\"why\": the shared theme in \(AppLanguage.ai), one short phrase (max 70 chars)}]}. Only real, existing titles.\n" +
-                SpoilerGuard.rules,
-                json: true, temperature: 0.6, strong: true)
+                "A viewer loved this work. Name 25 films or series that share its CRAFT and EXPERIENCE — score and sound design, how fear " +
+                "or tension is built, camera and visual language, editing rhythm, the psychology of the characters, acting style, the " +
+                "feeling it leaves — rather than its plot or genre label. Include links a typical recommender would miss, from any genre, " +
+                "country or decade; well-known titles are fine when the kinship is real. No sequels, prequels, remakes or other parts of " +
+                "its franchise" + (franchise.isEmpty ? "" : " (\(franchise.joined(separator: "; ")))") + ".\n" +
+                "Return a JSON object {\"items\": [{\"title\": title in \(AppLanguage.ai) if it exists, else original, " +
+                "\"original\": original title, \"year\": release year as number, \"type\": \"movie\" or \"tv\"}]}. Only real, existing titles.",
+                json: true, temperature: 0.8, strong: true)
         }
-        return titles(text, withWhy: true)
+        return titles(text)
     }
 
-    /// «Чем связан» без спойлеров — по смыслу: проверка, переписывание отмеченных, повторная проверка ([SpoilerGuard]).
-    /// Отдельно от подбора: фильмы показываются сразу, а описания — когда проверка закончится.
-    static func safeWhys(_ details: VodDetails, _ picks: [AiTitle]) async -> [AiTitle] {
-        let title = titleOf(details)
-        let year = Int(details.item.year) ?? 0
-        let started = Date()
-        let seed = "\(title)\(year > 0 ? " (\(year))" : "")"
-        let pairs = picks.map { (title: $0.original.isEmpty ? $0.title : $0.original, why: $0.why) }
-        let checked = try? await cached("spoilers2", [AppLanguage.english ? "en" : "ru", seed] + pairs.map { "\($0.title)|\($0.why)" }, ttl: 30 * day) {
-            try await generate(SpoilerGuard.checkPrompt(seed: seed, items: pairs), json: true, temperature: 0, strong: true)
+    /// Профили работ по тонким чертам `RelativeCriteria` (как `AiClient.profiles` ТВ): оценка 1–3 только у того, что в
+    /// работе есть. Профиль — на работу, 180 дней в кэше; недостающие — пачками по 12 (не больше 4 запросов разом), пачка
+    /// без ответа — ещё раз по 4.
+    static func profiles(_ works: [VodItem]) async -> [String: [String: Int]] {
+        var result: [String: [String: Int]] = [:]
+        var missing: [VodItem] = []
+        var seen = Set<String>()
+        for w in works where seen.insert(w.id).inserted {
+            if let data = DiskCache.api.get("ai2:profile2:\(w.id)", ttl: 180 * day), let line = String(data: data, encoding: .utf8) {
+                result[w.id] = parseProfile(line)
+            } else { missing.append(w) }
         }
-        let verdict = SpoilerGuard.parseVerdict(checked)
-        var rewrites: [Int: String] = [:]
-        var recheck: Set<Int>?
-        if let verdict, !verdict.isEmpty {
-            let flagged = verdict.sorted().filter { $0 < pairs.count }.map { (index: $0, title: pairs[$0].title, why: pairs[$0].why) }
-            let rewritten = try? await cached("spoilerfix1", [AppLanguage.english ? "en" : "ru", seed] + flagged.map { "\($0.index)|\($0.title)|\($0.why)" }, ttl: 30 * day) {
-                try await generate(SpoilerGuard.rewritePrompt(seed: seed, items: flagged), json: true, temperature: 0.3, strong: true)
+        func rateAll(_ batches: [[VodItem]]) async -> [VodItem] {
+            var failed: [VodItem] = []
+            var index = 0
+            while index < batches.count {
+                let slice = batches[index..<min(index + 4, batches.count)]
+                await withTaskGroup(of: ([VodItem], [String: [String: Int]]).self) { group in
+                    for batch in slice { group.addTask { await rate(batch) } }
+                    for await (left, found) in group {
+                        failed += left
+                        result.merge(found) { $1 }
+                    }
+                }
+                index += 4
             }
-            rewrites = SpoilerGuard.parseRewrites(rewritten)
-            // Повторная проверка переписанного; номера — исходные.
-            let fixed = rewrites.keys.sorted()
-            let fixedPairs = fixed.map { (title: pairs[$0].title, why: rewrites[$0] ?? "") }
-            let rechecked = try? await cached("spoilers2", [AppLanguage.english ? "en" : "ru", seed] + fixedPairs.map { "\($0.title)|\($0.why)" }, ttl: 30 * day) {
-                try await generate(SpoilerGuard.checkPrompt(seed: seed, items: fixedPairs), json: true, temperature: 0, strong: true)
-            }
-            let again = SpoilerGuard.parseVerdict(rechecked)
-            recheck = again.map { Set($0.compactMap { $0 < fixed.count ? fixed[$0] : nil }) }
+            return failed
         }
-        let safe = SpoilerGuard.merge(picks, verdict: verdict, rewrites: rewrites, recheck: recheck)
-        let changed = zip(picks, safe).filter { $0.0.why != $0.1.why }.count
-        Log.note("ИИ", String(format: "родственники «%@»: проверка спойлеров %.1f с, переписано %d", title,
-                              Date().timeIntervalSince(started), changed))
-        return safe
+        let failed = await rateAll(stride(from: 0, to: missing.count, by: 12).map { Array(missing[$0..<min($0 + 12, missing.count)]) })
+        let still = await rateAll(stride(from: 0, to: failed.count, by: 4).map { Array(failed[$0..<min($0 + 4, failed.count)]) })
+        if !missing.isEmpty { Log.note("ИИ", "профили: новых \(missing.count), повтор \(failed.count), без профиля \(still.count)") }
+        return result
+    }
+
+    private static func rate(_ batch: [VodItem]) async -> ([VodItem], [String: [String: Int]]) {
+        guard let text = try? await generate(profilePrompt(batch), json: true, temperature: 0.1, strong: true),
+              let items = (parseJSON(text) as? [String: Any])?["items"] as? [[String: Any]] else { return (batch, [:]) }
+        var found: [String: [String: Int]] = [:]
+        for row in items {
+            let id = (row["id"] as? String ?? "").trimmingCharacters(in: .whitespaces)
+            guard batch.contains(where: { $0.id == id }), let scores = row["scores"] as? [String: Any] else { continue }
+            let profile = RelativeRanker.profile(scores.compactMapValues { ($0 as? NSNumber)?.intValue })
+            guard !profile.isEmpty else { continue }
+            DiskCache.api.put("ai2:profile2:\(id)", Data(profile.map { "\($0.key):\($0.value)" }.joined(separator: ",").utf8))
+            found[id] = profile
+        }
+        return (batch.filter { found[$0.id] == nil }, found)
+    }
+
+    private static func parseProfile(_ line: String) -> [String: Int] {
+        var raw: [String: Int] = [:]
+        for part in line.split(separator: ",") {
+            let pair = part.split(separator: ":")
+            if pair.count == 2, let v = Int(pair[1]) { raw[String(pair[0])] = v }
+        }
+        return RelativeRanker.profile(raw)
+    }
+
+    private static func profilePrompt(_ batch: [VodItem]) -> String {
+        "Rate each work below on these criteria. They are grouped; give scores only to the specific keys, never to group names:\n" +
+            RelativeCriteria.promptList() + "\n" +
+            "Give a score only to criteria that clearly apply: 1 — present, 2 — strong, 3 — defining for the work. Leave out " +
+            "everything else. A typical work has 8–15 scored criteria. Judge what you know of how the work is made and feels, " +
+            "not its genre label. Calibration examples: Hereditary (2018) — low_drone 3, creaks_whispers 2, creeping_unease 3, " +
+            "mental_unraveling 3, raw_acting 3, family_tension 3, old_house 2, deep_shadows 2, unexplained 2, lingering 2; " +
+            "Drive (2011) — retro_synth 3, pulsing_synth 2, neon_light 3, era_songs 2, quiet_acting 3, isolation 2, " +
+            "detached_observation 2.\n" +
+            batch.map { w in
+                let original = w.originalTitle.isEmpty ? w.title : w.originalTitle
+                return "\(w.id) | \(original)\(w.title != original ? " / \(w.title)" : "") (\(w.year), \(w.kind == .series ? "TV series" : "film"))"
+            }.joined(separator: "\n") +
+            "\nReturn a JSON object {\"items\": [{\"id\": the id before |, \"scores\": {\"key\": score}}]}. If you do not know a work, " +
+            "return empty scores for it."
     }
 
     /// Разбор после просмотра. Сериал — до сезона/серии включительно. [plot] — раздел «Сюжет» Википедии: модель разбирает
     /// по нему, а не по памяти. nil — модель не знает именно эту работу.
-    static func recap(_ details: VodDetails, season: Int = 0, episode: Int = 0, plot: String = "") async throws -> [AiSection]? {
+    static func recap(_ details: VodDetails, plot: String = "") async throws -> [AiSection]? {
         let title = titleOf(details)
         let year = Int(details.item.year) ?? 0
         let tv = details.item.kind == .series
         let kind = tv ? "TV series" : "feature film"
         let about = identity(details)
-        let upTo = tv && season > 0 ? " up to and including season \(season)\(episode > 0 ? ", episode \(episode)" : "")" : ""
         let story = String(plot.trimmingCharacters(in: .whitespacesAndNewlines).prefix(6000))
-        let text = try await cached("recap5", [AppLanguage.english ? "en" : "ru", title, String(year), kind, about, upTo, String(story.count), String(story.prefix(200))],
+        let text = try await cached("recap6", [AppLanguage.english ? "en" : "ru", title, String(year), kind, about, String(story.count), String(story.prefix(200))],
                                     ttl: 30 * day) {
-            try await generate("The \(kind) \"\(title)\"\(year > 0 ? " (\(year))" : "")\(upTo).\(about)\n" +
+            try await generate("The \(kind) \"\(title)\"\(year > 0 ? " (\(year))" : "").\(about)\n" +
                 "Make sure you are describing THIS exact work identified above — not another work with the same or a similar name " +
                 "(a web series, a short, a book, a game, an older film or a remake). " +
                 (story.isEmpty
@@ -359,14 +383,14 @@ enum AI {
 
     private static let session: URLSession = {
         let config = URLSessionConfiguration.default
-        config.timeoutIntervalForRequest = 60
-        config.timeoutIntervalForResource = 90
+        config.timeoutIntervalForRequest = 90
+        config.timeoutIntervalForResource = 120
         config.urlCache = nil
         return URLSession(configuration: config)
     }()
 
     private static func post(_ url: URL, _ body: [String: Any], headers: [String: String]) async throws -> (Int, Data) {
-        var request = URLRequest(url: url, timeoutInterval: 60)
+        var request = URLRequest(url: url, timeoutInterval: 90)
         request.httpMethod = "POST"
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -383,7 +407,10 @@ enum AI {
         var last = "no model"
         for model in models {
             guard let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/\(model):generateContent") else { continue }
-            let (code, data) = try await post(url, body, headers: ["x-goog-api-key": geminiKey])
+            // Тайм-аут — следующая модель: полноценная flash думала дольше минуты над «родственниками», и до lite не доходило.
+            let code: Int, data: Data
+            do { (code, data) = try await post(url, body, headers: ["x-goog-api-key": geminiKey]) }
+            catch let error as URLError where error.code == .timedOut { last = "gemini \(model) timeout"; continue }
             let text = String(data: data, encoding: .utf8) ?? ""
             if (200..<300).contains(code) {
                 blocked.lower()
@@ -491,7 +518,9 @@ enum AI {
             guard !name.isEmpty else { return nil }
             let year = (row["year"] as? NSNumber)?.intValue ?? Int(row["year"] as? String ?? "") ?? 0
             return AiTitle(title: String(name.prefix(150)), original: String((original.isEmpty ? name : original).prefix(150)), year: year,
-                           tv: row["type"] as? String == "tv", why: withWhy ? String((row["why"] as? String ?? "").prefix(100)) : "")
+                           tv: row["type"] as? String == "tv",
+                           // «why» — строка или массив ключей («Духовные родственники»: склеиваются через запятую).
+                           why: !withWhy ? "" : (row["why"] as? [String])?.joined(separator: ",") ?? String((row["why"] as? String ?? "").prefix(100)))
         }.prefix(30).map { $0 }
     }
 

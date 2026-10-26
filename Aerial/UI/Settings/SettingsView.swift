@@ -132,11 +132,8 @@ struct SettingsView: View {
         @Bindable var settings = settings
         Section {
             Toggle(L("Описания серий"), isOn: $settings.episodeOverviews)
-            Toggle(L("Скрывать спойлеры серий"), isOn: $settings.hideSpoilers)
         } header: {
             Text(L("Серии"))
-        } footer: {
-            Text(L("Спойлеры: у непросмотренных серий кадр размыт, а описание скрыто."))
         }
         Section {
             Button(L("Сбросить фильтры и сортировку раздач")) {

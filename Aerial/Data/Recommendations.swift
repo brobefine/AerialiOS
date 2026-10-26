@@ -456,7 +456,7 @@ final class Taste {
         for chunk in stride(from: 0, to: seeds.count, by: 4).map({ Array(seeds[$0..<min($0 + 4, seeds.count)]) }) {
             await withTaskGroup(of: (String, [VodItem]).self) { group in
                 for seed in chunk {
-                    group.addTask { (seed.id, Array(((try? await Catalogue.shared.recommendations(seed)) ?? []).prefix(20))) }
+                    group.addTask { (seed.id, Array(((try? await Catalogue.shared.recommendations(seed)) ?? []).prefix(30))) }
                 }
                 for await (id, films) in group where !films.isEmpty { found[id] = films }
             }
@@ -478,7 +478,7 @@ final class Taste {
     /// в конец (каталог приходит порциями — иначе верх ряда менялся на глазах). Новая оценка или соседи — пересчёт.
     func forYou(_ shelf: VodShelf, pool: [VodItem], library: Library, useHistory: Bool) -> [VodItem] {
         let signals = signals(library, useHistory: useHistory)
-        let byGenre = Recommendations.rank(pool, signals, accept: shelf.accepts)
+        let byGenre = Recommendations.rank(pool, signals, limit: 60, accept: shelf.accepts)
         // Подбор ИИ — только то, чего нет в подборе по жанрам, вперемешку через один (как у ТВ).
         let taken = Set(byGenre.map(\.id))
         let fromAi = aiPicks.filter {
@@ -490,7 +490,7 @@ final class Taste {
             if index < byGenre.count { mixed.append(byGenre[index]) }
             if index < fromAi.count { mixed.append(fromAi[index]) }
         }
-        let fresh = Array(mixed.prefix(40))
+        let fresh = Array(mixed.prefix(60))
         let signal = String(Recommendations.javaHash([
             signals.saved.sorted(), signals.liked.sorted(), signals.loved.sorted(), signals.rejected.sorted(),
             signals.progress.keys.sorted(), related.keys.sorted(), [String(useHistory)], aiPicks.map(\.id),

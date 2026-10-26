@@ -167,7 +167,7 @@ struct PosterGrid: View {
                   alignment: .leading, spacing: 18) {
             ForEach(items) { item in
                 NavigationLink(value: Route.details(item)) {
-                    PosterCard(item: item, showTitle: true)
+                    PosterCard(item: item)
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("poster")

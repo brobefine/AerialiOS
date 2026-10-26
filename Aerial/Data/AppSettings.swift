@@ -52,8 +52,6 @@ final class AppSettings {
     var ratingSources: Set<String> { didSet { defaults.set(ratingSources.sorted(), forKey: "mdblist.sources") } }
     /// Описания серий под названием в карточках серий.
     var episodeOverviews: Bool { didSet { defaults.set(episodeOverviews, forKey: "episodes.overviews") } }
-    /// Скрывать спойлеры: у непросмотренных серий кадр размыт, описания нет.
-    var hideSpoilers: Bool { didSet { defaults.set(hideSpoilers, forKey: "episodes.hideSpoilers") } }
 
     /// Источники MDBList: ключ настройки, название, пояснение — как на ТВ.
     struct RatingSource: Sendable {
@@ -110,6 +108,5 @@ final class AppSettings {
         mdblistShown = defaults.object(forKey: "mdblist.shown") as? Bool ?? true
         ratingSources = Set(defaults.stringArray(forKey: "mdblist.sources") ?? ["imdb", "tomatoes", "metacritic", "letterboxd"])
         episodeOverviews = defaults.object(forKey: "episodes.overviews") as? Bool ?? true
-        hideSpoilers = defaults.object(forKey: "episodes.hideSpoilers") as? Bool ?? false
     }
 }

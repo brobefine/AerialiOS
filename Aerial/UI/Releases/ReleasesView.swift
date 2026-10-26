@@ -217,9 +217,8 @@ struct ReleasesView: View {
             afterSheet?()
             afterSheet = nil
         }) { picking in
-            WatchSheet(item: item, info: picking.info, voices: (infos[picking.release.id] ?? picking.release.info).audio,
-                       episode: episode) { file, chosen, voice in
-                afterSheet = { play(picking.release, file, episode: chosen, voice: voice) }
+            WatchSheet(item: item, info: picking.info, episode: episode) { file, chosen in
+                afterSheet = { play(picking.release, file, episode: chosen) }
                 self.picking = nil
             }
         }
@@ -368,10 +367,9 @@ struct ReleasesView: View {
                 let poster = TMDbImage.urls(item.poster, "w342").first?.absoluteString ?? ""
                 var info = try await client.add(link: release.link, title: item.title, poster: poster)
                 info = try await client.awaitFiles(info)
-                // Окно «Смотреть», как на ТВ: озвучка, сезон и серия из файлов раздачи (у фильма — файл, если их
-                // несколько). Выбирать нечего — сразу в плеер.
-                let voices = (infos[release.id] ?? release.info).audio
-                if voices.count < 2 && info.files.count < 2, let file = info.files.first {
+                // Окно «Смотреть»: сезон и серия из файлов раздачи (у фильма — файл, если их несколько); озвучка —
+                // в плеере. Выбирать нечего — сразу в плеер.
+                if info.files.count < 2, let file = info.files.first {
                     play(release, file)
                 } else {
                     picking = Picking(release: release, info: info)
@@ -385,13 +383,12 @@ struct ReleasesView: View {
         }
     }
 
-    private func play(_ release: Release, _ file: TorrentFile, episode chosen: VodEpisode? = nil, voice: String? = nil) {
+    private func play(_ release: Release, _ file: TorrentFile, episode chosen: VodEpisode? = nil) {
         let target = chosen ?? episode
         let entry = library.entry(item, target)
         var request = PlaybackRequest(item: item, episode: target, link: release.link, fileIndex: file.index,
                                       releaseTitle: release.title, startAt: entry?.resumable == true ? entry?.position ?? 0 : 0,
                                       runtimeMinutes: target.map { $0.runtimeMinutes > 0 ? $0.runtimeMinutes : runtime } ?? runtime)
-        request.voice = voice
         playback.play(request)
     }
 }
@@ -455,16 +452,14 @@ private struct TightLabel: LabelStyle {
     }
 }
 
-/// Окно «Смотреть» перед плеером, как на ТВ: озвучка из названия раздачи, сезон и серия — из файлов раздачи
-/// (серии подписаны по TMDb); у фильма из нескольких файлов — выбор файла. Лист на стекле снизу.
+/// Окно «Смотреть» перед плеером: сезон и серия — из файлов раздачи (серии подписаны по TMDb); у фильма из
+/// нескольких файлов — выбор файла. Озвучка выбирается в плеере (26 октября). Лист на стекле снизу.
 struct WatchSheet: View {
     let item: VodItem
     let info: TorrentInfo
-    let voices: [String]
     let episode: VodEpisode?
-    let onPlay: (TorrentFile, VodEpisode?, String?) -> Void
+    let onPlay: (TorrentFile, VodEpisode?) -> Void
 
-    @State private var voice = ""
     @State private var season = 0
     @State private var fileIndex = -1
     @State private var titles: [Int: [VodEpisode]] = [:]
@@ -495,13 +490,6 @@ struct WatchSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                if voices.count > 1 {
-                    Picker(L("Озвучка"), selection: $voice) {
-                        Text(L("Как в раздаче")).tag("")
-                        ForEach(voices, id: \.self) { Text($0).tag($0) }
-                    }
-                    .pickerStyle(.menu)
-                }
                 if series {
                     Section {
                         if seasons.count > 1 {
@@ -561,7 +549,7 @@ struct WatchSheet: View {
     private func play() {
         guard let file = info.files.first(where: { $0.index == fileIndex }) ?? info.files.first else { return }
         let place = placed.first { $0.file.index == file.index }
-        onPlay(file, place.map(meta) ?? episode, voice.isEmpty ? nil : voice)
+        onPlay(file, place.map(meta) ?? episode)
     }
 
     /// Начальный выбор: нужная серия (или первая), у фильма — самый большой файл.

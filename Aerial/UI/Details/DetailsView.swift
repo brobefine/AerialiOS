@@ -357,8 +357,7 @@ struct DetailsView: View {
                     ForEach(episodes) { episode in
                         NavigationLink(value: Route.releases(item, episode, runtime: episode.runtimeMinutes)) {
                             EpisodeCard(episode: episode, entry: library.entry(item, episode),
-                                        width: Theme.landscapeWidth(sizeClass), overviews: settings.episodeOverviews,
-                                        hideSpoilers: settings.hideSpoilers)
+                                        width: Theme.landscapeWidth(sizeClass), overviews: settings.episodeOverviews)
                         }
                         .buttonStyle(.plain)
                         .accessibilityIdentifier("episode")
@@ -459,36 +458,25 @@ private struct WatchLabel: View {
     }
 }
 
-/// Карточка серии: кадр с полосой просмотра; под ним — тот же кадр зеркально и в размытии, поверх — номер,
-/// название и описание.
+/// Карточка серии: кадр с полосой просмотра; под ним — тот же кадр зеркально и в размытии (`MirrorBackdrop`,
+/// граница — градиентом), поверх — номер, название и описание.
 private struct EpisodeCard: View {
     let episode: VodEpisode
     let entry: WatchEntry?
     let width: CGFloat
-    /// «Описания серий» и «Скрывать спойлеры серий» из настроек, как на ТВ.
+    /// «Описания серий» из настроек, как на ТВ.
     var overviews = true
-    var hideSpoilers = false
 
     var body: some View {
         let still = width * 9 / 16
-        // Спойлер — серия, которую ещё не досмотрели: кадр размыт, описания нет.
-        let spoiler = hideSpoilers && (entry?.fraction ?? 0) < 0.9
         VStack(alignment: .leading, spacing: 0) {
-            CachedImage(path: episode.still, size: "w780", pixelWidth: Int(width * 3))
-                .frame(width: width, height: still)
-                .blur(radius: spoiler ? 18 : 0, opaque: true)
-                .clipped()
+            // Сам кадр рисует подложка (`MirrorBackdrop`): его низ теряет фокус вместе с продолжением. Текст идёт с начала
+            // размытия (`ProgressiveBlur.from`), а не под кадром — карточка ниже на эту долю кадра.
+            Color.clear
+                .frame(width: width, height: still * (1 - ProgressiveBlur.from))
+                // Полоса просмотра — на кадре, над текстом.
                 .overlay(alignment: .bottom) {
-                    if let entry, entry.fraction > 0 {
-                        GeometryReader { geometry in
-                            ZStack(alignment: .leading) {
-                                Capsule().fill(.white.opacity(0.3))
-                                Capsule().fill(Theme.accent).frame(width: geometry.size.width * entry.fraction)
-                            }
-                        }
-                        .frame(height: 4)
-                        .padding(8)
-                    }
+                    if let entry, entry.fraction > 0 { WatchPlate(entry: entry).padding(.horizontal, 10).padding(.bottom, 4) }
                 }
             VStack(alignment: .leading, spacing: 4) {
                 Text("\(episode.number). \(episode.title)").font(.aerial(.subheadline, .semibold)).lineLimit(1)
@@ -496,27 +484,50 @@ private struct EpisodeCard: View {
                     .filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(.aerial(.caption2)).foregroundStyle(.white.opacity(0.7))
                 // Нет описания — нет и пустого места под ним.
-                if overviews && (spoiler || !episode.overview.isEmpty) {
-                    Text(spoiler ? L("Описание скрыто, чтобы не было спойлеров") : episode.overview)
-                        .font(.aerial(.caption)).foregroundStyle(.white.opacity(spoiler ? 0.5 : 0.85))
+                if overviews && !episode.overview.isEmpty {
+                    Text(episode.overview)
+                        .font(.aerial(.caption)).foregroundStyle(.white.opacity(0.85))
                         .lineLimit(3, reservesSpace: true)
                 }
             }
-            .padding(12)
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+            .padding(.bottom, 12)
+            // Не короче кадра: подложка с размытием — до низа текста.
+            .frame(minHeight: still * ProgressiveBlur.from + 12, alignment: .top)
             .frame(width: width, alignment: .leading)
-            .background(alignment: .top) {
-                CachedImage(path: episode.still, size: "w300", pixelWidth: 300)
-                    .frame(width: width, height: still)
-                    .clipped()
-                    .scaleEffect(x: 1, y: -1)
-                    .blur(radius: 22, opaque: true)
-                    .overlay(Color.black.opacity(0.3))
-            }
-            .clipped()
+        }
+        .background(alignment: .top) {
+            MirrorBackdrop(path: episode.still, size: "w780", pixelWidth: Int(width * 3), width: width, height: still)
         }
         .background(Theme.card)
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .frame(width: width)
+    }
+}
+
+/// Плашка просмотра серии (как `VodFrost.drawPlate` ТВ): заполнение долей просмотра, время остановки и процент.
+private struct WatchPlate: View {
+    let entry: WatchEntry?
+
+    var body: some View {
+        GeometryReader { geometry in
+            if let entry {
+                ZStack(alignment: .leading) {
+                    Capsule().fill(.ultraThinMaterial)
+                    Rectangle().fill(Theme.accent.opacity(0.55)).frame(width: geometry.size.width * entry.fraction)
+                    HStack {
+                        Text(Format.runtime(minutes: max(1, Int(entry.position / 60))))
+                        Spacer(minLength: 6)
+                        Text("\(Int(entry.fraction * 100))%")
+                    }
+                    .font(.aerial(.caption2, .medium)).foregroundStyle(.white).padding(.horizontal, 10)
+                }
+                .clipShape(Capsule())
+                .overlay(Capsule().strokeBorder(.white.opacity(0.25), lineWidth: 1))
+            }
+        }
+        .frame(height: 24)
     }
 }
 

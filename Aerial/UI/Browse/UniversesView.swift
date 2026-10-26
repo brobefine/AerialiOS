@@ -191,7 +191,7 @@ private struct WallCard: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 14) {
-            PosterCard(item: item, width: 84)
+            PosterCard(item: item, width: 84, info: false)
             VStack(alignment: .leading, spacing: 6) {
                 Text(item.title).font(.aerial(.headline)).lineLimit(2)
                 Text([item.year, item.genres.prefix(2).joined(separator: ", ")].filter { !$0.isEmpty }.joined(separator: " · "))

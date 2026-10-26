@@ -166,6 +166,39 @@ final class Catalogue: Sendable {
         return try await items(body.results, kind: item.kind)
     }
 
+    /// Кандидаты «Духовных родственников» (как `byKeywords` ТВ): работы того же вида и основного жанра с любым из её ключевых
+    /// слов TMDb — самые обсуждаемые и самые высоко оценённые (не меньше 150 голосов), и самые обсуждаемые работы жанра за 15 лет.
+    func byKeywords(_ item: VodItem) async -> [VodItem] {
+        struct Keywords: Decodable { struct K: Decodable { var id: Int }; var keywords: [K]?; var results: [K]? }
+        struct Genres: Decodable { struct G: Decodable { var id: Int }; var genres: [G]? }
+        let type = item.tmdbType
+        guard let kw = try? await tmdb.decode(Keywords.self, "\(type)/\(item.remoteId)/keywords", localize: false, ttl: 30 * DiskCache.day) else { return [] }
+        let ids = (kw.keywords ?? kw.results ?? []).map(\.id).prefix(12)
+        guard !ids.isEmpty else { return [] }
+        let genre = (try? await tmdb.decode(Genres.self, "\(type)/\(item.remoteId)", localize: false, ttl: 7 * DiskCache.day))?.genres?.first?.id
+        var base = ["with_keywords": ids.map(String.init).joined(separator: "|"), "vote_count.gte": "150"]
+        if let genre { base["with_genres"] = String(genre) }
+        var found: [VodItem] = []
+        for sort in ["vote_count.desc", "vote_average.desc"] {
+            for page in 1...2 {
+                var params = base; params["sort_by"] = sort; params["page"] = String(page)
+                if let body = try? await tmdb.decode(TMDbPage.self, "discover/\(type)", params, ttl: DiskCache.day),
+                   let rows = try? await items(body.results, kind: item.kind) { found += rows }
+            }
+        }
+        if let genre {
+            let dateKey = item.kind == .series ? "first_air_date.gte" : "primary_release_date.gte"
+            let from = "\(Calendar.current.component(.year, from: .now) - 15)-01-01"
+            for page in 1...6 {
+                let params = ["with_genres": String(genre), "sort_by": "vote_count.desc", dateKey: from, "page": String(page)]
+                if let body = try? await tmdb.decode(TMDbPage.self, "discover/\(type)", params, ttl: DiskCache.day),
+                   let rows = try? await items(body.results, kind: item.kind) { found += rows }
+            }
+        }
+        var seen = Set<String>()
+        return found.filter { seen.insert($0.id).inserted }
+    }
+
     /// Название от ИИ → работа TMDb. Строго: название (русское или оригинальное) совпадает целиком, год — с точностью до
     /// года; иначе nil (ИИ назвал «The Box» про запертых людей — первый результат поиска был бы корейской мелодрамой).
     func resolve(_ title: AiTitle) async -> VodItem? {
