@@ -1,12 +1,15 @@
 import SwiftUI
 
 /// Раздачи фильма или серии в стиле iOS 26: карточки на тёмном фоне, фильтр качества капсулами сверху и свайпом по
-/// странице, сортировка в стеклянной кнопке. Касание — раздача в TorrServer, затем файл и плеер; удержание — «Скачать».
-/// Сортировка и выбранное качество запоминаются между страницами, как `releasePrefs` ТВ.
+/// странице, сортировка в стеклянной кнопке. Касание — раздача в TorrServer, затем в том же окне сезон и серия
+/// (`WatchPane`) и плеер; удержание — «Скачать». Сортировка и выбранное качество запоминаются, как `releasePrefs` ТВ.
+/// С 27 октября открывается системным окном со страницы фильма (`ReleasesSheet`), как на ТВ — окно поверх страницы.
 struct ReleasesView: View {
     let item: VodItem
     let episode: VodEpisode?
     let runtime: Int
+    /// Окно: закрыть его и после закрытия выполнить действие (плеер поверх ещё закрывающегося листа iOS не показывает).
+    var close: ((@escaping () -> Void) -> Void)? = nil
 
     @Environment(AppSettings.self) private var settings
     @Environment(Library.self) private var library
@@ -22,8 +25,6 @@ struct ReleasesView: View {
     @State private var notice: String?
     @State private var opening: Release?
     @State private var picking: Picking?
-    /// Плеер после закрытия окна «Смотреть»: показ поверх ещё закрывающегося листа iOS молча отклоняла.
-    @State private var afterSheet: (() -> Void)?
     @State private var failure: String?
     /// Фильтры раздач, как на ТВ (`ReleaseFilter`): перевод, HDR, Dolby Vision, субтитры, трекер; пусто — любое.
     @State private var voiceFilter = ""
@@ -47,10 +48,12 @@ struct ReleasesView: View {
         var id: String { rawValue }
     }
 
-    struct Picking: Identifiable {
+    struct Picking: Identifiable, Hashable {
         let release: Release
         let info: TorrentInfo
         var id: String { release.id }
+        static func == (a: Picking, b: Picking) -> Bool { a.id == b.id }
+        func hash(into hasher: inout Hasher) { hasher.combine(id) }
     }
 
     private static let all = L("Все")
@@ -213,13 +216,10 @@ struct ReleasesView: View {
             // Свайп и капсула — выбор зрителя: в следующий раз страница откроется на этом качестве.
             if !releases.isEmpty { preferredQuality = value == Self.all ? "" : value }
         }
-        .sheet(item: $picking, onDismiss: {
-            afterSheet?()
-            afterSheet = nil
-        }) { picking in
-            WatchSheet(item: item, info: picking.info, episode: episode) { file, chosen in
-                afterSheet = { play(picking.release, file, episode: chosen) }
-                self.picking = nil
+        // Сезон и серия — в том же окне, переходом вперёд (было отдельным листом поверх списка).
+        .navigationDestination(item: $picking) { picking in
+            WatchPane(item: item, info: picking.info, episode: episode) { file, chosen in
+                perform { play(picking.release, file, episode: chosen) }
             }
         }
         .alert(L("Не удалось открыть раздачу"), isPresented: Binding(get: { failure != nil }, set: { if !$0 { failure = nil } })) {
@@ -239,7 +239,7 @@ struct ReleasesView: View {
         return ScrollView {
             LazyVStack(alignment: .leading, spacing: 12) {
                 if let entry = library.entry(item, episode), entry.resumable, let source = entry.source {
-                    Button { playback.resume(entry) } label: {
+                    Button { perform { playback.resume(entry) } } label: {
                         HStack(spacing: 14) {
                             Image(systemName: "play.fill").font(.aerial(.title3))
                                 .frame(width: 44, height: 44)
@@ -370,7 +370,7 @@ struct ReleasesView: View {
                 // Окно «Смотреть»: сезон и серия из файлов раздачи (у фильма — файл, если их несколько); озвучка —
                 // в плеере. Выбирать нечего — сразу в плеер.
                 if info.files.count < 2, let file = info.files.first {
-                    play(release, file)
+                    perform { play(release, file) }
                 } else {
                     picking = Picking(release: release, info: info)
                 }
@@ -383,14 +383,22 @@ struct ReleasesView: View {
         }
     }
 
-    private func play(_ release: Release, _ file: TorrentFile, episode chosen: VodEpisode? = nil) {
-        let target = chosen ?? episode
-        let entry = library.entry(item, target)
-        var request = PlaybackRequest(item: item, episode: target, link: release.link, fileIndex: file.index,
-                                      releaseTitle: release.title, startAt: entry?.resumable == true ? entry?.position ?? 0 : 0,
-                                      runtimeMinutes: target.map { $0.runtimeMinutes > 0 ? $0.runtimeMinutes : runtime } ?? runtime)
-        playback.play(request)
+    private func perform(_ action: @escaping () -> Void) {
+        if let close { close(action) } else { action() }
     }
+
+    private func play(_ release: Release, _ file: TorrentFile, episode chosen: VodEpisode? = nil) {
+        playback.play(releaseRequest(library: library, item: item, episode: chosen ?? episode, release: release, file: file, runtime: runtime))
+    }
+}
+
+/// Запрос плеера для файла раздачи: позиция — из медиатеки, длительность — серии или фильма.
+@MainActor
+func releaseRequest(library: Library, item: VodItem, episode: VodEpisode?, release: Release, file: TorrentFile, runtime: Int) -> PlaybackRequest {
+    let entry = library.entry(item, episode)
+    return PlaybackRequest(item: item, episode: episode, link: release.link, fileIndex: file.index,
+                           releaseTitle: release.title, startAt: entry?.resumable == true ? entry?.position ?? 0 : 0,
+                           runtimeMinutes: episode.map { $0.runtimeMinutes > 0 ? $0.runtimeMinutes : runtime } ?? runtime)
 }
 
 /// Карточка раздачи: название, плашки качества, затем размер, сиды и трекер, озвучки.
@@ -413,28 +421,23 @@ private struct ReleaseCard: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                 if busy { ProgressView().tint(.white) }
             }
-            let tags = info.tags + [info.season].compactMap { $0 }
-            if !tags.isEmpty {
-                FlowLayout(spacing: 6) {
-                    ForEach(Array(tags.enumerated()), id: \.offset) { index, tag in
-                        TagLabel(text: tag, highlighted: index == 0 && tag == info.quality)
-                    }
+            // Всё основное — плашками под названием (27 октября, как на ТВ и ПК), без строк сведений.
+            let tags = info.tags + [info.season].compactMap { $0 } + Array(info.audio.prefix(4))
+                + (info.subtitles ? [L("Субтитры")] : []) + (release.bytes > 0 ? [Format.bytes(release.bytes)] : [])
+            FlowLayout(spacing: 6) {
+                ForEach(Array(tags.enumerated()), id: \.offset) { index, tag in
+                    TagLabel(text: tag, highlighted: index == 0 && tag == info.quality)
                 }
+                Text("↑ \(release.seeds)")
+                    .font(.aerial(.caption2, .semibold))
+                    .foregroundStyle(seedColor)
+                    .padding(.horizontal, 7).padding(.vertical, 3)
+                    .background(seedColor.opacity(0.16), in: RoundedRectangle(cornerRadius: 5))
             }
-            HStack(spacing: 14) {
-                Label(Format.bytes(release.bytes), systemImage: "internaldrive")
-                Label("\(release.seeds)", systemImage: "arrow.up").foregroundStyle(seedColor)
+            if !release.tracker.isEmpty {
                 Text(release.tracker).lineLimit(1)
-            }
-            .font(.aerial(.caption, .medium))
-            .foregroundStyle(Theme.secondaryText)
-            .labelStyle(TightLabel())
-            if !info.audio.isEmpty {
-                Label(info.audio.joined(separator: ", "), systemImage: "waveform")
                     .font(.aerial(.caption2))
                     .foregroundStyle(Theme.secondaryText)
-                    .lineLimit(2)
-                    .labelStyle(TightLabel())
             }
         }
         .padding(16)
@@ -452,9 +455,23 @@ private struct TightLabel: LabelStyle {
     }
 }
 
-/// Окно «Смотреть» перед плеером: сезон и серия — из файлов раздачи (серии подписаны по TMDb); у фильма из
-/// нескольких файлов — выбор файла. Озвучка выбирается в плеере (26 октября). Лист на стекле снизу.
+/// Окно «Смотреть» отдельным листом (торренты медиатеки): [WatchPane] в своей навигации.
 struct WatchSheet: View {
+    let item: VodItem
+    let info: TorrentInfo
+    let episode: VodEpisode?
+    let onPlay: (TorrentFile, VodEpisode?) -> Void
+
+    var body: some View {
+        NavigationStack { WatchPane(item: item, info: info, episode: episode, onPlay: onPlay) }
+            .presentationDetents([.medium, .large])
+    }
+}
+
+/// «Смотреть» перед плеером: сезон и серия — из файлов раздачи (серии подписаны по TMDb); у фильма из
+/// нескольких файлов — выбор файла. Озвучка выбирается в плеере (26 октября). Без своей навигации: то же содержимое
+/// и в окне раздач (после выбора раздачи), и в окне автовыбора, и отдельным листом ([WatchSheet]).
+struct WatchPane: View {
     let item: VodItem
     let info: TorrentInfo
     let episode: VodEpisode?
@@ -488,7 +505,6 @@ struct WatchSheet: View {
     }
 
     var body: some View {
-        NavigationStack {
             Form {
                 if series {
                     Section {
@@ -532,8 +548,6 @@ struct WatchSheet: View {
             .scrollContentBackground(.hidden)
             .navigationTitle(L("Смотреть"))
             .navigationBarTitleDisplayMode(.inline)
-        }
-        .presentationDetents([.medium, .large])
         .onAppear(perform: preselect)
         .onChange(of: season) { _, value in
             if placed.first(where: { $0.file.index == fileIndex })?.season != value {

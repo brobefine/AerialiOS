@@ -34,6 +34,13 @@ final class AppSettings {
     var parserKey: String { didSet { defaults.set(parserKey, forKey: "parser.key") } }
     /// Torrentio — раздачи по номеру IMDb (в основном зарубежные), без ключа.
     var torrentio: Bool { didSet { defaults.set(torrentio, forKey: "parser.torrentio") } }
+    /// Автовыбор раздачи, как на ТВ (27 октября): «Смотреть» сразу открывает окно фильма или серий подобранной раздачи
+    /// (`AutoPick`), списка раздач нет. Выключен — сначала окно со списком раздач.
+    var autoRelease: Bool { didSet { defaults.set(autoRelease, forKey: "releases.auto") } }
+    /// Качество для автовыбора: `AutoPick.Quality` — "best", "1080", "light".
+    var releaseQuality: String { didSet { defaults.set(releaseQuality, forKey: "releases.autoQuality") } }
+    /// Звук для автовыбора: true — озвучка, false — оригинал.
+    var releaseVoice: Bool { didSet { defaults.set(releaseVoice, forKey: "releases.autoVoice") } }
     var serverMode: ServerMode { didSet { defaults.set(serverMode.rawValue, forKey: "torrserver.mode") } }
     var externalAddress: String { didSet { defaults.set(externalAddress, forKey: "torrserver.address") } }
     /// Кэш встроенного TorrServer в памяти, МБ.
@@ -97,6 +104,10 @@ final class AppSettings {
         parserAddress = defaults.string(forKey: "parser.address") ?? Self.parserCatalog[0].address
         parserKey = defaults.string(forKey: "parser.key") ?? ""
         torrentio = defaults.object(forKey: "parser.torrentio") as? Bool ?? true
+        // В UI-тестах — список раздач: сеть раздач на CI непредсказуема, снимки нужны одинаковые.
+        autoRelease = defaults.object(forKey: "releases.auto") as? Bool ?? !UITestHooks.active
+        releaseQuality = defaults.string(forKey: "releases.autoQuality") ?? "1080"
+        releaseVoice = defaults.object(forKey: "releases.autoVoice") as? Bool ?? true
         serverMode = ServerMode(rawValue: defaults.string(forKey: "torrserver.mode") ?? "") ?? .embedded
         externalAddress = defaults.string(forKey: "torrserver.address") ?? ""
         cacheMB = defaults.object(forKey: "torrserver.cacheMB") as? Int ?? 256

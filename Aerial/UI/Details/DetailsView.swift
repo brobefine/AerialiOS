@@ -22,6 +22,12 @@ struct DetailsView: View {
     /// Цвет постера — им окрашены кнопки ([PosterPalette]).
     @State private var accent: Color?
     @State private var trailerOpen = false
+    /// Окно раздач поверх страницы (27 октября) и что сделать после его закрытия (плеер).
+    @State private var releasesTarget: ReleasesTarget?
+    @State private var afterReleases: (() -> Void)?
+    /// Автовыбор подбирает раздачу — на кнопке «Подбираю…», повторные нажатия не считаются.
+    @State private var autoPicking = false
+    @State private var pickFailure: String?
     /// Насколько страницу оттянули вниз в самом начале — постер растягивается следом.
     @State private var pull: CGFloat = 0
 
@@ -69,6 +75,20 @@ struct DetailsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task { if details == nil { await load() } }
         .task(id: season) { await loadSeason() }
+        .sheet(item: $releasesTarget, onDismiss: {
+            afterReleases?()
+            afterReleases = nil
+        }) { target in
+            ReleasesSheet(target: target) { action in
+                afterReleases = action
+                releasesTarget = nil
+            }
+        }
+        .alert(L("Не удалось подобрать раздачу"), isPresented: Binding(get: { pickFailure != nil }, set: { if !$0 { pickFailure = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(pickFailure ?? "")
+        }
         .fullScreenCover(isPresented: $trailerOpen) {
             if let key = details?.trailerKey, !key.isEmpty { TrailerView(key: key) }
         }
@@ -226,6 +246,26 @@ struct DetailsView: View {
         return parts.filter { !$0.isEmpty }.joined(separator: " · ")
     }
 
+    /// «Смотреть»: без автовыбора — окно раздач; с автовыбором — раздача подбирается (`AutoPick`) и окно открывается
+    /// сразу на её фильме или сезонах с сериями.
+    private func watch(_ episode: VodEpisode?, runtime: Int) {
+        let target = ReleasesTarget(item: item, episode: episode, runtime: runtime)
+        guard settings.autoRelease else { releasesTarget = target; return }
+        guard !autoPicking else { return }
+        autoPicking = true
+        Task {
+            defer { autoPicking = false }
+            do {
+                let (release, info) = try await AutoPick.pick(item: item, episode: episode, settings: settings)
+                var picked = target
+                picked.picked = (release, info)
+                releasesTarget = picked
+            } catch {
+                if !HTTP.isCancellation(error) { pickFailure = error.localizedDescription }
+            }
+        }
+    }
+
     /// Один абзац — целиком; несколько — первый, остальные по «Ещё».
     @ViewBuilder private var overview: some View {
         let paragraphs = shown.overview.components(separatedBy: .newlines)
@@ -259,21 +299,23 @@ struct DetailsView: View {
                 }
                 .buttonStyle(PrimaryButtonStyle(fill: accent))
                 .accessibilityIdentifier("details-watch")
-                NavigationLink(value: Route.releases(item, latest.episode, runtime: details?.runtimeMinutes ?? 0)) {
-                    Image(systemName: "list.bullet")
+                // При автовыборе — окно подобранной раздачи: выбрать другую серию, а не только продолжить.
+                Button { watch(latest.episode, runtime: details?.runtimeMinutes ?? 0) } label: {
+                    if autoPicking { ProgressView().tint(.white) } else { Image(systemName: "list.bullet") }
                 }
                 .buttonStyle(CircleGlassButtonStyle(tint: accent))
                 .accessibilityLabel(L("Другая раздача"))
             } else if item.kind == .movie {
-                NavigationLink(value: Route.releases(item, nil, runtime: details?.runtimeMinutes ?? 0)) {
-                    WatchLabel(title: L("Смотреть"))
+                Button { watch(nil, runtime: details?.runtimeMinutes ?? 0) } label: {
+                    WatchLabel(title: autoPicking ? L("Подбираю раздачу…") : L("Смотреть"))
                 }
                 .buttonStyle(PrimaryButtonStyle(fill: accent))
                 .accessibilityIdentifier("details-watch")
             } else if let episode = latest?.episode ?? episodes.first {
                 // Серия под «Смотреть» — только когда сериал уже начинали, как на ТВ.
-                NavigationLink(value: Route.releases(item, episode, runtime: episode.runtimeMinutes)) {
-                    WatchLabel(title: L("Смотреть"), detail: latest?.episode == nil ? "" : "\(episode.code) · \(episode.title)")
+                Button { watch(episode, runtime: episode.runtimeMinutes) } label: {
+                    WatchLabel(title: autoPicking ? L("Подбираю раздачу…") : L("Смотреть"),
+                               detail: latest?.episode == nil ? "" : "\(episode.code) · \(episode.title)")
                 }
                 .buttonStyle(PrimaryButtonStyle(fill: accent))
                 .accessibilityIdentifier("details-watch")
@@ -355,7 +397,7 @@ struct DetailsView: View {
             ScrollView(.horizontal) {
                 LazyHStack(alignment: .top, spacing: 12) {
                     ForEach(episodes) { episode in
-                        NavigationLink(value: Route.releases(item, episode, runtime: episode.runtimeMinutes)) {
+                        Button { watch(episode, runtime: episode.runtimeMinutes) } label: {
                             EpisodeCard(episode: episode, entry: library.entry(item, episode),
                                         width: Theme.landscapeWidth(sizeClass), overviews: settings.episodeOverviews)
                         }

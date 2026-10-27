@@ -63,6 +63,21 @@ struct SettingsView: View {
 
     @ViewBuilder private var parserSection: some View {
         @Bindable var settings = settings
+        // Автовыбор раздачи (27 октября), как на ТВ: вопросы мастера ТВ — здесь, мастера на iOS нет.
+        Section {
+            Toggle(L("Выбирать раздачу автоматически"), isOn: $settings.autoRelease)
+            if settings.autoRelease {
+                Picker(L("Качество"), selection: $settings.releaseQuality) {
+                    ForEach(AutoPick.Quality.allCases) { Text($0.title).tag($0.rawValue) }
+                }
+                Picker(L("Звук"), selection: $settings.releaseVoice) {
+                    Text(L("Озвучка")).tag(true)
+                    Text(L("Оригинал")).tag(false)
+                }
+            }
+        } footer: {
+            Text(L("Только «Смотреть»: раздачу подберёт Aerial и сразу откроет фильм или серии. Выключено — сначала список раздач."))
+        }
         Section {
             ForEach(AppSettings.parserCatalog) { entry in
                 Button {

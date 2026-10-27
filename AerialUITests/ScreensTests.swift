@@ -59,6 +59,13 @@ final class ScreensTests: XCTestCase {
         return true
     }
 
+    /// Закрыть системное окно (раздачи — листом поверх страницы с 27 октября): смахнуть вниз за верх листа.
+    private func dismissSheet() {
+        let top = app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.12))
+        top.press(forDuration: 0.05, thenDragTo: app.windows.firstMatch.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.98)))
+        sleep(1)
+    }
+
     private func back(_ times: Int = 1) {
         for _ in 0..<times {
             let button = app.navigationBars.buttons.element(boundBy: 0)
@@ -112,7 +119,7 @@ final class ScreensTests: XCTestCase {
                 if tapVisible("episode", wait: 2) {
                     _ = element("release").waitForExistence(timeout: 60)
                     shot("06-episode-releases", settle: 1)
-                    back()
+                    dismissSheet()
                 }
                 back()
             }
@@ -145,7 +152,7 @@ final class ScreensTests: XCTestCase {
                 shot("10-releases", settle: 1)
                 app.swipeLeft()
                 shot("10b-releases-filter", settle: 1)
-                back()
+                dismissSheet()
             }
             back()
         }

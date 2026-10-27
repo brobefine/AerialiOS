@@ -146,6 +146,13 @@ enum English {
         "Сортировка": "Sorting", "Ищу раздачи…": "Searching for torrents…", "Раздач не нашлось": "No torrents found",
         "Попробуйте другой сервер поиска в настройках.": "Try another search server in Settings.",
         "Не удалось открыть раздачу": "Couldn't open the torrent", "Загрузка": "Download",
+        "Не удалось подобрать раздачу": "Couldn't pick a torrent", "Подбираю раздачу…": "Picking a torrent…",
+        "Не нашлось раздачи с раздающими.": "No seeded torrent found.",
+        "Раздачи не ответили за 20 секунд. Попробуйте ещё раз или выберите раздачу вручную в настройках.":
+            "Torrents didn't respond within 20 seconds. Try again or pick one manually in Settings.",
+        "Лучшее": "Best", "Экономно": "Light", "Качество": "Quality", "Выбирать раздачу автоматически": "Pick torrents automatically",
+        "Только «Смотреть»: раздачу подберёт Aerial и сразу откроет фильм или серии. Выключено — сначала список раздач.":
+            "Just “Watch”: Aerial picks a torrent and opens the movie or episodes. Off — the list of torrents first.",
         "%@ %@ · удерживайте, чтобы скачать": "%@ %@ · hold to download", "Скачать": "Download", "Скачать серию": "Download episode",
         "Скачать все серии раздачи": "Download all episodes", "Продолжить с %@": "Continue from %@",
         "В раздаче не нашёлся файл серии %@. Можно скачать все серии раздачи.": "No file for episode %@ in this torrent. You can download all its episodes.",
